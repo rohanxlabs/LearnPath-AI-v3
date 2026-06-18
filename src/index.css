@@ -1,0 +1,366 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom dark glow and animations */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.8);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+/* Base custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.25);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.45);
+}
+
+/* ==========================================================================
+   REAL-TIME UNIVERSAL LIGHT VALUE OVERRIDES
+   Maps dark utility classes to elegant, crisp light styles when .light is active.
+   ========================================================================== */
+
+.light {
+  color-scheme: light;
+}
+
+/* Custom light background override */
+.light body,
+.light #root,
+.light .min-h-screen {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+}
+
+/* Base Headings & Labels */
+.light h1, .light h2, .light h3, .light h4, .light h5, .light h6,
+.light .text-white,
+.light .group-hover\:text-white:hover {
+  color: #0F172A !important;
+}
+
+/* Subtitles, secondary texts, and zinc labels */
+.light p,
+.light span.text-zinc-300,
+.light span.text-zinc-400,
+.light p.text-zinc-400,
+.light div.text-zinc-400,
+.light div.text-zinc-500,
+.light span.text-zinc-500,
+.light p.text-zinc-500,
+.light .text-zinc-400,
+.light .text-zinc-450,
+.light .text-zinc-500,
+.light .text-zinc-650 {
+  color: #475569 !important;
+}
+
+.light .text-zinc-605,
+.light .text-zinc-600,
+.light .text-zinc-700 {
+  color: #64748B !important;
+}
+
+/* Hardcoded card/module backgrounds */
+.light .bg-\[\#111111\],
+.light .bg-\[\#111111\]\/80,
+.light .bg-\[\#111111\]\/90,
+.light .bg-\[\#111111\]\/95,
+.light .bg-\[\#111111\]\/98,
+.light .bg-\[\#121215\],
+.light .bg-\[\#121215\]\/95,
+.light .bg-zinc-950,
+.light .bg-zinc-950\/30,
+.light .bg-zinc-950\/40,
+.light .bg-zinc-910,
+.light .bg-zinc-900,
+.light .bg-zinc-900\/40,
+.light .bg-[#111111],
+.light .bg-[#121215],
+.light .bg-[#13121b],
+.light .bg-[#14121b],
+.light .bg-[#1E1B29],
+.light .bg-[#1E1B29]\/95,
+.light .bg-[#1E1B29]\/90,
+.light .bg-[#1E1B29]\/75,
+.light .bg-[#1E1B29]\/60,
+.light .bg-[#1E1B29]\/40,
+.light .bg-[#1E1B29]\/30,
+.light .bg-[#0a0a0d],
+.light .bg-[#0A0A0A],
+.light .bg-[#0E0E10],
+.light .bg-zinc-900,
+.light .bg-zinc-950,
+.light .bg-zinc-910,
+.light .bg-[#101012] {
+  background-color: #FFFFFF !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+}
+
+.light .bg-zinc-950\/20,
+.light .bg-zinc-954,
+.light .bg-zinc-955,
+.light .bg-zinc-950\/30 {
+  background-color: #F1F5F9 !important;
+}
+
+/* Hover background cards in light theme */
+.light .hover\:bg-zinc-900:hover,
+.light .hover\:bg-zinc-950:hover,
+.light .hover\:bg-[#18181b]:hover {
+  background-color: #F1F5F9 !important;
+}
+
+/* Overrides for standard dark boundaries and lines */
+.light .border-white\/5,
+.light .border-white\/10,
+.light .border-white\/15,
+.light .border-white\/20,
+.light .border-white\/\[0\.03\],
+.light .border-white\/\[0\.04\],
+.light .border-zinc-800,
+.light .border-zinc-805,
+.light .border-zinc-900,
+.light .border-zinc-910,
+.light .border-zinc-950,
+.light .border-[#1c1c1f],
+.light .border-white\/\[0\.03\] {
+  border-color: #E2E8F0 !important;
+}
+
+/* Semi-transparent button/badge backgrounds (white overlays) */
+.light .bg-white\/5,
+.light .bg-white\/10,
+.light .bg-white\/15,
+.light .bg-white\/20,
+.light .bg-white\/\[0\.02\],
+.light .bg-zinc-800,
+.light .bg-zinc-950\/60 {
+  background-color: rgba(15, 23, 42, 0.05) !important;
+  color: #0F172A !important;
+}
+
+/* Hover and active overrides for navigation items and indicators */
+.light .hover\:bg-white\/5:hover,
+.light .hover\:text-white:hover {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+  color: #0F172A !important;
+}
+
+/* Text selections & inactive items */
+.light .text-zinc-650,
+.light .text-zinc-700,
+.light .placeholder-zinc-600::placeholder,
+.light .text-zinc-500 {
+  color: #64748B !important;
+}
+
+/* Inputs, code boxes & study prompts */
+.light input,
+.light textarea,
+.light select,
+.light .bg-black\/30,
+.light .bg-[#080809],
+.light .bg-[#09090A]\/40,
+.light .bg-[#0A0A0B],
+.light .bg-black {
+  background-color: #F8FAFC !important;
+  color: #0F172A !important;
+  border-color: #D1D5DB !important;
+}
+
+.light select option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+.light .bg-black\/50,
+.light .bg-[#0e0e11] {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+/* Code block highlight adjustments */
+.light pre,
+.light code,
+.light .bg-zinc-900\/80 {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+/* Mentor interactive quick chips */
+.light .hover\:bg-purple-950\/20:hover {
+  background-color: rgba(168, 85, 247, 0.15) !important;
+  color: #6B21A8 !important;
+}
+
+/* Custom success/trophy cards */
+.light .bg-\[\#0f1d14\] {
+  background-color: #ECFDF5 !important;
+  border-color: #10B981 !important;
+}
+.light .text-emerald-350 {
+  color: #047857 !important;
+}
+
+/* Custom analytics & Consistency diagnostics containers */
+.light .bg-[#111111]\/90 {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* Backdrop for profile bypass auth / login panels */
+.light .bg-\[\#09090b\]\/80 {
+  background-color: rgba(248, 250, 252, 0.8) !important;
+}
+
+/* Scrollbar styling for light mode */
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.15) !important;
+}
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.3) !important;
+}
+
+/* Glassmorphic SaaS System Classes */
+.glass-card {
+  background: rgba(22, 22, 26, 0.6) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
+  border-radius: 20px !important;
+}
+
+/* Category gradients tints */
+.glass-card-purple {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(22, 22, 26, 0.6)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(168, 85, 247, 0.2) !important;
+  box-shadow: 0 8px 32px 0 rgba(168, 85, 247, 0.05) !important;
+  border-radius: 20px !important;
+}
+
+.glass-card-blue {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(22, 22, 26, 0.6)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+  box-shadow: 0 8px 32px 0 rgba(59, 130, 246, 0.05) !important;
+  border-radius: 20px !important;
+}
+
+.glass-card-orange {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(22, 22, 26, 0.6)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(245, 158, 11, 0.2) !important;
+  box-shadow: 0 8px 32px 0 rgba(245, 158, 11, 0.05) !important;
+  border-radius: 20px !important;
+}
+
+.glass-card-orange-red {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(22, 22, 26, 0.6)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(239, 68, 68, 0.2) !important;
+  box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.05) !important;
+  border-radius: 20px !important;
+}
+
+.glass-card-teal {
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.08), rgba(22, 22, 26, 0.6)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(20, 184, 166, 0.2) !important;
+  box-shadow: 0 8px 32px 0 rgba(20, 184, 166, 0.05) !important;
+  border-radius: 20px !important;
+}
+
+.glass-card-emerald {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(22, 22, 26, 0.6)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  box-shadow: 0 8px 32px 0 rgba(16, 185, 129, 0.05) !important;
+  border-radius: 20px !important;
+}
+
+.glass-card-rose {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.08), rgba(22, 22, 26, 0.6)) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(244, 63, 94, 0.2) !important;
+  box-shadow: 0 8px 32px 0 rgba(244, 63, 94, 0.05) !important;
+  border-radius: 20px !important;
+}
+
+/* Light theme overrides for Glassmorphism */
+.light [class*="glass-card"] {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.04) !important;
+  color: #0F172A !important;
+}
+
+.light .glass-card-purple {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.06), rgba(255, 255, 255, 0.8)) !important;
+  border: 1px solid rgba(168, 85, 247, 0.15) !important;
+}
+
+.light .glass-card-blue {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(255, 255, 255, 0.8)) !important;
+  border: 1px solid rgba(59, 130, 246, 0.15) !important;
+}
+
+.light .glass-card-orange {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(255, 255, 255, 0.8)) !important;
+  border: 1px solid rgba(245, 158, 11, 0.15) !important;
+}
+
+.light .glass-card-orange-red {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.06), rgba(255, 255, 255, 0.8)) !important;
+  border: 1px solid rgba(239, 68, 68, 0.15) !important;
+}
+
+.light .glass-card-teal {
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.06), rgba(255, 255, 255, 0.8)) !important;
+  border: 1px solid rgba(20, 184, 166, 0.15) !important;
+}
+
+.light .glass-card-emerald {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(255, 255, 255, 0.8)) !important;
+  border: 1px solid rgba(16, 185, 129, 0.15) !important;
+}
+
+.light .glass-card-rose {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.06), rgba(255, 255, 255, 0.8)) !important;
+  border: 1px solid rgba(244, 63, 94, 0.15) !important;
+}
+
+

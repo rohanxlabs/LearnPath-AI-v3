@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline • LearnPath AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #0A0A0A;
+      color: #F8FAFC;
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      text-align: center;
+    }
+    .wrapper {
+      padding: 2.5rem;
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(22, 22, 26, 0.6));
+      border: 1px solid rgba(168, 85, 247, 0.2);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      max-width: 420px;
+      width: 85%;
+      backdrop-filter: blur(12px);
+    }
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-top: 1.5rem;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.025em;
+    }
+    p {
+      color: #94A3B8;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      margin-bottom: 2rem;
+    }
+    /* Logo / Icon pulse glow */
+    .icon-container {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto;
+      border-radius: 20px;
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(168, 85, 247, 0.25);
+    }
+    svg.wifi-off {
+      width: 40px;
+      height: 40px;
+      stroke: #A78BFA;
+    }
+    .btn {
+      display: inline-block;
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      background: linear-gradient(135deg, #8B5CF6, #3B82F6);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+    }
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(139, 92, 246, 0.5);
+    }
+    .btn:active {
+      transform: translateY(1px);
+    }
+    .badge-bar {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #A78BFA;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #F59E0B;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="icon-container">
+      <svg class="wifi-off" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.5M5 12.5a10.94 10.94 0 0 1 5.83-2.84M7.34 7.34A15 15 0 0 1 12 6.5a15 15 0 0 1 7.2 1.83M10.28 10.28L12 10.5M1.66 7.34a14.93 14.93 0 0 0 1.22 1.04" />
+        <path d="M12 18.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" />
+      </svg>
+    </div>
+    <h1>You are Currently Offline</h1>
+    <p>We've cached your learning roadmaps, recommendations, and recent chats, so you can continue viewing them. Connect to the internet to chat with AI Mentor or generate brand new paths.</p>
+    <button class="btn" onclick="window.location.reload(true)">Reload Application</button>
+    <div class="badge-bar">
+      <div class="pulse-dot"></div>
+      <span>Waiting for Network Recovery...</span>
+    </div>
+  </div>
+</body>
+</html>
