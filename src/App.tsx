@@ -677,43 +677,18 @@ export default function App() {
   };
 
   // Active theme application style
-  const [resolvedTheme, setResolvedTheme] = useState<'dark' | 'light'>('dark');
+  const [resolvedTheme, setResolvedTheme] = useState<'light'>('light');
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
-    const updateTheme = () => {
-      let activeTheme: 'dark' | 'light' = 'dark';
-      if (settings.theme === 'dark') {
-        activeTheme = 'dark';
-      } else if (settings.theme === 'light') {
-        activeTheme = 'light';
-      } else {
-        // System defaults
-        activeTheme = mediaQuery.matches ? 'dark' : 'light';
-      }
-      setResolvedTheme(activeTheme);
-      
-      if (activeTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-        document.documentElement.classList.remove('light');
-        document.body.classList.add('dark');
-        document.body.classList.remove('light');
-      } else {
-        document.documentElement.classList.add('light');
-        document.documentElement.classList.remove('dark');
-        document.body.classList.add('light');
-        document.body.classList.remove('dark');
-      }
-    };
-    
-    updateTheme();
-    mediaQuery.addEventListener('change', updateTheme);
-    return () => mediaQuery.removeEventListener('change', updateTheme);
-  }, [settings.theme]);
+    setResolvedTheme('light');
+    document.documentElement.classList.add('light');
+    document.documentElement.classList.remove('dark');
+    document.body.classList.add('light');
+    document.body.classList.remove('dark');
+  }, []);
 
-  const themeClass = resolvedTheme === 'dark' ? 'dark text-white' : 'light text-slate-900';
-  const customBackground = resolvedTheme === 'dark' ? { backgroundColor: '#0A0A0A' } : { backgroundColor: '#F8FAFC' };
+  const themeClass = `${resolvedTheme} text-slate-950`;
+  const customBackground = { backgroundColor: '#F8FAFC' };
 
   // Phase AI Action handlers from Sidebar
   const handleAiAction = async (actionType: 'explain' | 'quiz' | 'study_plan' | 'projects', phaseName: string) => {

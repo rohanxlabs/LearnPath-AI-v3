@@ -7,13 +7,39 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Custom dark glow and animations */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  color-scheme: light;
+  font-size: 17px;
+  background: #f8fafc;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(168, 85, 247, 0.08), transparent 32rem),
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.08), transparent 30rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef6ff 48%, #f8fafc 100%);
+  color: #0f172a;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom light glow and animations */
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 15px rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
   }
   50% {
-    box-shadow: 0 0 30px rgba(59, 130, 246, 0.8);
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.28);
   }
 }
 
@@ -38,8 +64,8 @@
 }
 
 /* ==========================================================================
-   REAL-TIME UNIVERSAL LIGHT VALUE OVERRIDES
-   Maps dark utility classes to elegant, crisp light styles when .light is active.
+   App-wide Light SaaS Theme
+   Keeps legacy dark utility classes visually light without changing layout.
    ========================================================================== */
 
 .light {
@@ -50,8 +76,8 @@
 .light body,
 .light #root,
 .light .min-h-screen {
-  background-color: #F8FAFC !important;
-  color: #0F172A !important;
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
 }
 
 /* Base Headings & Labels */
@@ -77,10 +103,15 @@
   color: #475569 !important;
 }
 
+.light .text-zinc-305,
+.light .text-zinc-350,
+.light .text-zinc-450,
+.light .text-zinc-550,
 .light .text-zinc-605,
 .light .text-zinc-600,
+.light .text-zinc-650,
 .light .text-zinc-700 {
-  color: #64748B !important;
+  color: #334155 !important;
 }
 
 /* Hardcoded card/module backgrounds */
@@ -361,4 +392,258 @@
 .light .glass-card-rose {
   background: linear-gradient(135deg, rgba(244, 63, 94, 0.06), rgba(255, 255, 255, 0.8)) !important;
   border: 1px solid rgba(244, 63, 94, 0.15) !important;
+}
+
+/* Final light-theme guardrails for utilities that are hard-coded in components. */
+.light,
+.light * {
+  text-shadow: none !important;
+}
+
+.light {
+  background:
+    radial-gradient(circle at top left, rgba(168, 85, 247, 0.08), transparent 32rem),
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.08), transparent 30rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef6ff 48%, #f8fafc 100%) !important;
+}
+
+.light .glass-card,
+.light .glass-card-purple,
+.light .glass-card-blue,
+.light .glass-card-orange,
+.light .glass-card-orange-red,
+.light .glass-card-teal,
+.light .glass-card-emerald,
+.light .glass-card-rose {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(18px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(150%) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow:
+    0 22px 50px rgba(15, 23, 42, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset !important;
+  color: #0f172a !important;
+}
+
+.light .glass-card-purple {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(255, 255, 255, 0.76)) !important;
+}
+
+.light .glass-card-blue {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.76)) !important;
+}
+
+.light .glass-card-orange {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(255, 255, 255, 0.76)) !important;
+}
+
+.light .glass-card-orange-red {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(255, 255, 255, 0.76)) !important;
+}
+
+.light .glass-card-teal,
+.light .glass-card-emerald {
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.08), rgba(255, 255, 255, 0.76)) !important;
+}
+
+.light .glass-card-rose {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.08), rgba(255, 255, 255, 0.76)) !important;
+}
+
+.light :is(h1, h2, h3, h4, h5, h6),
+.light :is(.text-white, .dark\:text-white, .text-zinc-100, .text-zinc-200, .text-zinc-205, .text-zinc-300, .text-zinc-305, .text-zinc-350) {
+  color: #0f172a !important;
+}
+
+.light :is(.text-zinc-400, .text-zinc-450, .text-zinc-500, .text-zinc-550, .text-zinc-600, .text-zinc-605, .text-zinc-650, .text-zinc-700, .dark\:text-zinc-100, .dark\:text-zinc-200, .dark\:text-zinc-300, .dark\:text-zinc-350, .dark\:text-zinc-400) {
+  color: #334155 !important;
+}
+
+.light :is(.text-purple-300, .text-purple-400, .text-purple-450, .dark\:text-purple-300, .dark\:text-purple-400) {
+  color: #6d28d9 !important;
+}
+
+.light :is(.text-blue-300, .text-blue-400) {
+  color: #1d4ed8 !important;
+}
+
+.light :is(.text-emerald-300, .text-emerald-350, .text-emerald-400, .text-emerald-450) {
+  color: #047857 !important;
+}
+
+.light :is(.text-amber-300, .text-amber-400, .text-amber-500) {
+  color: #b45309 !important;
+}
+
+.light :is(.text-rose-400, .text-rose-450, .text-red-400, .text-red-500) {
+  color: #be123c !important;
+}
+
+.light :is(
+  .bg-\[\#0A0A0A\],
+  .bg-\[\#080809\],
+  .bg-\[\#09090b\],
+  .bg-\[\#09090A\],
+  .bg-\[\#0A0A0B\],
+  .bg-\[\#0E0E10\],
+  .bg-\[\#101012\],
+  .bg-\[\#111111\],
+  .bg-\[\#111111\]\/45,
+  .bg-\[\#111111\]\/80,
+  .bg-\[\#111111\]\/90,
+  .bg-\[\#111115\],
+  .bg-\[\#111115\]\/80,
+  .bg-\[\#121215\],
+  .bg-\[\#121215\]\/95,
+  .bg-\[\#13121b\],
+  .bg-\[\#14121b\],
+  .bg-\[\#1E1B29\],
+  .bg-\[\#1E1B29\]\/30,
+  .bg-\[\#1E1B29\]\/40,
+  .bg-\[\#1E1B29\]\/50,
+  .bg-\[\#1E1B29\]\/60,
+  .bg-\[\#1E1B29\]\/95,
+  .bg-black,
+  .bg-black\/30,
+  .bg-black\/40,
+  .bg-black\/50,
+  .bg-black\/60,
+  .bg-zinc-800,
+  .bg-zinc-900,
+  .bg-zinc-900\/40,
+  .bg-zinc-900\/80,
+  .bg-zinc-950,
+  .bg-zinc-950\/15,
+  .bg-zinc-950\/20,
+  .bg-zinc-950\/30,
+  .bg-zinc-950\/40,
+  .bg-zinc-950\/60,
+  .bg-zinc-950\/85,
+  .dark\:bg-\[\#111111\],
+  .dark\:bg-\[\#111111\]\/80,
+  .dark\:bg-zinc-950,
+  .dark\:bg-zinc-950\/85
+) {
+  background-color: rgba(255, 255, 255, 0.76) !important;
+  backdrop-filter: blur(16px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(145%) !important;
+  color: #0f172a !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.06) !important;
+}
+
+.light :is(
+  .bg-white\/5,
+  .bg-white\/10,
+  .bg-white\/15,
+  .bg-white\/20,
+  .bg-white\/\[0\.01\],
+  .bg-white\/\[0\.02\],
+  .bg-zinc-100\/40,
+  .bg-zinc-100\/50,
+  .dark\:bg-white\/5,
+  .dark\:bg-white\/\[0\.02\]
+) {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.light :is(
+  .border-white\/5,
+  .border-white\/10,
+  .border-white\/15,
+  .border-white\/20,
+  .border-white\/\[0\.03\],
+  .border-white\/\[0\.04\],
+  .border-zinc-200,
+  .border-zinc-250,
+  .border-zinc-300,
+  .border-zinc-800,
+  .border-zinc-805,
+  .border-zinc-900,
+  .border-zinc-910,
+  .border-zinc-950,
+  .border-\[\#1c1c1f\],
+  .dark\:border-white\/5,
+  .dark\:border-white\/10,
+  .dark\:border-zinc-805
+) {
+  border-color: rgba(148, 163, 184, 0.28) !important;
+}
+
+.light :is(input, textarea, select, pre, code) {
+  background-color: rgba(255, 255, 255, 0.82) !important;
+  color: #0f172a !important;
+  border-color: rgba(148, 163, 184, 0.38) !important;
+}
+
+.light ::placeholder {
+  color: #64748b !important;
+  opacity: 1;
+}
+
+.light :is(.hover\:text-white:hover, .dark\:hover\:text-white:hover, .hover\:text-zinc-200:hover, .dark\:hover\:text-zinc-200:hover) {
+  color: #0f172a !important;
+}
+
+.light :is(.hover\:bg-white\/5:hover, .hover\:bg-white\/10:hover, .hover\:bg-zinc-800:hover, .hover\:bg-zinc-900:hover, .hover\:bg-zinc-950:hover, .dark\:hover\:bg-white\/5:hover, .dark\:hover\:bg-zinc-100:hover) {
+  background-color: rgba(226, 232, 240, 0.72) !important;
+}
+
+.light [class*="bg-gradient-to"] {
+  box-shadow: 0 10px 24px rgba(79, 70, 229, 0.18);
+}
+
+.light button[class*="bg-gradient-to"],
+.light button[class*="bg-gradient-to"] *,
+.light [class*="from-purple-500"][class*="to-blue-600"],
+.light [class*="from-purple-500"][class*="to-blue-600"] *,
+.light [class*="from-emerald-500"][class*="to-teal-600"],
+.light [class*="from-emerald-500"][class*="to-teal-600"] * {
+  color: #ffffff !important;
+}
+
+.light :is(.stroke-white\/5, .stroke-white\/10) {
+  stroke: rgba(148, 163, 184, 0.28) !important;
+}
+
+.light :is(.shadow-2xl, .shadow-xl, .shadow-lg, .shadow-md, .shadow-sm) {
+  --tw-shadow-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+.light :is(.text-\[8px\], .text-\[9px\], .text-\[10px\], .text-\[11px\]) {
+  font-size: 0.78rem !important;
+  line-height: 1.35rem !important;
+}
+
+.light .text-xs {
+  font-size: 0.86rem !important;
+  line-height: 1.45rem !important;
+}
+
+.light .text-sm {
+  font-size: 0.98rem !important;
+  line-height: 1.55rem !important;
+}
+
+.light .text-base {
+  font-size: 1.06rem !important;
+  line-height: 1.65rem !important;
+}
+
+.light .prose-invert {
+  --tw-prose-body: #334155;
+  --tw-prose-headings: #0f172a;
+  --tw-prose-lead: #334155;
+  --tw-prose-links: #6d28d9;
+  --tw-prose-bold: #0f172a;
+  --tw-prose-counters: #475569;
+  --tw-prose-bullets: #64748b;
+  --tw-prose-hr: rgba(148, 163, 184, 0.28);
+  --tw-prose-quotes: #0f172a;
+  --tw-prose-quote-borders: rgba(148, 163, 184, 0.38);
+  --tw-prose-captions: #475569;
+  --tw-prose-code: #0f172a;
+  --tw-prose-pre-code: #0f172a;
+  --tw-prose-pre-bg: rgba(255, 255, 255, 0.78);
+  --tw-prose-th-borders: rgba(148, 163, 184, 0.38);
+  --tw-prose-td-borders: rgba(148, 163, 184, 0.22);
 }

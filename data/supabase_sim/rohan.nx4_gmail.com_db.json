@@ -6,17 +6,17 @@
       "experienceLevel": "Beginner",
       "weeklyHours": 10,
       "preferredStyle": "Hands-on",
-      "progressPercent": 0,
-      "totalXp": 0,
-      "lessonsCompleted": 0,
-      "hoursRemaining": 40,
+      "progressPercent": 33,
+      "totalXp": 70,
+      "lessonsCompleted": 2,
+      "hoursRemaining": 37,
       "createdAt": "2026-06-18T11:53:36.311Z",
       "phases": [
         {
           "id": "ph-fallback-1",
           "name": "Core Fundamentals",
           "description": "Mastering the absolute fundamentals necessary for \"machine learning\".",
-          "progress": 0,
+          "progress": 100,
           "estimatedHours": 12,
           "skillsCovered": [
             "Definitions",
@@ -24,21 +24,21 @@
             "Basic Syntax",
             "First Operations"
           ],
-          "xpEarned": 0,
-          "status": "current",
+          "xpEarned": 70,
+          "status": "completed",
           "levels": [
             {
               "id": "lvl-fallback-1-1",
               "name": "Getting Started Basics",
               "type": "Basics",
-              "status": "current",
+              "status": "completed",
               "lessons": [
                 {
                   "id": "les-f1-learn",
                   "name": "Introduction Chapter",
                   "type": "learn",
                   "xpReward": 20,
-                  "status": "available",
+                  "status": "completed",
                   "content": "\n### Welcome to machine learning!\n\nIn this introductory lesson, we will cover the core landscape. Whether you are a total beginner or just brushing up, visual clarity is key.\n\n#### Key Mechanics:\n1. **Inputs & Definitions**: Define clean pipelines so that you can organize your thoughts.\n2. **First Script Operations**: Execute core computations using the target system parameters.\n3. **Execution flow**: Process inputs chronologically.\n\nWe will verify this with a simple multiple-choice quiz up next!\n"
                 },
                 {
@@ -46,7 +46,7 @@
                   "name": "Fundamentals Checkpoint Quiz",
                   "type": "quiz",
                   "xpReward": 50,
-                  "status": "locked",
+                  "status": "completed",
                   "content": "Test your initial definitions.",
                   "quizQuestions": [
                     {
