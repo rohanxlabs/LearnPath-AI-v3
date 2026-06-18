@@ -1137,8 +1137,8 @@ function preparePWAAssets() {
     }
 
     const srcIcon = path.join(process.cwd(), 'src', 'assets', 'images', 'icon_512_1781771940744.jpg');
-    const destIcon512 = path.join(publicDir, 'icon-512.png');
-    const destIcon192 = path.join(publicDir, 'icon-192.png');
+    const destIcon512 = path.join(publicDir, 'icon-512.jpg');
+    const destIcon192 = path.join(publicDir, 'icon-192.jpg');
 
     const imagesDir = path.join(process.cwd(), 'src', 'assets', 'images');
     let foundIcon = srcIcon;
@@ -1153,7 +1153,7 @@ function preparePWAAssets() {
     if (fs.existsSync(foundIcon)) {
       fs.copyFileSync(foundIcon, destIcon512);
       fs.copyFileSync(foundIcon, destIcon192);
-      console.log('[PWA] Successfully cloned generated launcher PNG icons to public/');
+      console.log('[PWA] Successfully cloned generated launcher JPEG icons to public/');
     } else {
       console.warn('[PWA] Source launcher icon not found, generating fallback placeholder icons...');
       // If we don't have a source icon yet, write a tiny dummy 1px purple PNG or let the browser use SVG

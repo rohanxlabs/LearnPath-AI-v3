@@ -232,7 +232,7 @@ export function SideDrawer({
               <h5 className="text-xs font-black text-purple-700 dark:text-purple-300">UPGRADE TO PRO</h5>
             </div>
             <p className="text-[10px] text-zinc-700 dark:text-zinc-350 leading-relaxed mb-3">
-              Unlock unlimited AI dynamic roadmaps, instant code analysis, and continuous mock assessments.
+              Unlock unlimited AI dynamic roadmaps, instant code analysis, and continuous practice assessments.
             </p>
             <button
               onClick={() => {
@@ -266,7 +266,7 @@ export function SideDrawer({
             className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-rose-600 dark:text-rose-450 hover:text-rose-900 dark:hover:text-white hover:bg-rose-500/10 rounded-lg text-left"
           >
             <LogOut className="w-3.5 h-3.5 text-rose-500" />
-            <span className="text-rose-600 dark:text-red-400">Bypass Logout</span>
+            <span className="text-rose-600 dark:text-red-400">Logout</span>
           </button>
         </div>
       </div>

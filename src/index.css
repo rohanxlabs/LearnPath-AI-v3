@@ -97,24 +97,24 @@
 .light .bg-zinc-910,
 .light .bg-zinc-900,
 .light .bg-zinc-900\/40,
-.light .bg-[#111111],
-.light .bg-[#121215],
-.light .bg-[#13121b],
-.light .bg-[#14121b],
-.light .bg-[#1E1B29],
-.light .bg-[#1E1B29]\/95,
-.light .bg-[#1E1B29]\/90,
-.light .bg-[#1E1B29]\/75,
-.light .bg-[#1E1B29]\/60,
-.light .bg-[#1E1B29]\/40,
-.light .bg-[#1E1B29]\/30,
-.light .bg-[#0a0a0d],
-.light .bg-[#0A0A0A],
-.light .bg-[#0E0E10],
+.light .bg-\[\#111111\],
+.light .bg-\[\#121215\],
+.light .bg-\[\#13121b\],
+.light .bg-\[\#14121b\],
+.light .bg-\[\#1E1B29\],
+.light .bg-\[\#1E1B29\]\/95,
+.light .bg-\[\#1E1B29\]\/90,
+.light .bg-\[\#1E1B29\]\/75,
+.light .bg-\[\#1E1B29\]\/60,
+.light .bg-\[\#1E1B29\]\/40,
+.light .bg-\[\#1E1B29\]\/30,
+.light .bg-\[\#0a0a0d\],
+.light .bg-\[\#0A0A0A\],
+.light .bg-\[\#0E0E10\],
 .light .bg-zinc-900,
 .light .bg-zinc-950,
 .light .bg-zinc-910,
-.light .bg-[#101012] {
+.light .bg-\[\#101012\] {
   background-color: #FFFFFF !important;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02) !important;
 }
@@ -129,7 +129,7 @@
 /* Hover background cards in light theme */
 .light .hover\:bg-zinc-900:hover,
 .light .hover\:bg-zinc-950:hover,
-.light .hover\:bg-[#18181b]:hover {
+.light .hover\:bg-\[\#18181b\]:hover {
   background-color: #F1F5F9 !important;
 }
 
@@ -145,7 +145,7 @@
 .light .border-zinc-900,
 .light .border-zinc-910,
 .light .border-zinc-950,
-.light .border-[#1c1c1f],
+.light .border-\[\#1c1c1f\],
 .light .border-white\/\[0\.03\] {
   border-color: #E2E8F0 !important;
 }
@@ -182,9 +182,9 @@
 .light textarea,
 .light select,
 .light .bg-black\/30,
-.light .bg-[#080809],
-.light .bg-[#09090A]\/40,
-.light .bg-[#0A0A0B],
+.light .bg-\[\#080809\],
+.light .bg-\[\#09090A\]\/40,
+.light .bg-\[\#0A0A0B\],
 .light .bg-black {
   background-color: #F8FAFC !important;
   color: #0F172A !important;
@@ -197,7 +197,7 @@
 }
 
 .light .bg-black\/50,
-.light .bg-[#0e0e11] {
+.light .bg-\[\#0e0e11\] {
   background-color: #F1F5F9 !important;
   color: #0F172A !important;
 }
@@ -226,7 +226,7 @@
 }
 
 /* Custom analytics & Consistency diagnostics containers */
-.light .bg-[#111111]\/90 {
+.light .bg-\[\#111111\]\/90 {
   background-color: #FFFFFF !important;
   border-color: #E2E8F0 !important;
 }
@@ -362,5 +362,3 @@
   background: linear-gradient(135deg, rgba(244, 63, 94, 0.06), rgba(255, 255, 255, 0.8)) !important;
   border: 1px solid rgba(244, 63, 94, 0.15) !important;
 }
-
-

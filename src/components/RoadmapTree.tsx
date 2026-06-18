@@ -104,7 +104,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
   const activePhase = roadmap.phases.find(p => p.status === 'current') || roadmap.phases[0];
 
   return (
-    <div ref={containerRef} className="space-y-6 select-none font-sans text-white relative">
+    <div ref={containerRef} className="space-y-7 select-none font-sans text-white relative">
       {/* Dynamic Keyframes for floaty XP rises & particle streams */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes float-xp-up {
@@ -175,8 +175,8 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
       </div>
 
       {/* Gamified HUD Status Card: Stable general telemetry overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 glass-card p-5">
-        <div className="flex items-center gap-4 col-span-1 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-white/5 pb-4 md:pb-0 md:pr-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 glass-card p-5 sm:p-6">
+        <div className="flex items-center gap-4 col-span-1 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-white/5 pb-5 md:pb-0 md:pr-5">
           <div className="relative w-15 h-15 shrink-0 flex items-center justify-center">
             <svg className="w-full h-full transform -rotate-90">
               <circle cx="30" cy="30" r="25" className="stroke-zinc-200 dark:stroke-zinc-800" strokeWidth="4" fill="none" />
@@ -201,7 +201,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
           </div>
         </div>
 
-        <div className="col-span-2 grid grid-cols-2 gap-4 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-white/5 pb-4 md:pb-0 md:px-4">
+        <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-5 border-b md:border-b-0 md:border-r border-zinc-200 dark:border-white/5 pb-5 md:pb-0 md:px-5">
           <div className="flex flex-col justify-center">
             <span className="text-[8px] font-black text-zinc-500 dark:text-zinc-500 tracking-wider uppercase block">Accumulated Experience</span>
             <div className="flex items-center gap-2 mt-1">
@@ -236,12 +236,12 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
       </div>
 
       {/* CORE PERMANENTLY LOCKED SYSTEM TIMELINE */}
-      <div className="glass-card p-6 shadow-xl relative overflow-hidden">
+      <div className="glass-card p-5 sm:p-7 shadow-xl relative overflow-hidden">
         {/* Background ambient lighting flares */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-purple-600/10 rounded-full blur-[140px] pointer-events-none animate-glow-pulse" />
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-600/10 rounded-full blur-[140px] pointer-events-none animate-glow-pulse" />
 
-        <div className="border-b border-zinc-200 dark:border-white/5 pb-4 mb-6">
+        <div className="border-b border-zinc-200 dark:border-white/5 pb-5 mb-7">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Compass className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -251,13 +251,13 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
               Locked Progression System
             </span>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 leading-relaxed">
             Flow sequentially through curated challenges. Complete mandatory levels below to expand subsequent locks automatically.
           </p>
         </div>
 
         {/* Stable Unified Timeline Track */}
-        <div className="relative space-y-8 pl-4 sm:pl-8 before:absolute before:top-2 before:bottom-2 before:left-2 sm:before:left-4 before:w-[2px] before:bg-gradient-to-b before:from-purple-500/40 before:via-blue-500/20 before:to-zinc-800">
+        <div className="relative space-y-9 pl-5 sm:pl-9 before:absolute before:top-2 before:bottom-2 before:left-2 sm:before:left-4 before:w-[2px] before:bg-gradient-to-b before:from-purple-500/40 before:via-blue-500/20 before:to-zinc-800">
           
           {roadmap.phases.map((ph, phaseIdx) => {
             const PhaseIcon = getPhaseIcon(phaseIdx, ph.name);
@@ -293,19 +293,19 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                   isActive 
                     ? 'bg-purple-50/70 dark:bg-[#14121b] border-purple-300 dark:border-purple-500/25 shadow-[0_4px_20px_rgba(168,85,247,0.06)]' 
                     : isCompleted 
-                      ? 'bg-[#1E1B29] border-purple-500/35 dark:border-purple-500/25 shadow-[0_4px_20px_rgba(139,92,246,0.12)] text-white'
+                      ? 'bg-purple-50/80 dark:bg-[#1E1B29] border-purple-200 dark:border-purple-500/25 shadow-[0_4px_20px_rgba(139,92,246,0.12)] text-slate-900 dark:text-white'
                       : 'bg-zinc-100/60 dark:bg-zinc-950/20 border-zinc-200 dark:border-zinc-900 text-zinc-500 opacity-75'
                 }`}>
                   
                   {/* Phase Summary Header */}
                   <div 
                     onClick={() => togglePhaseExpand(ph.id)}
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-white/[0.02]"
+                    className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-5 cursor-pointer hover:bg-white/[0.02]"
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-4">
                       <div className={`p-2.5 rounded-xl border shrink-0 ${
                         isCompleted 
-                          ? 'bg-purple-500/20 border-purple-400/40 text-purple-300' 
+                          ? 'bg-purple-100 dark:bg-purple-500/20 border-purple-200 dark:border-purple-400/40 text-purple-700 dark:text-purple-300' 
                           : isActive 
                             ? 'bg-purple-500/10 border-purple-400/20 text-purple-600 dark:text-purple-400' 
                             : 'bg-zinc-200/50 dark:bg-white/5 border-zinc-300 dark:border-zinc-900 text-zinc-600'
@@ -315,11 +315,11 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={`text-[9px] font-black uppercase tracking-widest ${
-                            isCompleted ? 'text-zinc-400' : 'text-zinc-500 dark:text-zinc-500'
+                            isCompleted ? 'text-slate-500 dark:text-zinc-400' : 'text-zinc-500 dark:text-zinc-500'
                           }`}>PHASE {String(phaseIdx + 1).padStart(2, '0')}</span>
                           <span className={`text-[8px] font-mono font-black uppercase px-2 py-0.5 border rounded ${
                             isCompleted 
-                              ? 'bg-purple-500/25 border-purple-400/30 text-purple-200' 
+                              ? 'bg-purple-100 border-purple-200 text-purple-700 dark:bg-purple-500/25 dark:border-purple-400/30 dark:text-purple-200' 
                               : isActive 
                                 ? 'bg-purple-100 dark:bg-purple-500/10 border-purple-300/40 dark:border-purple-500/20 text-purple-750 dark:text-purple-400' 
                                 : 'bg-zinc-200/50 dark:bg-white/5 border-zinc-300 dark:border-white/5 text-zinc-600'
@@ -327,29 +327,29 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                             {ph.status}
                           </span>
                         </div>
-                        <h4 className={`font-bold text-sm mt-1 group-hover:text-purple-300 transition-colors ${
-                          isCompleted ? 'text-white' : 'text-zinc-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-300'
+                        <h4 className={`font-bold text-sm mt-1.5 group-hover:text-purple-300 transition-colors ${
+                          isCompleted ? 'text-slate-950 dark:text-white group-hover:text-purple-700 dark:group-hover:text-purple-300' : 'text-zinc-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-300'
                         }`}>{ph.name}</h4>
-                        <p className={`text-xs mt-1 line-clamp-2 max-w-2xl ${
-                          isCompleted ? 'text-zinc-300' : 'text-zinc-500 dark:text-zinc-300'
+                        <p className={`text-xs mt-1.5 line-clamp-2 max-w-2xl leading-relaxed ${
+                          isCompleted ? 'text-slate-600 dark:text-zinc-300' : 'text-zinc-500 dark:text-zinc-300'
                         }`}>{ph.description}</p>
                       </div>
                     </div>
 
                     {/* Progress representation + Quick study state controller */}
-                    <div className="flex items-center gap-4 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 border-zinc-200 dark:border-white/5 pt-3 sm:pt-0">
+                    <div className="flex items-center gap-5 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 border-zinc-200 dark:border-white/5 pt-4 sm:pt-0">
                       <div className="text-right">
                         <span className={`block text-[8px] font-bold tracking-wider uppercase ${
-                          isCompleted ? 'text-zinc-400' : 'text-zinc-500 dark:text-zinc-500'
+                          isCompleted ? 'text-slate-500 dark:text-zinc-400' : 'text-zinc-500 dark:text-zinc-500'
                         }`}>Stage Progress</span>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-2.5 mt-1">
                           <div className={`w-16 h-1.5 rounded-full overflow-hidden border ${
-                            isCompleted ? 'bg-zinc-950 border-purple-500/35' : 'bg-zinc-200 dark:bg-[#0E0E10] border-zinc-300 dark:border-white/5'
+                            isCompleted ? 'bg-purple-100 border-purple-200 dark:bg-zinc-950 dark:border-purple-500/35' : 'bg-zinc-200 dark:bg-[#0E0E10] border-zinc-300 dark:border-white/5'
                           }`}>
                             <div className="h-full bg-purple-600 dark:bg-purple-500 rounded-full" style={{ width: `${ph.progress}%` }} />
                           </div>
                           <span className={`text-[10px] font-bold font-mono ${
-                            isCompleted ? 'text-white' : 'text-zinc-900 dark:text-white'
+                            isCompleted ? 'text-slate-900 dark:text-white' : 'text-zinc-900 dark:text-white'
                           }`}>{ph.progress}%</span>
                         </div>
                       </div>
@@ -357,7 +357,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                       {/* Expansion arrow toggle state */}
                       <div className={`p-1.5 rounded-xl border ${
                         isCompleted 
-                          ? 'border-purple-500/30 bg-purple-950/40 text-purple-350' 
+                          ? 'border-purple-200 bg-purple-100 text-purple-700 dark:border-purple-500/30 dark:bg-purple-950/40 dark:text-purple-350' 
                           : 'border-zinc-200 dark:border-white/5 bg-zinc-100 dark:bg-zinc-950/60 text-zinc-600 dark:text-zinc-400'
                       }`}>
                         <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
@@ -375,34 +375,34 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                         transition={{ duration: 0.25 }}
                         className={`border-t ${
                           isCompleted 
-                            ? 'border-purple-500/15 bg-zinc-950/45' 
+                            ? 'border-purple-200/70 bg-white/55 dark:border-purple-500/15 dark:bg-zinc-950/45' 
                             : 'border-zinc-200 dark:border-white/[0.04] bg-zinc-100/30 dark:bg-[#09090A]/40'
                         }`}
                       >
-                        <div className="p-4 space-y-6">
+                        <div className="p-5 space-y-7">
                           
                           {/* Inner Level Header */}
-                          <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b ${
-                            isCompleted ? 'border-purple-500/15' : 'border-zinc-200 dark:border-white/[0.03]'
+                          <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b ${
+                            isCompleted ? 'border-purple-200/70 dark:border-purple-500/15' : 'border-zinc-200 dark:border-white/[0.03]'
                           }`}>
                             <div>
                               <span className="text-[8px] font-black text-purple-600 dark:text-purple-400 tracking-widest uppercase">SYLLABUS SECTOR CHECKS</span>
                               <h5 className={`text-xs font-black mt-0.5 flex items-center gap-1.5 ${
-                                isCompleted ? 'text-zinc-200' : 'text-zinc-900 dark:text-white'
+                                isCompleted ? 'text-slate-900 dark:text-zinc-200' : 'text-zinc-900 dark:text-white'
                               }`}>
-                                <BookOpen className={`w-3.5 h-3.5 ${isCompleted ? 'text-purple-400' : 'text-zinc-500'}`} />
+                                <BookOpen className={`w-3.5 h-3.5 ${isCompleted ? 'text-purple-700 dark:text-purple-400' : 'text-zinc-500'}`} />
                                 <span>Includes {ph.levels.length} modular milestones • {ph.estimatedHours} Hours total</span>
                               </h5>
                             </div>
 
                             {/* AI Copilot Tools Integrated per Phase */}
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex flex-wrap gap-2">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onAiAction('explain', ph.name);
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[9px] font-bold text-purple-700 dark:text-purple-300 hover:text-white bg-purple-100 hover:bg-purple-600 dark:bg-purple-500/10 border border-purple-200 hover:border-purple-500 rounded-lg transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-bold text-purple-700 dark:text-purple-300 hover:text-white bg-purple-100 hover:bg-purple-600 dark:bg-purple-500/10 border border-purple-200 hover:border-purple-500 rounded-lg transition-colors cursor-pointer"
                               >
                                 <Bot className="w-3 h-3" />
                                 <span>Explain Stage</span>
@@ -412,7 +412,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                                   e.stopPropagation();
                                   onAiAction('quiz', ph.name);
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[9px] font-bold text-blue-700 dark:text-blue-300 hover:text-white bg-blue-100 hover:bg-blue-600 dark:bg-blue-500/10 border border-blue-200 hover:border-blue-500 rounded-lg transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[9px] font-bold text-blue-700 dark:text-blue-300 hover:text-white bg-blue-100 hover:bg-blue-600 dark:bg-blue-500/10 border border-blue-200 hover:border-blue-500 rounded-lg transition-colors cursor-pointer"
                               >
                                 <Zap className="w-3 h-3" />
                                 <span>AI Practice Quiz</span>
@@ -421,7 +421,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                           </div>
 
                           {/* Level list/ timeline container inside Phase */}
-                          <div className="space-y-4">
+                          <div className="space-y-5">
                             {ph.levels.map((lvl, lvlIdx) => {
                               const lvlIsLocked = false; // Unlocked globally for free learning flow
                               const lvlIsDone = lvl.status === 'completed';
@@ -430,21 +430,21 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                               return (
                                 <div 
                                   key={lvl.id} 
-                                  className={`p-4 rounded-xl border transition-all ${
+                                  className={`p-4 sm:p-5 rounded-2xl border transition-all ${
                                     lvlIsCurrent
                                       ? 'bg-purple-50/60 dark:bg-[#13121b] border-purple-300 dark:border-purple-500/30'
                                       : lvlIsDone
                                         ? (isCompleted 
-                                            ? 'bg-[#15121F]/80 border-purple-500/30 text-white shadow-[0_2px_12px_rgba(168,85,247,0.06)]' 
+                                            ? 'bg-white/80 dark:bg-[#15121F]/80 border-purple-200 dark:border-purple-500/30 text-slate-900 dark:text-white shadow-[0_2px_12px_rgba(168,85,247,0.06)]' 
                                             : 'bg-[#1E1B29]/40 dark:bg-[#1E1B29]/30 border-purple-500/25 dark:border-purple-500/15')
                                         : (isCompleted
-                                            ? 'bg-zinc-900/40 border-white/5 opacity-80'
+                                            ? 'bg-white/55 dark:bg-zinc-900/40 border-purple-100 dark:border-white/5 opacity-80'
                                             : 'bg-zinc-50 dark:bg-zinc-950/30 border-zinc-200 dark:border-zinc-900 opacity-80')
                                   }`}
                                 >
                                   {/* Level Meta info */}
-                                  <div className={`flex items-center justify-between border-b pb-2 mb-3 ${
-                                    isCompleted ? 'border-purple-500/10' : 'border-zinc-200 dark:border-white/[0.03]'
+                                  <div className={`flex items-center justify-between border-b pb-3 mb-4 gap-3 ${
+                                    isCompleted ? 'border-purple-200/70 dark:border-purple-500/10' : 'border-zinc-200 dark:border-white/[0.03]'
                                   }`}>
                                     <div className="flex items-center gap-2">
                                       <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border ${
@@ -457,7 +457,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                                         Level {lvlIdx + 1} • {lvl.type}
                                       </span>
                                       <h6 className={`font-bold text-xs truncate max-w-[200px] ${
-                                        isCompleted ? 'text-zinc-100' : 'text-zinc-900 dark:text-white'
+                                        isCompleted ? 'text-slate-900 dark:text-zinc-100' : 'text-zinc-900 dark:text-white'
                                       }`}>{lvl.name}</h6>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -469,7 +469,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                                         <Lock className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-700" />
                                       ) : null}
                                       <span className={`text-[9px] font-mono ${
-                                        isCompleted ? 'text-purple-300/90' : 'text-zinc-650 dark:text-zinc-500'
+                                        isCompleted ? 'text-purple-700 dark:text-purple-300/90' : 'text-zinc-650 dark:text-zinc-500'
                                       }`}>
                                         {lvl.lessons.filter(l => l.status === 'completed').length}/{lvl.lessons.length} Quests
                                       </span>
@@ -477,7 +477,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                                   </div>
 
                                   {/* Inline rendering of lesson tiles under this level */}
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {lvl.lessons.map((les) => {
                                       const isLessonLocked = false; // Unlocked globally for free learning flow
                                       const isLessonDone = les.status === 'completed';
@@ -492,34 +492,34 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                                         <div
                                           key={les.id}
                                           onClick={(e) => handleLessonClick(ph.id, lvl, les, e)}
-                                          className={`p-3.5 rounded-xl border text-left cursor-pointer transition-all duration-300 flex flex-col justify-between h-28 relative overflow-hidden group/les ${
+                                          className={`p-4 rounded-xl border text-left cursor-pointer transition-all duration-300 flex flex-col justify-between min-h-32 relative overflow-hidden group/les ${
                                             !isLessonLocked
                                               ? isLessonDone
                                                 ? (isCompleted
-                                                    ? 'bg-[#15121F]/70 hover:bg-[#15121F] border-purple-500/25 hover:border-purple-500 text-zinc-100 hover:shadow-[0_2px_12px_rgba(168,85,247,0.1)]'
+                                                    ? 'bg-white/80 hover:bg-purple-50 border-purple-200 hover:border-purple-400 text-slate-900 dark:bg-[#15121F]/70 dark:hover:bg-[#15121F] dark:border-purple-500/25 dark:hover:border-purple-500 dark:text-zinc-100 hover:shadow-[0_2px_12px_rgba(168,85,247,0.1)]'
                                                     : 'bg-[#1E1B29]/30 hover:bg-[#1E1B29]/50 dark:bg-[#1E1B29]/40 dark:hover:bg-[#1E1B29]/60 border-purple-500/25 dark:border-purple-500/15 hover:border-purple-500 dark:hover:border-purple-400 text-purple-900 dark:text-purple-300 hover:shadow-[0_2px_12px_rgba(168,85,247,0.08)]')
                                                 : isCompleted
-                                                  ? 'bg-[#15121F]/50 hover:bg-[#15121F]/75 border-purple-900/40 hover:border-purple-500/50 text-zinc-300 hover:shadow-md'
+                                                  ? 'bg-white/65 hover:bg-purple-50/90 border-purple-100 hover:border-purple-300 text-slate-700 dark:bg-[#15121F]/50 dark:hover:bg-[#15121F]/75 dark:border-purple-900/40 dark:hover:border-purple-500/50 dark:text-zinc-300 hover:shadow-md'
                                                   : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/5 hover:border-purple-300 dark:hover:border-purple-500/30 hover:shadow-md'
                                               : 'bg-zinc-100/55 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-950 text-zinc-400 dark:text-zinc-500 opacity-45 cursor-not-allowed'
                                           }`}
                                         >
-                                          <div className="flex items-start justify-between gap-1">
+                                          <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
                                               <span className={`text-[7.5px] font-bold tracking-wider uppercase block ${
-                                                isCompleted ? 'text-zinc-400' : 'text-zinc-500 dark:text-zinc-500'
+                                                isCompleted ? 'text-slate-500 dark:text-zinc-400' : 'text-zinc-500 dark:text-zinc-500'
                                               }`}>{subText}</span>
-                                              <h6 className={`font-bold text-xs truncate mt-0.5 transition-colors ${
+                                              <h6 className={`font-bold text-xs truncate mt-1 transition-colors ${
                                                 isCompleted 
-                                                  ? 'text-zinc-100 group-hover/les:text-purple-300' 
+                                                  ? 'text-slate-900 group-hover/les:text-purple-700 dark:text-zinc-100 dark:group-hover/les:text-purple-300' 
                                                   : 'text-zinc-900 dark:text-white group-hover/les:text-purple-600 dark:group-hover/les:text-purple-300'
                                               }`}>{les.name}</h6>
                                             </div>
                                             <span className="text-base select-none">{iconEmoji}</span>
                                           </div>
 
-                                          <div className={`pt-2 border-t mt-2 flex items-center justify-between ${
-                                            isCompleted ? 'border-purple-500/10' : 'border-zinc-200 dark:border-white/[0.03]'
+                                          <div className={`pt-3 border-t mt-3 flex items-center justify-between ${
+                                            isCompleted ? 'border-purple-200/70 dark:border-purple-500/10' : 'border-zinc-200 dark:border-white/[0.03]'
                                           }`}>
                                             <XPBadge amount={les.xpReward} size="sm" />
                                             
@@ -527,7 +527,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                                               {isLessonDone ? (
                                                 <span className={`text-[8px] font-black px-2 py-0.5 border rounded-full flex items-center gap-0.5 ${
                                                   isCompleted 
-                                                    ? 'text-purple-250 bg-purple-500/20 border-purple-400/30' 
+                                                    ? 'text-purple-700 bg-purple-100 border-purple-200 dark:text-purple-250 dark:bg-purple-500/20 dark:border-purple-400/30' 
                                                     : 'text-purple-800 dark:text-purple-300 bg-purple-100/90 dark:bg-purple-500/10 border-purple-300/40 dark:border-purple-500/20'
                                                 }`}>
                                                   <Check className="w-2.5 h-2.5 stroke-[3.5px]" />
@@ -578,7 +578,7 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
               <Trophy className="w-3.5 h-3.5" />
             </div>
 
-            <div className={`p-4 rounded-xl border max-w-sm inline-flex items-center gap-3 select-none ${
+            <div className={`p-5 rounded-2xl border max-w-sm inline-flex items-center gap-4 select-none ${
               overallProgressPct === 100 
                 ? 'bg-purple-100/80 dark:bg-[#1E1B29]/95 border-purple-400 dark:border-purple-500 shadow-[0_0_25px_rgba(168,85,247,0.35)] text-purple-900 dark:text-white' 
                 : 'bg-zinc-100/50 dark:bg-[#101012] border-zinc-200 dark:border-zinc-900 text-zinc-600 dark:text-zinc-500'
@@ -599,48 +599,48 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
       </div>
 
       {/* Structured study metrics section tracking diagnostic results */}
-      <div className="bg-[#111111]/90 border border-white/5 rounded-3xl p-5 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-white/5 pb-4 mb-4 gap-2">
+      <div className="bg-white dark:bg-[#111111]/90 border border-zinc-200 dark:border-white/5 rounded-3xl p-5 sm:p-6 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-200 dark:border-white/5 pb-5 mb-5 gap-3">
           <div>
-            <h4 className="font-display font-semibold text-sm text-white">Consistency diagnostics & learning velocity tracker</h4>
-            <p className="text-[10px] text-zinc-500">Continuous study telemetry tracked automatically by LearnPath AI.</p>
+            <h4 className="font-display font-semibold text-sm text-slate-900 dark:text-white">Consistency diagnostics & learning velocity tracker</h4>
+            <p className="text-[10px] text-slate-500 dark:text-zinc-500">Continuous study telemetry tracked automatically by LearnPath AI.</p>
           </div>
-          <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase bg-white/5 border border-white/10 px-2 py-1 rounded-md">
+          <span className="text-[10px] font-mono font-bold text-slate-600 dark:text-zinc-400 uppercase bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 px-2 py-1 rounded-md">
             Syllabus Engine 1.2
           </span>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pb-2 text-center">
-          <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-2xl">
-            <span className="text-[8px] font-black text-zinc-500 tracking-wider uppercase block">Chapters Completed</span>
-            <span className="text-lg font-black text-purple-400 font-display block mt-1">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5 pb-2 text-center">
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl">
+            <span className="text-[8px] font-black text-slate-500 dark:text-zinc-500 tracking-wider uppercase block">Chapters Completed</span>
+            <span className="text-lg font-black text-purple-700 dark:text-purple-400 font-display block mt-1">
               {roadmap.lessonsCompleted} Chapters
             </span>
-            <span className="text-[9px] text-zinc-500">{overallProgressPct}% Complete</span>
+            <span className="text-[9px] text-slate-500 dark:text-zinc-500">{overallProgressPct}% Complete</span>
           </div>
 
-          <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-2xl">
-            <span className="text-[8px] font-black text-zinc-500 tracking-wider uppercase block">Quizzes Verified</span>
-            <span className="text-lg font-black text-blue-400 font-display block mt-1">
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl">
+            <span className="text-[8px] font-black text-slate-500 dark:text-zinc-500 tracking-wider uppercase block">Quizzes Verified</span>
+            <span className="text-lg font-black text-blue-700 dark:text-blue-400 font-display block mt-1">
               {Math.max(1, Math.round(roadmap.lessonsCompleted * 0.4))} Quiz units
             </span>
-            <span className="text-[9px] text-zinc-500">Avg accuracy: 92%</span>
+            <span className="text-[9px] text-slate-500 dark:text-zinc-500">Avg accuracy: 92%</span>
           </div>
 
-          <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-2xl">
-            <span className="text-[8px] font-black text-zinc-500 tracking-wider uppercase block">Coding challenges</span>
-            <span className="text-lg font-black text-emerald-400 font-display block mt-1">
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl">
+            <span className="text-[8px] font-black text-slate-500 dark:text-zinc-500 tracking-wider uppercase block">Coding challenges</span>
+            <span className="text-lg font-black text-emerald-700 dark:text-emerald-400 font-display block mt-1">
               {Math.max(1, Math.round(roadmap.lessonsCompleted * 0.35))} Exercises
             </span>
-            <span className="text-[9px] text-zinc-500 font-medium">Pass rate: 85% compile</span>
+            <span className="text-[9px] text-slate-500 dark:text-zinc-500 font-medium">Pass rate: 85% compile</span>
           </div>
 
-          <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-2xl">
-            <span className="text-[8px] font-black text-zinc-500 tracking-wider uppercase block">Speed study velocity</span>
-            <span className="text-lg font-black text-amber-500 font-display block mt-1">
+          <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-900 rounded-2xl">
+            <span className="text-[8px] font-black text-slate-500 dark:text-zinc-500 tracking-wider uppercase block">Speed study velocity</span>
+            <span className="text-lg font-black text-amber-700 dark:text-amber-500 font-display block mt-1">
               Excellent
             </span>
-            <span className="text-[9px] text-zinc-400">Streak factor active</span>
+            <span className="text-[9px] text-slate-500 dark:text-zinc-400">Streak factor active</span>
           </div>
         </div>
       </div>

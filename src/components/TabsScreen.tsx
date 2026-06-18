@@ -442,7 +442,7 @@ export function ProfileView({
           </div>
         </div>
 
-        {/* Subscription stripe payment mock screen */}
+        {/* Subscription payment screen */}
         <div className="p-5 rounded-3xl glass-card glass-card-blue flex flex-col justify-between space-y-4">
           <div>
             <h4 className="font-display font-semibold text-sm text-white flex items-center gap-2">
@@ -478,7 +478,7 @@ export function ProfileView({
               <CheckCircle className="w-4 h-4 shrink-0" />
               <div>
                 <p className="font-bold">{checkoutStatus}</p>
-                <p className="text-[10px] text-zinc-400 font-medium">Auto-activated on bypassed premium demo profiles.</p>
+                <p className="text-[10px] text-zinc-400 font-medium">Subscription status is saved to your user profile.</p>
               </div>
             </div>
           ) : (

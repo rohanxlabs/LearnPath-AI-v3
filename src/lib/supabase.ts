@@ -21,6 +21,14 @@ class SupabaseQueryBuilder {
     this.table = table;
   }
 
+  private getUserEmail() {
+    const userEmail = localStorage.getItem('learnpath_authenticated_email');
+    if (!userEmail) {
+      throw new Error('No authenticated user email is available for persistence.');
+    }
+    return userEmail;
+  }
+
   eq(column: string, value: any) {
     this.filters.push({ column, value });
     return this;
@@ -28,7 +36,7 @@ class SupabaseQueryBuilder {
 
   async select(columns: string = '*') {
     try {
-      const userEmail = localStorage.getItem('learnpath_authenticated_email') || 'alex.parker@learnpath.ai';
+      const userEmail = this.getUserEmail();
       const url = `/api/supabase/select?table=${this.table}&userEmail=${encodeURIComponent(userEmail)}&filters=${encodeURIComponent(JSON.stringify(this.filters))}`;
       const res = await fetch(url);
       if (!res.ok) {
@@ -44,7 +52,7 @@ class SupabaseQueryBuilder {
 
   async insert(rowOrRows: any) {
     try {
-      const userEmail = localStorage.getItem('learnpath_authenticated_email') || 'alex.parker@learnpath.ai';
+      const userEmail = this.getUserEmail();
       const rows = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
       const res = await fetch(`/api/supabase/insert`, {
         method: 'POST',
@@ -64,7 +72,7 @@ class SupabaseQueryBuilder {
 
   async update(updates: any) {
     try {
-      const userEmail = localStorage.getItem('learnpath_authenticated_email') || 'alex.parker@learnpath.ai';
+      const userEmail = this.getUserEmail();
       const res = await fetch(`/api/supabase/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,7 +91,7 @@ class SupabaseQueryBuilder {
 
   async upsert(rowOrRows: any) {
     try {
-      const userEmail = localStorage.getItem('learnpath_authenticated_email') || 'alex.parker@learnpath.ai';
+      const userEmail = this.getUserEmail();
       const rows = Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows];
       const res = await fetch(`/api/supabase/upsert`, {
         method: 'POST',

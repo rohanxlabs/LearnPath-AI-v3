@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, KeyRound, CheckCircle } from 'lucide-react';
+import { Sparkles, Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, CheckCircle } from 'lucide-react';
 import { UserProfile, UserSettings, Roadmap, Achievement, SystemNotification, ChatMessage } from './types';
 import { usePWA } from './lib/usePWA';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
@@ -15,10 +15,173 @@ import { ResourcesTab } from './components/ResourcesTab';
 import { QuizTab } from './components/QuizTab';
 import { ProjectsTab } from './components/ProjectsTab';
 import { supabase } from './lib/supabase';
-import { loadLocalStorage, saveLocalStorage, DEV_BYPASS_AUTH } from './mockData';
+import { createEmptyProfile, DEFAULT_SETTINGS, loadUserData, saveUserData } from './userData';
+
+function DashboardTemplate({
+  profile,
+  onCreateRoadmap,
+  onOpenMentor,
+}: {
+  profile: UserProfile;
+  onCreateRoadmap: () => void;
+  onOpenMentor: () => void;
+}) {
+  const levelCards = [
+    { id: 'level-foundations', title: 'Level 1', label: 'Foundations', status: 'Ready when roadmap connects', tint: 'glass-card-purple' },
+    { id: 'level-practice', title: 'Level 2', label: 'Guided Practice', status: 'Locked until lessons arrive', tint: 'glass-card-blue' },
+    { id: 'level-project', title: 'Level 3', label: 'Project Sprint', status: 'Waiting for project data', tint: 'glass-card-teal' },
+  ];
+
+  const lessonSlots = [
+    { id: 'lesson-slot-1', title: 'Intro lesson slot', meta: 'Video, reading, or mentor task' },
+    { id: 'lesson-slot-2', title: 'Practice checkpoint', meta: 'Quiz or coding exercise' },
+    { id: 'lesson-slot-3', title: 'Applied project step', meta: 'Hands-on deliverable' },
+  ];
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <section className="grid grid-cols-1 lg:grid-cols-[1.35fr_0.65fr] gap-6">
+        <div className="glass-card glass-card-purple p-6 md:p-7 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
+            <div className="min-w-0">
+              <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-purple-300 font-mono">
+                <Sparkles className="w-3.5 h-3.5" />
+                Dashboard Template
+              </span>
+              <h2 className="font-display text-2xl md:text-3xl font-bold text-white mt-3">
+                Welcome back, {profile.name}
+              </h2>
+              <p className="text-xs text-zinc-350 mt-2 max-w-xl leading-relaxed">
+                Your active course progress, next lesson, and skill milestones will fill this space once a roadmap is connected.
+              </p>
+            </div>
+            <button
+              onClick={onCreateRoadmap}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-purple-500 to-blue-600 rounded-xl shadow-md hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Create Roadmap</span>
+            </button>
+          </div>
+
+          <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { label: 'Course Progress', value: '0%', detail: 'No active roadmap' },
+              { label: 'Current Level', value: 'L1', detail: 'Template state' },
+              { label: 'Lessons Ready', value: '0', detail: 'Awaiting sync' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl border border-white/5 bg-white/5 p-4">
+                <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 font-mono">{item.label}</p>
+                <p className="font-display text-2xl font-bold text-white mt-2">{item.value}</p>
+                <p className="text-[10px] text-zinc-400 mt-1">{item.detail}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-semibold text-zinc-300">Overall roadmap progress</span>
+              <span className="font-mono font-bold text-zinc-400">0 / 100%</span>
+            </div>
+            <div className="h-2 rounded-full bg-white/5 border border-white/5 overflow-hidden">
+              <div className="h-full w-[8%] rounded-full bg-gradient-to-r from-purple-500/50 to-blue-500/50" />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card glass-card-blue p-5 flex flex-col justify-between gap-5">
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-display font-semibold text-sm text-white">Next Lesson</h3>
+              <span className="text-[10px] font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5">
+                Empty State
+              </span>
+            </div>
+            <div className="mt-5 space-y-3">
+              <div className="h-3 w-3/4 rounded-full bg-white/10 animate-pulse" />
+              <div className="h-3 w-full rounded-full bg-white/10 animate-pulse" />
+              <div className="h-3 w-2/3 rounded-full bg-white/10 animate-pulse" />
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+            <p className="text-xs font-semibold text-white">Lesson data will appear here</p>
+            <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
+              Title, duration, XP reward, and continue action can bind to the active lesson record.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {levelCards.map((level) => (
+          <div key={level.id} className={`${level.tint} p-5`}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 font-mono">{level.title}</p>
+                <h3 className="font-display font-bold text-lg text-white mt-1">{level.label}</h3>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-purple-300" />
+              </div>
+            </div>
+            <p className="text-xs text-zinc-350 mt-4">{level.status}</p>
+            <div className="mt-4 flex gap-1.5">
+              {[0, 1, 2, 3].map((slot) => (
+                <span key={slot} className="h-1.5 flex-1 rounded-full bg-white/10" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-[1fr_0.8fr] gap-6">
+        <div className="glass-card glass-card-teal p-5">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <h3 className="font-display font-semibold text-sm text-white">Lesson Queue</h3>
+            <span className="text-[10px] text-zinc-400 font-mono">Template slots</span>
+          </div>
+          <div className="space-y-3">
+            {lessonSlots.map((lesson, index) => (
+              <div key={lesson.id} className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 p-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-300">
+                  {index + 1}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-white truncate">{lesson.title}</p>
+                  <p className="text-[10px] text-zinc-400 truncate">{lesson.meta}</p>
+                </div>
+                <CheckCircle className="w-4 h-4 text-zinc-500 shrink-0" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="glass-card glass-card-orange p-5">
+          <div className="flex items-center gap-2">
+            <Bot className="w-5 h-5 text-amber-400" />
+            <h3 className="font-display font-semibold text-sm text-white">Mentor & Recommendations</h3>
+          </div>
+          <p className="text-xs text-zinc-350 mt-3 leading-relaxed">
+            Recommendation cards, mentor prompts, and personalized study nudges can render here after progress data is available.
+          </p>
+          <div className="mt-5 space-y-3">
+            <div className="h-16 rounded-2xl border border-white/5 bg-white/5 animate-pulse" />
+            <div className="h-16 rounded-2xl border border-white/5 bg-white/5 animate-pulse" />
+          </div>
+          <button
+            onClick={onOpenMentor}
+            className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
+          >
+            <Terminal className="w-4 h-4" />
+            <span>Open Mentor</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
 
 export default function App() {
-  const localData = loadLocalStorage();
   const pwa = usePWA();
   const [showOnlineToast, setShowOnlineToast] = useState(false);
   const [wasOffline, setWasOffline] = useState(false);
@@ -37,20 +200,20 @@ export default function App() {
   }, [pwa.isOnline, wasOffline]);
 
   // Authentication states
-  const [isAuthenticated, setIsAuthenticated] = useState(DEV_BYPASS_AUTH);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authName, setAuthName] = useState('');
 
   // Primary State Managers loaded from localStore
-  const [profile, setProfile] = useState<UserProfile>(localData.profile);
-  const [settings, setSettings] = useState<UserSettings>(localData.settings);
-  const [roadmaps, setRoadmaps] = useState<Roadmap[]>(localData.roadmaps);
-  const [activeRoadmapId, setActiveRoadmapId] = useState<string>(localData.roadmaps[0]?.id || '');
-  const [achievements, setAchievements] = useState<Achievement[]>(localData.achievements);
-  const [notifications, setNotifications] = useState<SystemNotification[]>(localData.notifications);
-  const [chats, setChats] = useState<ChatMessage[]>(localData.chats);
+  const [profile, setProfile] = useState<UserProfile>(() => createEmptyProfile());
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
+  const [activeRoadmapId, setActiveRoadmapId] = useState<string>('');
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+  const [chats, setChats] = useState<ChatMessage[]>([]);
 
   // Active view controller tabs
   const [activeTab, setActiveTab] = useState<string>('home'); // home | roadmaps | mentor | progress | profile | achievements | notifications
@@ -70,7 +233,7 @@ export default function App() {
   
   // Simulated stats
   const [stripeCheckoutStatus, setStripeCheckoutStatus] = useState<string | null>(null);
-  const [apiCallsCounter, setApiCallsCounter] = useState(14); // Track demo server calls
+  const [apiCallsCounter, setApiCallsCounter] = useState(0);
 
   // Load recommendations on mount
   useEffect(() => {
@@ -101,7 +264,8 @@ export default function App() {
   // Sync roadmaps with Supabase simulation per user
   useEffect(() => {
     async function syncRoadmapsWithSupabase() {
-      const email = profile.email || 'alex.parker@learnpath.ai';
+      const email = profile.email;
+      if (!email) return;
       localStorage.setItem('learnpath_authenticated_email', email);
 
       try {
@@ -122,21 +286,9 @@ export default function App() {
           if (!hasRoadmap && uniqueList[0]) {
             setActiveRoadmapId(uniqueList[0].id);
           }
-        } else {
-          // Not found on Supabase server. Seed them from current local state, making sure we only send unique local items
-          const uniqueList: Roadmap[] = [];
-          const seen = new Set<string>();
-          roadmaps.forEach((r) => {
-            if (r && r.id && !seen.has(r.id)) {
-              seen.add(r.id);
-              uniqueList.push(r);
-            }
-          });
-
-          await supabase.from('roadmaps').insert(uniqueList);
         }
       } catch (err) {
-        console.error('Failed to sync roadmaps with Supabase simulation:', err);
+        console.error('Failed to sync user roadmaps:', err);
       }
     }
 
@@ -147,7 +299,8 @@ export default function App() {
 
   // Hydrate local localStorage changes on change
   useEffect(() => {
-    saveLocalStorage({
+    if (!isAuthenticated || !profile.email) return;
+    saveUserData(profile.email, {
       profile,
       settings,
       roadmaps,
@@ -155,13 +308,13 @@ export default function App() {
       notifications,
       chats
     });
-  }, [profile, settings, roadmaps, achievements, notifications, chats]);
+  }, [profile, settings, roadmaps, achievements, notifications, chats, isAuthenticated]);
 
   // Fetch from Express recommendations API
   const fetchRecommendations = async () => {
     setIsRecsLoading(true);
     try {
-      const activeGoal = roadmaps.find(r => r.id === activeRoadmapId)?.goal || "Full-Stack AI Engineering";
+      const activeGoal = roadmaps.find(r => r.id === activeRoadmapId)?.goal || "";
       const response = await fetch('/api/ai-recommendations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -182,10 +335,26 @@ export default function App() {
       const data = await response.json();
       setAiRecommendations(data);
     } catch (err) {
-      console.error("Express API offline, falling back back to seed recommendations:", err);
+      console.error("Express API offline, recommendation request skipped:", err);
     } finally {
       setIsRecsLoading(false);
     }
+  };
+
+  const handleAuthenticate = () => {
+    const email = authEmail.trim().toLowerCase();
+    if (!email) return;
+
+    const loaded = loadUserData(email, authName);
+    setProfile(loaded.profile);
+    setSettings(loaded.settings);
+    setRoadmaps(loaded.roadmaps);
+    setActiveRoadmapId(loaded.roadmaps[0]?.id || '');
+    setAchievements(loaded.achievements);
+    setNotifications(loaded.notifications);
+    setChats(loaded.chats);
+    localStorage.setItem('learnpath_authenticated_email', email);
+    setIsAuthenticated(true);
   };
 
   // Custom AI Roadmap Generation Trigger
@@ -304,8 +473,11 @@ export default function App() {
       setActiveTab('roadmaps');
       // Set level id default expand
       const activeRm = roadmaps.find(r => r.id === activeRoadmapId) || roadmaps[0];
+      if (!activeRm) return;
       const activePhase = activeRm.phases.find(p => p.status === 'current') || activeRm.phases[0];
+      if (!activePhase) return;
       const activeLevel = activePhase.levels.find(l => l.status === 'current') || activePhase.levels[0];
+      if (!activeLevel) return;
       const firstAvailableLesson = activeLevel.lessons.find(l => l.status === 'available') || activeLevel.lessons[0];
       
       setActiveLesson({
@@ -563,30 +735,93 @@ export default function App() {
   };
 
   // Admin maintenance triggers
-  const handleSeedRoadmap = () => {
-    setNotifications(prev => [
-      {
-        id: `seed-notif-${Date.now()}`,
-        title: 'NumPy Broadcasting Chapter seeded',
-        message: 'Admin console seeded an advanced Python Level directly into active roadmap curriculum tree databases.',
-        category: 'system',
-        read: false,
-        timestamp: new Date().toISOString()
-      },
-      ...prev
-    ]);
-  };
-
   const handleClearCache = () => {
-    localStorage.clear();
+    if (profile.email) {
+      saveUserData(profile.email, {
+        profile: createEmptyProfile(profile.email, profile.name),
+        settings,
+        roadmaps: [],
+        achievements: [],
+        notifications: [],
+        chats: [],
+      });
+    }
     window.location.reload();
   };
 
-  const activeRoadmap = roadmaps.find(r => r.id === activeRoadmapId) || roadmaps[0];
-  const activePhase = activeRoadmap.phases.find(p => p.status === 'current') || activeRoadmap.phases[0];
+  const activeRoadmap = roadmaps.find(r => r.id === activeRoadmapId) || roadmaps[0] || null;
+  const activePhase = activeRoadmap?.phases.find(p => p.status === 'current') || activeRoadmap?.phases[0] || null;
 
   // Visual tab navigation router
   const renderTabContent = () => {
+    if (!activeRoadmap) {
+      if (activeTab === 'home') {
+        return (
+          <DashboardTemplate
+            profile={profile}
+            onCreateRoadmap={() => {
+              setActiveTab('roadmaps');
+              setActiveLesson(null);
+            }}
+            onOpenMentor={() => {
+              setActiveTab('mentor');
+              setActiveLesson(null);
+            }}
+          />
+        );
+      }
+      if (activeTab === 'mentor') {
+        return (
+          <MentorChatView
+            chats={chats}
+            isGenerating={isAiChatGenerating}
+            onSendMessage={handleSendMessage}
+            onSelectAction={(topic) => handleSendMessage(topic)}
+          />
+        );
+      }
+      if (activeTab === 'progress') {
+        return <AnalyticsView profile={profile} />;
+      }
+      if (activeTab === 'profile') {
+        return (
+          <ProfileView
+            profile={profile}
+            settings={settings}
+            onUpdateSettings={(set) => setSettings(prev => ({ ...prev, ...set }))}
+            onUpdateProfile={(num) => setProfile(prev => ({ ...prev, name: num.name }))}
+            onTriggerCheckout={handleStripeCheckout}
+            checkoutStatus={stripeCheckoutStatus}
+            isInstallAvailable={pwa.isInstallAvailable}
+            isInstalled={pwa.isInstalled}
+            onInstall={pwa.installApp}
+            onRequestNotificationPermission={pwa.requestNotificationPermission}
+          />
+        );
+      }
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div className="p-6 rounded-3xl glass-card glass-card-purple">
+            <h2 className="font-display font-bold text-xl text-white">Create your first roadmap</h2>
+            <p className="text-xs text-zinc-400 mt-1">
+              This account has no saved curriculum yet. Generate a roadmap and it will be stored under {profile.email}.
+            </p>
+          </div>
+          <RoadmapOverview
+            roadmaps={roadmaps}
+            activeId={activeRoadmapId}
+            onSetActive={(id) => {
+              setActiveRoadmapId(id);
+              setActiveLesson(null);
+            }}
+            onGenerateRoadmap={handleGenerateRoadmap}
+            isGenerating={isAiGeneratingRoadmap}
+            onContinueActive={() => setActiveLesson(null)}
+          />
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'home':
         return (
@@ -594,7 +829,7 @@ export default function App() {
             {/* 1. Progress banner card */}
             <ProgressCard
               progressPercent={activeRoadmap.progressPercent}
-              currentPhaseName={activePhase.name}
+              currentPhaseName={activePhase?.name || activeRoadmap.goal}
               totalXp={profile.xp}
               onContinue={() => {
                 setActiveTab('roadmaps');
@@ -605,7 +840,7 @@ export default function App() {
             <StatsCard
               stats={{
                 hoursStudied: profile.hoursStudied,
-                completedTopics: profile.lessonsCompleted,
+                completedTopics: activeRoadmap.lessonsCompleted,
                 totalXp: profile.xp,
                 streak: profile.streak,
               }}
@@ -792,7 +1027,7 @@ export default function App() {
 
           <form onSubmit={(e) => {
             e.preventDefault();
-            setIsAuthenticated(true);
+            handleAuthenticate();
           }} className="space-y-4">
             {authMode === 'signup' && (
               <div className="space-y-1.5">
@@ -853,21 +1088,9 @@ export default function App() {
               {authMode === 'login' ? "Don't have an account? Sign Up" : "Already registered? Sign In"}
             </button>
 
-            {/* Quick Demo Bypass Button */}
-            <div className="pt-2 bg-transparent">
-              <button
-                onClick={() => {
-                  setIsAuthenticated(true);
-                  setProfile(localData.profile);
-                }}
-                className="w-full py-2 border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10 rounded-xl text-xs font-bold text-purple-300 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
-                id="btn-auth-demo-bypass"
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>Bypass with Demo Account</span>
-              </button>
-              <span className="block text-[10px] text-zinc-605 mt-1.5 font-sans leading-relaxed">Bypass enabled by standard developer flags. Seeding automatic sandbox database records.</span>
-            </div>
+            <p className="text-[10px] text-zinc-500 leading-relaxed">
+              Your data is loaded by email and saved only to your user profile.
+            </p>
           </div>
         </div>
       </div>
@@ -876,7 +1099,7 @@ export default function App() {
 
   // Active reading chapter lesson visual overrides
   const selectedPhaseObj = activeLesson
-    ? activeRoadmap.phases.find(p => p.id === activeLesson.phaseId)
+    ? activeRoadmap?.phases.find(p => p.id === activeLesson.phaseId)
     : null;
 
   const selectedLevelObj = activeLesson && selectedPhaseObj

@@ -44,7 +44,7 @@ export function usePWA() {
     window.addEventListener('appinstalled', handleAppInstalled);
 
     // 5. Register production service worker and handle updates
-    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+    if ('serviceWorker' in navigator && import.meta.env.PROD) {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
