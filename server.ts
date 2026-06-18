@@ -1,5 +1,8 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
+import { exec } from 'child_process';
+import { platform } from 'os';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 
@@ -1194,9 +1197,18 @@ async function bootstrap() {
   }
 
   // Binds strictly to 0.0.0.0 and PORT 3000 as required
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server starting running on http://0.0.0.0:${PORT}`);
+    console.log(`Open in browser at http://localhost:${PORT}`);
+    if (platform() === 'win32') {
+      exec(`start "" "http://localhost:${PORT}"`, { shell: true });
+    } else if (platform() === 'darwin') {
+      exec(`open "http://localhost:${PORT}"`);
+    } else {
+      exec(`xdg-open "http://localhost:${PORT}"`);
+    }
   });
+  return server;
 }
 
 bootstrap().catch(console.error);
