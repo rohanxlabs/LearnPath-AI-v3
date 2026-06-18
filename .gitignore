@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+data/
+dev-server.log
+dev-server.err.log
+
+.vite/
