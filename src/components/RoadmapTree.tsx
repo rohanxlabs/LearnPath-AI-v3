@@ -291,10 +291,10 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                 {/* Phase Row Container */}
                 <div className={`rounded-2xl border transition-all duration-300 overflow-hidden ${
                   isActive 
-                    ? 'bg-purple-50/70 dark:bg-[#14121b] border-purple-300 dark:border-purple-500/25 shadow-[0_4px_20px_rgba(168,85,247,0.06)]' 
+                    ? 'state-current' 
                     : isCompleted 
-                      ? 'bg-purple-50/80 dark:bg-[#1E1B29] border-purple-200 dark:border-purple-500/25 shadow-[0_4px_20px_rgba(139,92,246,0.12)] text-slate-900 dark:text-white'
-                      : 'bg-zinc-100/60 dark:bg-zinc-950/20 border-zinc-200 dark:border-zinc-900 text-zinc-500 opacity-75'
+                      ? 'state-completed'
+                      : 'state-upcoming'
                 }`}>
                   
                   {/* Phase Summary Header */}
@@ -432,16 +432,11 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                                   key={lvl.id} 
                                   className={`p-4 sm:p-5 rounded-2xl border transition-all ${
                                     lvlIsCurrent
-                                      ? 'bg-purple-50/60 dark:bg-[#13121b] border-purple-300 dark:border-purple-500/30'
+                                      ? 'state-current'
                                       : lvlIsDone
-                                        ? (isCompleted 
-                                            ? 'bg-white/80 dark:bg-[#15121F]/80 border-purple-200 dark:border-purple-500/30 text-slate-900 dark:text-white shadow-[0_2px_12px_rgba(168,85,247,0.06)]' 
-                                            : 'bg-[#1E1B29]/40 dark:bg-[#1E1B29]/30 border-purple-500/25 dark:border-purple-500/15')
-                                        : (isCompleted
-                                            ? 'bg-white/55 dark:bg-zinc-900/40 border-purple-100 dark:border-white/5 opacity-80'
-                                            : 'bg-zinc-50 dark:bg-zinc-950/30 border-zinc-200 dark:border-zinc-900 opacity-80')
-                                  }`}
-                                >
+                                        ? 'state-completed'
+                                        : 'state-upcoming'
+                                  }`}>
                                   {/* Level Meta info */}
                                   <div className={`flex items-center justify-between border-b pb-3 mb-4 gap-3 ${
                                     isCompleted ? 'border-purple-200/70 dark:border-purple-500/10' : 'border-zinc-200 dark:border-white/[0.03]'
@@ -495,15 +490,10 @@ export function RoadmapTree({ roadmap, onLessonSelect, onAiAction }: RoadmapTree
                                           className={`p-4 rounded-xl border text-left cursor-pointer transition-all duration-300 flex flex-col justify-between min-h-32 relative overflow-hidden group/les ${
                                             !isLessonLocked
                                               ? isLessonDone
-                                                ? (isCompleted
-                                                    ? 'bg-white/80 hover:bg-purple-50 border-purple-200 hover:border-purple-400 text-slate-900 dark:bg-[#15121F]/70 dark:hover:bg-[#15121F] dark:border-purple-500/25 dark:hover:border-purple-500 dark:text-zinc-100 hover:shadow-[0_2px_12px_rgba(168,85,247,0.1)]'
-                                                    : 'bg-[#1E1B29]/30 hover:bg-[#1E1B29]/50 dark:bg-[#1E1B29]/40 dark:hover:bg-[#1E1B29]/60 border-purple-500/25 dark:border-purple-500/15 hover:border-purple-500 dark:hover:border-purple-400 text-purple-900 dark:text-purple-300 hover:shadow-[0_2px_12px_rgba(168,85,247,0.08)]')
-                                                : isCompleted
-                                                  ? 'bg-white/65 hover:bg-purple-50/90 border-purple-100 hover:border-purple-300 text-slate-700 dark:bg-[#15121F]/50 dark:hover:bg-[#15121F]/75 dark:border-purple-900/40 dark:hover:border-purple-500/50 dark:text-zinc-300 hover:shadow-md'
-                                                  : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/5 hover:border-purple-300 dark:hover:border-purple-500/30 hover:shadow-md'
-                                              : 'bg-zinc-100/55 dark:bg-zinc-950/40 border-zinc-200 dark:border-zinc-950 text-zinc-400 dark:text-zinc-500 opacity-45 cursor-not-allowed'
-                                          }`}
-                                        >
+                                                ? 'state-completed hover:brightness-105'
+                                                : 'state-current hover:brightness-105'
+                                              : 'state-upcoming cursor-not-allowed'
+                                          }`}>
                                           <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
                                               <span className={`text-[7.5px] font-bold tracking-wider uppercase block ${

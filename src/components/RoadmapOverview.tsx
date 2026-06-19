@@ -195,12 +195,11 @@ export function RoadmapOverview({
             <div
               key={r.id}
               onClick={() => onSetActive(r.id)}
-              className={`p-6 rounded-3xl cursor-pointer relative overflow-hidden transition-all duration-300 flex flex-col justify-between h-56 ${glassClass} ${
+              className={`p-6 rounded-3xl cursor-pointer relative overflow-hidden transition-all duration-300 flex flex-col justify-between h-56 ${
                 isActive
-                  ? 'ring-2 ring-purple-500/30 shadow-[0_8px_30px_rgba(168,85,247,0.2)] scale-102 z-10'
-                  : 'opacity-85 hover:opacity-100 hover:scale-[1.01]'
-              }`}
-            >
+                  ? 'state-current ring-2 ring-purple-500/30 shadow-[0_8px_30px_rgba(168,85,247,0.2)] scale-102 z-10'
+                  : `${glassClass} opacity-85 hover:opacity-100 hover:scale-[1.01]`
+              }`}>
               {/* Top corner status badges */}
               <div className="absolute top-4 right-4 flex items-center gap-2">
                 {isActive && (

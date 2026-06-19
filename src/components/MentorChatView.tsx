@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Send, Sparkles, MessageSquare, Bot, HelpCircle, Code2, BookOpen, Lightbulb, Mic, MicOff, Paperclip, CheckCircle, Search, Terminal, AlertTriangle } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { XPBadge } from './Badges';
@@ -59,54 +61,6 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
     { label: "Suggest AI Projects", topic: "Recommend 2 cool open-source project guides involving Model Context Protocol." }
   ];
 
-  // Simple Markdown and Code Block formatter helper:
-  const formatMessageText = (text: string) => {
-    // Regex split for markdown code blocks (```python ... ```)
-    const blocks = text.split(/(```[a-z]*\n[\s\S]*?\n```)/g);
-
-    return blocks.map((block, idx) => {
-      if (block.startsWith('```')) {
-        const lines = block.split('\n');
-        const lang = lines[0].replace('```', '') || 'code';
-        const code = lines.slice(1, -1).join('\n');
-        
-        return (
-          <div key={idx} className="my-3 rounded-lg overflow-hidden border border-zinc-800 font-mono text-xs">
-            <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-800 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-              <span>{lang} environment</span>
-              <span className="text-[9px] bg-zinc-800 px-1 py-0.5 rounded">Terminal Readout</span>
-            </div>
-            <pre className="p-3 bg-zinc-950 overflow-x-auto text-zinc-300">
-              <code>{code}</code>
-            </pre>
-          </div>
-        );
-      }
-
-      // Format bold markup text (**text**) & inline code (`code`)
-      let formattedText = block;
-      const paragraphs = formattedText.split('\n').map((line, pIdx) => {
-        if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
-          return (
-            <li key={pIdx} className="ml-4 list-disc mt-1 text-zinc-300">
-              {line.substring(2)}
-            </li>
-          );
-        }
-        if (line.trim().startsWith('### ')) {
-          return <h4 key={pIdx} className="font-display font-semibold text-sm text-purple-300 mt-3 mb-1">{line.substring(4)}</h4>;
-        }
-        if (line.trim().startsWith('## ')) {
-          return <h3 key={pIdx} className="font-display font-bold text-base text-purple-400 mt-4 mb-1.5">{line.substring(3)}</h3>;
-        }
-        
-        return <p key={pIdx} className="mt-1.5 text-zinc-320 leading-relaxed">{line}</p>;
-      });
-
-      return <div key={idx}>{paragraphs}</div>;
-    });
-  };
-
   return (
     <div className="flex flex-col h-[calc(100vh-10rem)] md:h-[calc(100vh-8.5rem)] rounded-3xl glass-card border border-white/5 shadow-2xl relative overflow-hidden">
       {/* Upper info panel */}
@@ -152,7 +106,47 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
                     ? 'glass-card glass-card-purple border-purple-500/10 text-zinc-100 shadow-sm'
                     : 'glass-card glass-card-blue border-blue-500/15 text-white font-medium shadow-md'
                 }`}>
-                  {formatMessageText(ch.text)}
+                  {isAI ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ node, inline, className, children, ...props }) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return !inline ? (
+                            <div className="my-3 rounded-lg overflow-hidden border border-zinc-700">
+                              <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-700 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                                <span>{match ? match[1] : 'code'} environment</span>
+                                <span className="text-[9px] bg-zinc-800 px-1 py-0.5 rounded">Terminal Readout</span>
+                              </div>
+                              <pre className="p-3 bg-zinc-950 overflow-x-auto text-zinc-300">
+                                <code className={className} {...props}>
+                                  {children}
+                                </code>
+                              </pre>
+                            </div>
+                          ) : (
+                            <code className={`${className} bg-zinc-800 px-1.5 py-0.5 rounded text-purple-300`} {...props}>
+                              {children}
+                            </code>
+                          );
+                        },
+                        h1: ({ node, ...props }) => <h1 className="font-display font-bold text-xl text-purple-300 mt-3 mb-2" {...props} />,
+                        h2: ({ node, ...props }) => <h2 className="font-display font-bold text-lg text-purple-400 mt-3 mb-1.5" {...props} />,
+                        h3: ({ node, ...props }) => <h3 className="font-display font-semibold text-base text-purple-300 mt-3 mb-1" {...props} />,
+                        h4: ({ node, ...props }) => <h4 className="font-display font-semibold text-sm text-purple-300 mt-3 mb-1" {...props} />,
+                        p: ({ node, ...props }) => <p className="mt-1.5 text-zinc-320 leading-relaxed" {...props} />,
+                        ul: ({ node, ...props }) => <ul className="list-disc ml-4 mt-2 mb-2 text-zinc-300" {...props} />,
+                        ol: ({ node, ...props }) => <ol className="list-decimal ml-4 mt-2 mb-2 text-zinc-300" {...props} />,
+                        li: ({ node, ...props }) => <li className="mt-1" {...props} />,
+                        strong: ({ node, ...props }) => <strong className="text-white font-bold" {...props} />,
+                        em: ({ node, ...props }) => <em className="text-zinc-200 italic" {...props} />
+                      }}
+                    >
+                      {ch.text}
+                    </ReactMarkdown>
+                  ) : (
+                    ch.text
+                  )}
                 </div>
                 <span className={`block text-[8px] text-zinc-500 font-mono px-2 ${isAI ? 'text-left' : 'text-right'}`}>
                   {new Date(ch.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

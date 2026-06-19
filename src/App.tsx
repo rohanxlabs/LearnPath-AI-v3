@@ -439,7 +439,7 @@ export default function App() {
     }
   };
 
-  // AI Mentor Chat Message Send controller
+  // AI Mentor Chat Message Send controller (Streaming)
   const handleSendMessage = async (text: string) => {
     const userMsg: ChatMessage = {
       id: `chat-usr-${Date.now()}`,
@@ -448,9 +448,20 @@ export default function App() {
       timestamp: new Date().toISOString()
     };
 
-    setChats(prev => [...prev, userMsg]);
+    // Get the updated chat history with the user's new message
+    const updatedChats = [...chats, userMsg];
+    setChats(updatedChats);
     setIsAiChatGenerating(true);
     setApiCallsCounter(prev => prev + 1);
+
+    const aiMsgId = `chat-ai-${Date.now()}`;
+    let aiMsg: ChatMessage = {
+      id: aiMsgId,
+      sender: 'assistant',
+      text: '',
+      timestamp: new Date().toISOString()
+    };
+    setChats(prev => [...prev, aiMsg]);
 
     try {
       const response = await fetch('/api/mentor-chat', {
@@ -458,25 +469,24 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: chats.slice(-6) // Send recent message slots to keep context
+          history: chats.slice(-6) // Send recent message slots to keep context (without the current user message since it's the new one)
         })
       });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        throw new Error("Server returned HTML or non-JSON content. The API may be offline.");
-      }
-      const data = await response.json();
 
-      const aiMsg: ChatMessage = {
-        id: `chat-ai-${Date.now()}`,
-        sender: 'assistant',
-        text: data.text,
-        timestamp: new Date().toISOString()
-      };
-      setChats(prev => [...prev, aiMsg]);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) return;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        aiMsg = { ...aiMsg, text: aiMsg.text + chunk };
+        setChats(prev => prev.map(c => c.id === aiMsgId ? aiMsg : c));
+      }
     } catch (err) {
       console.error(err);
     } finally {

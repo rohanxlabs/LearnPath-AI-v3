@@ -409,7 +409,7 @@ In this module we focus on creating robust error safety bounds.
   }
 });
 
-// 3. API: AI Mentor Chat
+// 3. API: AI Mentor Chat (Streaming)
 app.post('/api/mentor-chat', async (req, res) => {
   const { message, history } = req.body;
 
@@ -453,17 +453,43 @@ Guidelines:
 4. Keep the tone helpful, professional, and exciting like a world-class university TA.
 `;
 
-    const result = await callWithModelFallbackAndRetry((selectedModel) => ai.models.generateContent({
-      model: selectedModel,
-      contents: contents,
-      config: {
-        systemInstruction,
-        temperature: 0.7
-      }
-    }));
+    // Set up streaming response headers
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    });
 
-    const reply = result.text || "I was unable to synthesize a response. Let me try that again.";
-    return res.json({ text: reply });
+    let streamingSuccess = false;
+    for (const model of ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite']) {
+      try {
+        console.log(`[Gemini API] Dispatching streaming content generation request using model "${model}"...`);
+        const stream = await ai.models.generateContentStream({
+          model,
+          contents,
+          config: { systemInstruction, temperature: 0.7 }
+        });
+        
+        for await (const chunk of stream) {
+          if (chunk.text) {
+            res.write(chunk.text);
+          }
+        }
+        streamingSuccess = true;
+        break;
+      } catch (error: any) {
+        const errorStr = (error.message || '').toLowerCase();
+        const isQuotaExceeded = errorStr.includes('429') || errorStr.includes('quota') || errorStr.includes('resource_exhausted');
+        console.log(`[Gemini API Info] Model "${model}" failed: ${error.message}. Trying next model...`);
+        if (!isQuotaExceeded) break; // Only retry on quota errors
+      }
+    }
+
+    if (!streamingSuccess) {
+      throw new Error("All Gemini fallback models failed for streaming");
+    }
+    res.end();
 
   } catch (error: any) {
     let readableError = error.message || String(error);
@@ -489,7 +515,11 @@ Guidelines:
       reply = `### AI Mentor Insights 🤖\n\nHello! I am standing by to help you unlock fullstack skills. You asked: *"Reflecting on: ${message}"*\n\nHere are some solid steps to tackle this:\n1. **Read & Absorb**: Check out structural markdown logs.\n2. **Experiment & Build**: Write simple scripts to verify.\n3. **Quiz & Validate**: Take standard assessments to earn XP.\n\nAsk me anything about NumPy, Neural Networks, LLM tokens, or Career Readiness!`;
     }
 
-    return res.json({ text: reply });
+    // If headers are already sent, just end
+    if (!res.headersSent) {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    }
+    res.end(reply);
   }
 });
 
