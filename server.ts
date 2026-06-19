@@ -5,9 +5,11 @@ import { exec } from 'child_process';
 import { platform } from 'os';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
+import pg from 'pg';
 
 const app = express();
 const PORT = 3000;
+const { Pool } = pg;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -802,28 +804,35 @@ Output MUST be a valid JSON object matching this schema:
 // ============================================================================
 import fs from 'fs';
 
-const DB_DIR = path.join(process.cwd(), 'data', 'supabase_sim');
-if (!fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
-}
+type UserDB = Record<string, any[]>;
 
-function getUserDBPath(userEmail: string): string {
-  const safeEmail = userEmail.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
-  return path.join(DB_DIR, `${safeEmail}_db.json`);
-}
+const dbPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : undefined,
+});
 
-function loadUserDB(userEmail: string): Record<string, any[]> {
-  const dbPath = getUserDBPath(userEmail);
-  if (fs.existsSync(dbPath)) {
-    try {
-      return JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-    } catch (err) {
-      console.error('Error reading user db, creating new:', err);
-    }
+let userDataTableReady: Promise<void> | null = null;
+
+function ensureUserDataTable(): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is required for persistent user storage.');
   }
 
-  // Seed default DB structure
-  const defaultDB: Record<string, any[]> = {
+  if (!userDataTableReady) {
+    userDataTableReady = dbPool.query(`
+      CREATE TABLE IF NOT EXISTS user_data (
+        email TEXT PRIMARY KEY,
+        db_json JSONB NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `).then(() => undefined);
+  }
+
+  return userDataTableReady;
+}
+
+function getDefaultUserDB(): UserDB {
+  return {
     roadmaps: [],
     curated_resources: [
       {
@@ -995,139 +1004,181 @@ function loadUserDB(userEmail: string): Record<string, any[]> {
       }
     ]
   };
+}
 
-  saveUserDB(userEmail, defaultDB);
+async function loadUserDB(userEmail: string): Promise<UserDB> {
+  await ensureUserDataTable();
+
+  const result = await dbPool.query(
+    'SELECT db_json FROM user_data WHERE email = $1',
+    [userEmail.toLowerCase()]
+  );
+
+  if (result.rows[0]?.db_json) {
+    return result.rows[0].db_json;
+  }
+
+  const defaultDB = getDefaultUserDB();
+  await saveUserDB(userEmail, defaultDB);
   return defaultDB;
 }
 
-function saveUserDB(userEmail: string, dbData: Record<string, any[]>) {
-  try {
-    fs.writeFileSync(getUserDBPath(userEmail), JSON.stringify(dbData, null, 2), 'utf8');
-  } catch (err) {
-    console.error('Error writing user db:', err);
-  }
+async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
+  await ensureUserDataTable();
+
+  await dbPool.query(
+    `
+      INSERT INTO user_data (email, db_json, updated_at)
+      VALUES ($1, $2::jsonb, NOW())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        db_json = EXCLUDED.db_json,
+        updated_at = NOW()
+    `,
+    [userEmail.toLowerCase(), JSON.stringify(dbData)]
+  );
 }
 
 // 1. Selector endpoint
-app.get('/api/supabase/select', (req, res) => {
+app.get('/api/supabase/select', async (req, res) => {
   const { table, userEmail, filters } = req.query as { table: string; userEmail: string; filters: string };
   if (!table || !userEmail) {
     return res.status(400).json({ error: 'Missing mandatory fields' });
   }
 
-  const dbData = loadUserDB(userEmail);
-  let rows = dbData[table] || [];
+  try {
+    const dbData = await loadUserDB(userEmail);
+    let rows = dbData[table] || [];
 
-  // Simple filtering
-  if (filters) {
-    try {
-      const parsedFilters = JSON.parse(filters);
-      parsedFilters.forEach((f: { column: string; value: any }) => {
-        rows = rows.filter(r => r[f.column] === f.value);
-      });
-    } catch (_) {}
-  }
+    // Simple filtering
+    if (filters) {
+      try {
+        const parsedFilters = JSON.parse(filters);
+        parsedFilters.forEach((f: { column: string; value: any }) => {
+          rows = rows.filter(r => r[f.column] === f.value);
+        });
+      } catch (_) {}
+    }
 
-  // Deduplicate on read by id to guarantee complete uniqueness of returned data
-  const uniqueRows: any[] = [];
-  const seenIds = new Set<string>();
-  rows.forEach((r: any) => {
-    if (r && r.id) {
-      if (!seenIds.has(r.id)) {
-        seenIds.add(r.id);
+    // Deduplicate on read by id to guarantee complete uniqueness of returned data
+    const uniqueRows: any[] = [];
+    const seenIds = new Set<string>();
+    rows.forEach((r: any) => {
+      if (r && r.id) {
+        if (!seenIds.has(r.id)) {
+          seenIds.add(r.id);
+          uniqueRows.push(r);
+        }
+      } else {
         uniqueRows.push(r);
       }
-    } else {
-      uniqueRows.push(r);
-    }
-  });
+    });
 
-  return res.json(uniqueRows);
+    return res.json(uniqueRows);
+  } catch (err) {
+    console.error('PostgreSQL select error:', err);
+    return res.status(500).json({ error: 'Persistent storage query failed' });
+  }
 });
 
 // 2. Insert endpoint
-app.post('/api/supabase/insert', (req, res) => {
+app.post('/api/supabase/insert', async (req, res) => {
   const { table, userEmail, rows } = req.body;
   if (!table || !userEmail || !rows) {
     return res.status(400).json({ error: 'Missing parameters' });
   }
 
-  const dbData = loadUserDB(userEmail);
-  if (!dbData[table]) dbData[table] = [];
+  try {
+    const dbData = await loadUserDB(userEmail);
+    if (!dbData[table]) dbData[table] = [];
 
-  rows.forEach((r: any) => {
-    // Generate secure id if absent
-    if (!r.id) r.id = 'supabase_' + Math.random().toString(36).substr(2, 9);
-    
-    const existingIndex = dbData[table].findIndex((item: any) => item.id === r.id);
-    if (existingIndex > -1) {
-      dbData[table][existingIndex] = { ...dbData[table][existingIndex], ...r };
-    } else {
-      dbData[table].push(r);
-    }
-  });
+    rows.forEach((r: any) => {
+      // Generate secure id if absent
+      if (!r.id) r.id = 'supabase_' + Math.random().toString(36).substr(2, 9);
+      
+      const existingIndex = dbData[table].findIndex((item: any) => item.id === r.id);
+      if (existingIndex > -1) {
+        dbData[table][existingIndex] = { ...dbData[table][existingIndex], ...r };
+      } else {
+        dbData[table].push(r);
+      }
+    });
 
-  saveUserDB(userEmail, dbData);
-  return res.json({ success: true, count: rows.length, data: rows });
+    await saveUserDB(userEmail, dbData);
+    return res.json({ success: true, count: rows.length, data: rows });
+  } catch (err) {
+    console.error('PostgreSQL insert error:', err);
+    return res.status(500).json({ error: 'Persistent storage write failed' });
+  }
 });
 
 // 3. Update endpoint
-app.post('/api/supabase/update', (req, res) => {
+app.post('/api/supabase/update', async (req, res) => {
   const { table, userEmail, updates, filters } = req.body;
   if (!table || !userEmail || !updates) {
     return res.status(400).json({ error: 'Missing parameters' });
   }
 
-  const dbData = loadUserDB(userEmail);
-  let rows = dbData[table] || [];
+  try {
+    const dbData = await loadUserDB(userEmail);
+    let rows = dbData[table] || [];
 
-  let matchedAndUpdated = 0;
-  dbData[table] = rows.map((r: any) => {
-    // Check if matches filters
-    let matches = true;
-    if (filters && Array.isArray(filters)) {
-      filters.forEach((f: { column: string; value: any }) => {
-        if (r[f.column] !== f.value) matches = false;
-      });
-    }
+    let matchedAndUpdated = 0;
+    dbData[table] = rows.map((r: any) => {
+      // Check if matches filters
+      let matches = true;
+      if (filters && Array.isArray(filters)) {
+        filters.forEach((f: { column: string; value: any }) => {
+          if (r[f.column] !== f.value) matches = false;
+        });
+      }
 
-    if (matches) {
-      matchedAndUpdated++;
-      return { ...r, ...updates };
-    }
-    return r;
-  });
+      if (matches) {
+        matchedAndUpdated++;
+        return { ...r, ...updates };
+      }
+      return r;
+    });
 
-  saveUserDB(userEmail, dbData);
-  return res.json({ success: true, count: matchedAndUpdated, updates });
+    await saveUserDB(userEmail, dbData);
+    return res.json({ success: true, count: matchedAndUpdated, updates });
+  } catch (err) {
+    console.error('PostgreSQL update error:', err);
+    return res.status(500).json({ error: 'Persistent storage write failed' });
+  }
 });
 
 // 4. Upsert endpoint
-app.post('/api/supabase/upsert', (req, res) => {
+app.post('/api/supabase/upsert', async (req, res) => {
   const { table, userEmail, rows } = req.body;
   if (!table || !userEmail || !rows) {
     return res.status(400).json({ error: 'Missing parameters' });
   }
 
-  const dbData = loadUserDB(userEmail);
-  if (!dbData[table]) dbData[table] = [];
+  try {
+    const dbData = await loadUserDB(userEmail);
+    if (!dbData[table]) dbData[table] = [];
 
-  rows.forEach((newRow: any) => {
-    if (!newRow.id) {
-      newRow.id = 'supabase_' + Math.random().toString(36).substr(2, 9);
-      dbData[table].push(newRow);
-    } else {
-      const idx = dbData[table].findIndex((item: any) => item.id === newRow.id);
-      if (idx > -1) {
-        dbData[table][idx] = { ...dbData[table][idx], ...newRow };
-      } else {
+    rows.forEach((newRow: any) => {
+      if (!newRow.id) {
+        newRow.id = 'supabase_' + Math.random().toString(36).substr(2, 9);
         dbData[table].push(newRow);
+      } else {
+        const idx = dbData[table].findIndex((item: any) => item.id === newRow.id);
+        if (idx > -1) {
+          dbData[table][idx] = { ...dbData[table][idx], ...newRow };
+        } else {
+          dbData[table].push(newRow);
+        }
       }
-    }
-  });
+    });
 
-  saveUserDB(userEmail, dbData);
-  return res.json({ success: true, data: rows });
+    await saveUserDB(userEmail, dbData);
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('PostgreSQL upsert error:', err);
+    return res.status(500).json({ error: 'Persistent storage write failed' });
+  }
 });
 
 
@@ -1201,7 +1252,7 @@ async function bootstrap() {
     console.log(`Server starting running on http://0.0.0.0:${PORT}`);
     console.log(`Open in browser at http://localhost:${PORT}`);
     if (platform() === 'win32') {
-      exec(`start "" "http://localhost:${PORT}"`, { shell: true });
+      exec(`start "" "http://localhost:${PORT}"`);
     } else if (platform() === 'darwin') {
       exec(`open "http://localhost:${PORT}"`);
     } else {
