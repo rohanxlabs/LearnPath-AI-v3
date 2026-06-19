@@ -17,6 +17,9 @@ import { ProjectsTab } from './components/ProjectsTab';
 import { supabase } from './lib/supabase';
 import { createEmptyProfile, DEFAULT_SETTINGS, loadUserData, saveUserData } from './userData';
 
+const USER_EMAIL_STORAGE_KEY = 'learnpath_user_email';
+const LEGACY_USER_EMAIL_STORAGE_KEY = 'learnpath_authenticated_email';
+
 function DashboardTemplate({
   profile,
   onCreateRoadmap,
@@ -235,6 +238,24 @@ export default function App() {
   const [stripeCheckoutStatus, setStripeCheckoutStatus] = useState<string | null>(null);
   const [apiCallsCounter, setApiCallsCounter] = useState(0);
 
+  useEffect(() => {
+    const savedEmail = localStorage.getItem(USER_EMAIL_STORAGE_KEY) || localStorage.getItem(LEGACY_USER_EMAIL_STORAGE_KEY);
+    const email = savedEmail?.trim().toLowerCase();
+    if (!email) return;
+
+    const loaded = loadUserData(email);
+    setProfile(loaded.profile);
+    setSettings(loaded.settings);
+    setRoadmaps(loaded.roadmaps);
+    setActiveRoadmapId(loaded.roadmaps[0]?.id || '');
+    setAchievements(loaded.achievements);
+    setNotifications(loaded.notifications);
+    setChats(loaded.chats);
+    localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
+    setActiveTab('home');
+    setIsAuthenticated(true);
+  }, []);
+
   // Load recommendations on mount
   useEffect(() => {
     fetchRecommendations();
@@ -266,7 +287,7 @@ export default function App() {
     async function syncRoadmapsWithSupabase() {
       const email = profile.email;
       if (!email) return;
-      localStorage.setItem('learnpath_authenticated_email', email);
+      localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
 
       try {
         const { data, error } = await supabase.from('roadmaps').select('*');
@@ -353,7 +374,7 @@ export default function App() {
     setAchievements(loaded.achievements);
     setNotifications(loaded.notifications);
     setChats(loaded.chats);
-    localStorage.setItem('learnpath_authenticated_email', email);
+    localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
     setIsAuthenticated(true);
   };
 
@@ -1120,6 +1141,8 @@ export default function App() {
           setActiveTab('profile');
         }}
         onLogoutClick={() => {
+          localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
+          localStorage.removeItem(LEGACY_USER_EMAIL_STORAGE_KEY);
           setIsAuthenticated(false);
           setActiveLesson(null);
         }}

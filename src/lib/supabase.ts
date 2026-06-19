@@ -22,7 +22,7 @@ class SupabaseQueryBuilder {
   }
 
   private getUserEmail() {
-    const userEmail = localStorage.getItem('learnpath_authenticated_email');
+    const userEmail = localStorage.getItem('learnpath_user_email') || localStorage.getItem('learnpath_authenticated_email');
     if (!userEmail) {
       throw new Error('No authenticated user email is available for persistence.');
     }
