@@ -214,10 +214,10 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
   };
 
   return (
-    <div className="space-y-6 text-white font-sans">
+    <div className="space-y-6 font-sans">
       <div>
-        <h2 className="font-display font-bold text-xl text-white">Topic Assessment Quizzes</h2>
-        <p className="text-xs text-zinc-400">Challenge yourself with dynamic, curriculum-mapped quizzes. Scoring and attempts persist durably for your user profile.</p>
+        <h2 className="font-display font-bold text-xl text-zinc-900 dark:text-white">Topic Assessment Quizzes</h2>
+        <p className="text-xs text-zinc-600 dark:text-zinc-400">Challenge yourself with dynamic, curriculum-mapped quizzes. Scoring and attempts persist durably for your user profile.</p>
       </div>
 
       {loading ? (
@@ -234,58 +234,58 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
             return (
               <div 
                 key={quiz.id}
-                className="p-5 bg-zinc-900/60 border border-white/5 rounded-2xl flex flex-col justify-between gap-5 hover:border-purple-500/20 hover:bg-zinc-900/80 transition-all duration-300"
+                className="p-5 rounded-2xl flex flex-col justify-between gap-5 transition-all duration-300 glass-card"
               >
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2 text-[10px] tracking-wider uppercase font-bold text-zinc-400">
+                  <div className="flex items-center justify-between gap-2 text-[10px] tracking-wider uppercase font-bold text-zinc-600 dark:text-zinc-400">
                     <span className="flex items-center gap-2">
-                      <Brain className="w-4 h-4 text-purple-400" />
+                      <Brain className="w-4 h-4 text-purple-500" />
                       <span>Multiple Choice</span>
                     </span>
                     {hasAttempted && (
-                      <span className={`px-2 py-0.5 rounded-full ${hasPassed ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                      <span className={`px-2 py-0.5 rounded-full ${hasPassed ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'}`}>
                         {quiz.score}% Score
                       </span>
                     )}
                   </div>
                   
-                  <h4 className="font-sans font-bold text-xs text-zinc-100">{quiz.quizName}</h4>
+                  <h4 className="font-sans font-bold text-xs text-zinc-900 dark:text-zinc-100">{quiz.quizName}</h4>
                   
-                  <div className="grid grid-cols-2 gap-3 text-[10px] text-zinc-400 bg-white/5 p-3 rounded-xl border border-white/5">
+                  <div className="grid grid-cols-2 gap-3 text-[10px] text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-white/5 p-3 rounded-xl border border-zinc-200 dark:border-white/5">
                     <div>
-                      <p className="text-zinc-400 font-medium">Attempts</p>
-                      <p className="text-zinc-200 font-bold mt-0.5">{quiz.attemptsCount} times</p>
+                      <p className="text-zinc-500 dark:text-zinc-400 font-medium">Attempts</p>
+                      <p className="text-zinc-800 dark:text-zinc-200 font-bold mt-0.5">{quiz.attemptsCount} times</p>
                     </div>
                     <div>
-                      <p className="text-zinc-400 font-medium font-medium">Last Run</p>
-                      <p className="text-zinc-200 font-bold truncate mt-0.5">{quiz.lastAttemptedAt}</p>
+                      <p className="text-zinc-500 dark:text-zinc-400 font-medium font-medium">Last Run</p>
+                      <p className="text-zinc-800 dark:text-zinc-200 font-bold truncate mt-0.5">{quiz.lastAttemptedAt}</p>
                     </div>
                   </div>
                   
                   {/* Custom Prep Recommendations */}
-                  <div className="space-y-2 border-t border-white/5 pt-3 mt-1 flex-1">
-                    <span className="text-[9px] font-black uppercase text-purple-400 font-mono tracking-widest block">Highly Recommended Prep:</span>
+                  <div className="space-y-2 border-t border-zinc-200 dark:border-white/5 pt-3 mt-1 flex-1">
+                    <span className="text-[9px] font-black uppercase text-purple-500 dark:text-purple-400 font-mono tracking-widest block">Highly Recommended Prep:</span>
                     <div className="grid grid-cols-1 gap-2">
                       {getQuizRecommendations(quiz.quizId, quiz.quizName).map((resource) => (
-                        <div key={resource.id} className="p-2 border border-white/5 bg-white/5 rounded-xl hover:bg-white/10 hover:border-purple-500/20 transition-all flex items-center justify-between gap-2">
+                        <div key={resource.id} className="p-2 border border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-white/5 rounded-xl hover:bg-zinc-100 dark:hover:bg-white/10 transition-all flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
                             {resource.type === 'video' ? (
                               <Video className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                             ) : resource.type === 'course' ? (
                               <Bookmark className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                             ) : (
-                              <BookOpen className="w-3.5 h-3.5 text-emerald-450 shrink-0" />
+                              <BookOpen className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                             )}
                             <div className="min-w-0">
-                              <h5 className="font-semibold text-[10px] text-zinc-100 truncate leading-tight">{resource.title}</h5>
-                              <p className="text-[8px] text-zinc-400 font-medium leading-none mt-0.5">{resource.provider}</p>
+                              <h5 className="font-semibold text-[10px] text-zinc-900 dark:text-zinc-100 truncate leading-tight">{resource.title}</h5>
+                              <p className="text-[8px] text-zinc-500 dark:text-zinc-400 font-medium leading-none mt-0.5">{resource.provider}</p>
                             </div>
                           </div>
                           <a 
                             href={resource.url} 
                             target="_blank" 
                             rel="noopener noreferrer" 
-                            className="px-2 py-1 bg-white/5 hover:bg-purple-600 rounded text-[9px] font-bold text-purple-300 hover:text-white transition-all shrink-0 flex items-center gap-1.5"
+                            className="px-2 py-1 bg-purple-50 dark:bg-white/5 hover:bg-purple-600 rounded text-[9px] font-bold text-purple-600 dark:text-purple-300 hover:text-white transition-all shrink-0 flex items-center gap-1.5"
                           >
                             <span>Learn</span>
                             <ExternalLink className="w-2.5 h-2.5" />
@@ -298,7 +298,7 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
 
                 <button
                   onClick={() => startQuiz(quiz.quizId)}
-                  className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(168,85,247,0.15)] cursor-pointer"
+                  className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(168,85,247,0.15)] cursor-pointer text-white"
                 >
                   <Award className="w-4 h-4" />
                   <span>{hasAttempted ? 'Re-attempt Quiz' : 'Launch Assessment'}</span>
@@ -308,8 +308,8 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
           })}
         </div>
       ) : (
-        <div className="bg-zinc-900/60 border border-white/5 rounded-2xl p-6 space-y-6 relative overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-white/5">
+        <div className="rounded-2xl p-6 space-y-6 relative overflow-hidden glass-card">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-zinc-200 dark:bg-white/5">
             <div 
               className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all duration-300"
               style={{ width: `${((currentIdx) / activeQuestions.length) * 100}%` }}
@@ -325,12 +325,12 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
-                <div className="flex items-center justify-between gap-4 text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                <div className="flex items-center justify-between gap-4 text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-widest">
                   <span>Question {currentIdx + 1} of {activeQuestions.length}</span>
-                  <span className="bg-white/5 px-2.5 py-1 rounded-center select-none">{correctCount} Correct</span>
+                  <span className="bg-zinc-100 dark:bg-white/5 px-2.5 py-1 rounded-lg select-none text-zinc-800 dark:text-white">{correctCount} Correct</span>
                 </div>
 
-                <h3 className="font-sans font-extrabold text-sm text-white leading-relaxed">
+                <h3 className="font-sans font-extrabold text-sm text-zinc-900 dark:text-white leading-relaxed">
                   {activeQuestions[currentIdx].question}
                 </h3>
 
@@ -340,15 +340,15 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
                     const isAnswered = showFeedback;
                     const isCorrectOption = oIdx === activeQuestions[currentIdx].correctIndex;
                     
-                    let bgClass = 'bg-white/5 hover:bg-white/10 border-white/5';
+                    let bgClass = 'bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 border-zinc-200 dark:border-white/5';
                     if (isSelected) {
-                      bgClass = 'bg-purple-500/10 border-purple-500/40 text-purple-200';
+                      bgClass = 'bg-purple-50 dark:bg-purple-500/10 border-purple-300 dark:border-purple-500/40 text-purple-700 dark:text-purple-200';
                     }
                     if (isAnswered) {
                       if (isCorrectOption) {
-                        bgClass = 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200';
+                        bgClass = 'bg-emerald-50 dark:bg-emerald-500/15 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-200';
                       } else if (isSelected) {
-                        bgClass = 'bg-rose-500/15 border-rose-500/40 text-rose-200';
+                        bgClass = 'bg-rose-50 dark:bg-rose-500/15 border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-200';
                       }
                     }
 
@@ -360,29 +360,29 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
                         className={`w-full text-left p-4 rounded-xl border text-xs font-semibold leading-relaxed transition-all flex items-start gap-3 cursor-pointer ${bgClass}`}
                       >
                         <div className={`w-5 h-5 rounded-full border shrink-0 flex items-center justify-center text-[10px] font-bold font-mono transition-colors ${
-                          isSelected ? 'bg-purple-500 text-white border-transparent' : 'border-white/20 text-zinc-400'
+                          isSelected ? 'bg-purple-500 text-white border-transparent' : 'border-zinc-300 dark:border-white/20 text-zinc-600 dark:text-zinc-400'
                         }`}>
                           {indexToAlpha(oIdx)}
                         </div>
                         <span className="flex-1 mt-0.5">{opt}</span>
                         {isAnswered && isCorrectOption && <CheckCircle className="w-4 h-4 text-emerald-500 mt-0.5" />}
-                        {isAnswered && isSelected && !isCorrectOption && <XCircle className="w-4 h-4 text-rose-505 text-red-500 mt-0.5" />}
+                        {isAnswered && isSelected && !isCorrectOption && <XCircle className="w-4 h-4 text-rose-500 mt-0.5" />}
                       </button>
                     );
                   })}
                 </div>
 
                 {showFeedback && (
-                  <div className="p-4 bg-purple-500/5 border border-purple-500/15 rounded-xl space-y-1.5 animate-fade-in text-[11px] leading-relaxed">
-                    <p className="font-bold text-purple-300">Explanation</p>
-                    <p className="text-zinc-300">{activeQuestions[currentIdx].explanation}</p>
+                  <div className="p-4 bg-purple-50 dark:bg-purple-500/5 border border-purple-200 dark:border-purple-500/15 rounded-xl space-y-1.5 animate-fade-in text-[11px] leading-relaxed">
+                    <p className="font-bold text-purple-700 dark:text-purple-300">Explanation</p>
+                    <p className="text-zinc-700 dark:text-zinc-300">{activeQuestions[currentIdx].explanation}</p>
                   </div>
                 )}
 
                 {/* Embedded Reference Material hints during active question */}
-                <div className="p-4 bg-white/5 border border-white/5 rounded-xl space-y-2">
-                  <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-purple-400 tracking-wider font-mono">
-                    <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+                <div className="p-4 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/5 rounded-xl space-y-2">
+                  <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-purple-500 dark:text-purple-400 tracking-wider font-mono">
+                    <BookOpen className="w-3.5 h-3.5 text-purple-500" />
                     <span>Quick reference materials & learning platforms:</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -392,7 +392,7 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
                         href={res.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[10px] bg-zinc-950/40 p-2 border border-white/5 hover:border-purple-500/20 rounded-lg flex items-center justify-between gap-2 hover:bg-zinc-950 transition-colors"
+                        className="text-[10px] bg-zinc-50 dark:bg-zinc-950/40 p-2 border border-zinc-200 dark:border-white/5 hover:border-purple-500/20 rounded-lg flex items-center justify-between gap-2 hover:bg-zinc-100 dark:hover:bg-zinc-950 transition-colors"
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
                           {res.type === 'video' ? (
@@ -400,11 +400,11 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
                           ) : res.type === 'course' ? (
                             <Bookmark className="w-3 h-3 text-amber-500 shrink-0" />
                           ) : (
-                            <BookOpen className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <BookOpen className="w-3 h-3 text-emerald-500 shrink-0" />
                           )}
-                          <span className="text-zinc-300 font-medium truncate leading-tight">{res.title}</span>
+                          <span className="text-zinc-700 dark:text-zinc-300 font-medium truncate leading-tight">{res.title}</span>
                         </div>
-                        <ExternalLink className="w-2.5 h-2.5 text-zinc-550" />
+                        <ExternalLink className="w-2.5 h-2.5 text-zinc-500 dark:text-zinc-400" />
                       </a>
                     ))}
                   </div>
@@ -413,14 +413,14 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
                 <div className="flex gap-3 justify-end">
                   <button
                     onClick={() => setActiveQuizId(null)}
-                    className="px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all text-zinc-300 cursor-pointer"
+                    className="px-4 py-2.5 bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-xl text-xs font-bold transition-all text-zinc-700 dark:text-zinc-300 cursor-pointer"
                   >
                     Exit Quiz
                   </button>
                   <button
                     onClick={handleNextSubmit}
                     disabled={selectedOpt === null}
-                    className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-xl text-xs font-bold transition-all shadow-[0_4px_15px_rgba(168,85,247,0.15)] disabled:opacity-50 cursor-pointer"
+                    className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-xl text-xs font-bold transition-all shadow-[0_4px_15px_rgba(168,85,247,0.15)] disabled:opacity-50 cursor-pointer text-white"
                   >
                     {!showFeedback ? 'Submit Answer' : (currentIdx < activeQuestions.length - 1 ? 'Next Question' : 'Finish Quiz')}
                   </button>
@@ -438,20 +438,20 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="font-display font-extrabold text-lg text-white">Quiz Completed!</h3>
-                  <p className="text-xs text-zinc-400">Great work testing your knowledge foundations.</p>
+                  <h3 className="font-display font-extrabold text-lg text-zinc-900 dark:text-white">Quiz Completed!</h3>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Great work testing your knowledge foundations.</p>
                 </div>
 
-                <div className="inline-grid grid-cols-2 gap-8 bg-white/5 p-4 rounded-2xl border border-white/5 text-center px-10">
+                <div className="inline-grid grid-cols-2 gap-8 bg-zinc-100 dark:bg-white/5 p-4 rounded-2xl border border-zinc-200 dark:border-white/5 text-center px-10">
                   <div>
-                    <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider">Score</p>
-                    <p className="font-display font-black text-xl text-purple-400 mt-1">
+                    <p className="text-[10px] text-zinc-600 dark:text-zinc-400 uppercase font-bold tracking-wider">Score</p>
+                    <p className="font-display font-black text-xl text-purple-500 dark:text-purple-400 mt-1">
                       {Math.round((correctCount / activeQuestions.length) * 100)}%
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider">Accuracy</p>
-                    <p className="font-display font-black text-xl text-blue-400 mt-1">
+                    <p className="text-[10px] text-zinc-600 dark:text-zinc-400 uppercase font-bold tracking-wider">Accuracy</p>
+                    <p className="font-display font-black text-xl text-blue-500 dark:text-blue-400 mt-1">
                       {correctCount} / {activeQuestions.length}
                     </p>
                   </div>
@@ -460,9 +460,9 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
                 <div className="flex items-center justify-center gap-3 max-w-xs mx-auto">
                   <button
                     onClick={() => startQuiz(activeQuizId)}
-                    className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                    className="flex-1 py-3 bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer text-zinc-700 dark:text-zinc-300"
                   >
-                    <RefreshCw className="w-3.5 h-3.5 text-zinc-400" />
+                    <RefreshCw className="w-3.5 h-3.5 text-zinc-500 dark:text-zinc-400" />
                     <span>Try Again</span>
                   </button>
                   <button

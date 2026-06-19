@@ -58,13 +58,13 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
   };
 
   return (
-    <div className="space-y-6 text-white font-sans">
+    <div className="space-y-6 font-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display font-bold text-xl text-white">Curated Resources</h2>
-          <p className="text-xs text-zinc-400">Deepen your knowledge of {roadmap.goal} with vetted reference materials mapped to your master path.</p>
+          <h2 className="font-display font-bold text-xl text-zinc-900 dark:text-white">Curated Resources</h2>
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">Deepen your knowledge of {roadmap.goal} with vetted reference materials mapped to your master path.</p>
         </div>
-        <div className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider bg-white/5 border border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-1.5 self-start">
+        <div className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-1.5 flex items-center gap-1.5 self-start">
           <Clock className="w-3.5 h-3.5 text-purple-400" />
           <span>{resources.length} materials loaded</span>
         </div>
@@ -85,15 +85,15 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
 
             return (
               <div key={phase.id} className="space-y-4">
-                <div className="flex items-center gap-3 border-b border-white/5 pb-2">
+                <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/5 pb-2">
                   <div className="w-6 h-6 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center font-display text-xs font-black text-purple-400">
                     {phaseIdx + 1}
                   </div>
-                  <h3 className="font-display font-bold text-sm text-zinc-100">{phase.name}</h3>
+                  <h3 className="font-display font-bold text-sm text-zinc-900 dark:text-zinc-100">{phase.name}</h3>
                 </div>
 
                 {phaseResources.length === 0 ? (
-                  <div className="p-4 bg-zinc-900/40 border border-white/5 rounded-xl text-xs text-zinc-500 italic">
+                  <div className="p-4 bg-zinc-100/50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-white/5 rounded-xl text-xs text-zinc-500 italic">
                     AI recommendation models are generating bespoke assets for this master phase...
                   </div>
                 ) : (
@@ -103,44 +103,44 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
                       return (
                         <div 
                           key={res.id}
-                          className={`group p-4 bg-zinc-900/60 hover:bg-zinc-900/90 border rounded-2xl transition-all duration-300 flex flex-col justify-between gap-4 ${
-                            isCompleted ? 'border-purple-500/30' : 'border-white/5 hover:border-white/10'
+                          className={`group p-4 rounded-2xl transition-all duration-300 flex flex-col justify-between gap-4 glass-card ${
+                            isCompleted ? 'border-purple-500/30' : 'border-zinc-200 dark:border-white/5'
                           }`}
                         >
                           <div className="space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-[10px] font-bold text-zinc-400 flex items-center gap-1.5 uppercase tracking-wider">
+                              <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5 uppercase tracking-wider">
                                 {getResourceIcon(res.type)}
                                 <span>{res.provider}</span>
                               </span>
                               {res.duration && (
-                                <span className="text-[10px] text-zinc-550 text-zinc-400 bg-white/5 px-2 py-0.5 rounded-full">
+                                <span className="text-[10px] text-zinc-500 bg-zinc-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
                                   {res.duration}
                                 </span>
                               )}
                             </div>
 
                             <h4 className={`font-sans font-semibold text-xs leading-relaxed transition-colors ${
-                              isCompleted ? 'text-purple-400 line-through' : 'text-zinc-100 group-hover:text-white'
+                              isCompleted ? 'text-purple-400 line-through' : 'text-zinc-900 dark:text-zinc-100'
                             }`}>
                               {res.title}
                             </h4>
                             
-                            <p className="text-[11px] text-zinc-400 leading-relaxed">
+                            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
                               {res.description}
                             </p>
                           </div>
 
-                          <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+                          <div className="flex items-center justify-between border-t border-zinc-200 dark:border-white/5 pt-3 mt-1">
                             <button
                               onClick={() => toggleRead(res.id)}
                               className={`text-[10px] font-bold px-3 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
                                 isCompleted 
                                   ? 'bg-purple-500/10 text-purple-400' 
-                                  : 'bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white'
+                                  : 'bg-zinc-100 dark:bg-white/5 text-zinc-700 dark:text-zinc-300'
                               }`}
                             >
-                              <CheckCircle className={`w-3.5 h-3.5 ${isCompleted ? 'fill-purple-400 text-black' : ''}`} />
+                              <CheckCircle className={`w-3.5 h-3.5 ${isCompleted ? 'fill-purple-400' : ''}`} />
                               <span>{isCompleted ? 'Completed' : 'Mark Lesson Done'}</span>
                             </button>
 

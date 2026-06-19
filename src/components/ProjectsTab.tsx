@@ -48,23 +48,23 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
     : projects.filter(p => p.difficulty === filterDifficulty);
 
   return (
-    <div className="space-y-6 text-white font-sans">
+    <div className="space-y-6 font-sans">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="font-display font-bold text-xl text-white">Project Sandbox Portfolio</h2>
-          <p className="text-xs text-zinc-400">Put theory into action by building vetted core applications. Slider states update and synchronize to your user profile.</p>
+          <h2 className="font-display font-bold text-xl text-zinc-900 dark:text-white">Project Sandbox Portfolio</h2>
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">Put theory into action by building vetted core applications. Slider states update and synchronize to your user profile.</p>
         </div>
 
         {/* Filter Pill List */}
-        <div className="flex flex-wrap gap-1.5 p-1 bg-white/5 border border-white/10 rounded-xl max-w-fit md:self-center">
+        <div className="flex flex-wrap gap-1.5 p-1 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl max-w-fit md:self-center">
           {['all', 'beginner', 'intermediate', 'advanced'].map((lvl) => (
             <button
               key={lvl}
               onClick={() => setFilterDifficulty(lvl as any)}
               className={`px-3 py-1.5 text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all duration-200 cursor-pointer ${
                 filterDifficulty === lvl 
-                  ? 'bg-purple-650 bg-purple-600 text-white' 
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
+                  ? 'bg-purple-600 text-white' 
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-white/5'
               }`}
             >
               {lvl}
@@ -85,16 +85,16 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
             const isStarted = proj.progress > 0;
 
             const difficultyColors = {
-              beginner: 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5',
-              intermediate: 'border-blue-500/20 text-blue-400 bg-blue-500/5',
-              advanced: 'border-purple-500/20 text-purple-400 bg-purple-500/5'
+              beginner: 'border-emerald-500/30 text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10',
+              intermediate: 'border-blue-500/30 text-blue-500 bg-blue-50 dark:bg-blue-500/10',
+              advanced: 'border-purple-500/30 text-purple-500 bg-purple-50 dark:bg-purple-500/10'
             };
 
             return (
               <div 
                 key={proj.id}
-                className={`p-5 bg-zinc-900/60 hover:bg-zinc-900/80 border rounded-2xl transition-all duration-300 space-y-4 flex flex-col justify-between ${
-                  isCompleted ? 'border-purple-500/30 shadow-[0_0_15px_rgba(168,85,247,0.05)]' : 'border-white/5 hover:border-white/10'
+                className={`p-5 rounded-2xl transition-all duration-300 space-y-4 flex flex-col justify-between glass-card ${
+                  isCompleted ? 'border-purple-500/30' : 'border-zinc-200 dark:border-white/5'
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -104,15 +104,15 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
                         {proj.difficulty}
                       </span>
                       {isCompleted && (
-                        <span className="flex items-center gap-1 text-[9px] font-bold uppercase text-purple-400 bg-purple-500/5 px-2 py-0.5 rounded-lg border border-purple-500/20">
-                          <CheckCircle2 className="w-3 h-3 text-purple-400" />
+                        <span className="flex items-center gap-1 text-[9px] font-bold uppercase text-purple-500 bg-purple-50 dark:bg-purple-500/5 px-2 py-0.5 rounded-lg border border-purple-500/30">
+                          <CheckCircle2 className="w-3 h-3 text-purple-500" />
                           <span>COMPLETED +50 XP</span>
                         </span>
                       )}
                     </div>
                     
-                    <h3 className="font-sans font-extrabold text-xs text-zinc-100">{proj.title}</h3>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed font-normal">{proj.description}</p>
+                    <h3 className="font-sans font-extrabold text-xs text-zinc-900 dark:text-zinc-100">{proj.title}</h3>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed font-normal">{proj.description}</p>
                   </div>
                   
                   {proj.githubUrl && (
@@ -120,7 +120,7 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
                       href={proj.githubUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-lg text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      className="p-2 bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 border border-zinc-200 dark:border-white/5 rounded-lg text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
                       title="Explore source repository"
                     >
                       <ExternalLink className="w-4 h-4" />
@@ -131,19 +131,19 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
                 {/* Tech Stack Tags map */}
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {proj.techStack.map(tech => (
-                    <span key={tech} className="px-2 py-0.5 bg-white/5 border border-white/5 rounded-lg text-[10px] font-medium text-zinc-400">
+                    <span key={tech} className="px-2 py-0.5 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/5 rounded-lg text-[10px] font-medium text-zinc-600 dark:text-zinc-400">
                       {tech}
                     </span>
                   ))}
                 </div>
 
                 {/* Requirements / Key Features */}
-                <div className="bg-white/5 p-3 rounded-xl border border-white/5 space-y-2">
-                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <Code2 className="w-3.5 h-3.5 text-purple-400" />
+                <div className="bg-zinc-100 dark:bg-white/5 p-3 rounded-xl border border-zinc-200 dark:border-white/5 space-y-2">
+                  <span className="text-[9px] font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Code2 className="w-3.5 h-3.5 text-purple-500" />
                     <span>Key Architecture Requirements</span>
                   </span>
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] text-zinc-350 list-inside list-disc">
+                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] text-zinc-600 dark:text-zinc-300 list-inside list-disc">
                     {proj.features.map((feat, fidx) => (
                       <li key={fidx} className="truncate">{feat}</li>
                     ))}
@@ -151,29 +151,29 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
                 </div>
 
                 {/* Highly Recommended Projects Resources / Video Tutorials / Courses */}
-                <div className="p-3 bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 rounded-2xl space-y-2.5 transition-colors">
-                  <span className="text-[9px] font-black uppercase text-purple-300 font-mono tracking-wider block">Bespoke Tech-Stack Reference Materials:</span>
+                <div className="p-3 bg-purple-50 dark:bg-purple-500/5 hover:bg-purple-100 dark:hover:bg-purple-500/10 border border-purple-200 dark:border-purple-500/10 rounded-2xl space-y-2.5 transition-colors">
+                  <span className="text-[9px] font-black uppercase text-purple-600 dark:text-purple-300 font-mono tracking-wider block">Bespoke Tech-Stack Reference Materials:</span>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {getProjectRecommendations(proj.techStack, proj.features).map((res) => (
-                      <div key={res.id} className="p-2 border border-white/5 bg-zinc-950/45 rounded-xl hover:bg-zinc-950 transition-all flex items-center justify-between gap-2.5">
+                      <div key={res.id} className="p-2 border border-zinc-200 dark:border-white/5 bg-zinc-50 dark:bg-zinc-950/45 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-950 transition-all flex items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2 min-w-0">
                           {res.type === 'video' ? (
                             <Video className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                           ) : res.type === 'course' ? (
                             <Bookmark className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                           ) : (
-                            <BookOpen className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <BookOpen className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                           )}
                           <div className="min-w-0">
-                            <h4 className="font-bold text-[10px] text-zinc-200 truncate leading-tight">{res.title}</h4>
-                            <p className="text-[8px] text-zinc-400 leading-none mt-0.5 uppercase tracking-wide">{res.provider} • {res.duration || 'Flexible'}</p>
+                            <h4 className="font-bold text-[10px] text-zinc-900 dark:text-zinc-200 truncate leading-tight">{res.title}</h4>
+                            <p className="text-[8px] text-zinc-500 dark:text-zinc-400 leading-none mt-0.5 uppercase tracking-wide">{res.provider} • {res.duration || 'Flexible'}</p>
                           </div>
                         </div>
                         <a
                           href={res.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="p-1 px-2 border border-white/10 hover:border-purple-500/30 hover:bg-purple-600 rounded text-[9px] font-bold text-zinc-300 hover:text-white transition-all shrink-0 flex items-center gap-1"
+                          className="p-1 px-2 border border-zinc-200 dark:border-white/10 hover:border-purple-500/30 hover:bg-purple-600 rounded text-[9px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-white transition-all shrink-0 flex items-center gap-1"
                         >
                           <span>Explore</span>
                           <ExternalLink className="w-2.5 h-2.5" />
@@ -184,13 +184,13 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
                 </div>
 
                 {/* Progress tracker slider container */}
-                <div className="border-t border-white/5 pt-4 space-y-2">
+                <div className="border-t border-zinc-200 dark:border-white/5 pt-4 space-y-2">
                   <div className="flex items-center justify-between text-[10px] font-bold">
-                    <span className="text-zinc-400 flex items-center gap-1">
-                      <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
+                      <TrendingUp className="w-3.5 h-3.5 text-purple-500" />
                       <span>Track Completion Progress</span>
                     </span>
-                    <span className={isCompleted ? 'text-purple-400' : 'text-zinc-200'}>
+                    <span className={isCompleted ? 'text-purple-500' : 'text-zinc-800 dark:text-zinc-200'}>
                       {proj.progress}% finished
                     </span>
                   </div>
@@ -203,15 +203,15 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
                       step="10"
                       value={proj.progress}
                       onChange={(e) => handleUpdateProgress(proj.id, parseInt(e.target.value))}
-                      className="flex-1 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                      className="flex-1 h-1.5 bg-zinc-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-purple-500"
                     />
                     
                     <button
                       onClick={() => handleUpdateProgress(proj.id, isCompleted ? 0 : 100)}
                       className={`text-[9px] font-bold px-2.5 py-1.5 rounded-lg uppercase tracking-wider transition-all duration-300 cursor-pointer shrink-0 ${
                         isCompleted 
-                          ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20' 
-                          : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20'
+                          ? 'bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20' 
+                          : 'bg-purple-50 dark:bg-purple-500/10 hover:bg-purple-100 dark:hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20'
                       }`}
                     >
                       {isCompleted ? 'Reset Progress' : 'Mark Completed'}
