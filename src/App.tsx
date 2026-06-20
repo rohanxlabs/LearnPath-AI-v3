@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, CheckCircle } from 'lucide-react';
-import { UserProfile, UserSettings, Roadmap, Achievement, SystemNotification, ChatMessage } from './types';
+import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, ChatMessage } from './types';
 import { usePWA } from './lib/usePWA';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
-import { ProgressCard, StatsCard, AchievementCard, NotificationCard, AIRecommendationCard, LearningScoreCard } from './components/Cards';
+import { AchievementCard, NotificationCard } from './components/Cards';
+import { HomeView } from './components/HomeView';
 import { RoadmapTree } from './components/RoadmapTree';
 import { RoadmapOverview } from './components/RoadmapOverview';
 import { MentorChatView } from './components/MentorChatView';
@@ -19,167 +20,60 @@ import { createEmptyProfile, DEFAULT_SETTINGS, loadUserData, saveUserData } from
 
 const USER_EMAIL_STORAGE_KEY = 'userEmail';
 
-function DashboardTemplate({
-  profile,
-  onCreateRoadmap,
-  onOpenMentor,
-}: {
-  profile: UserProfile;
-  onCreateRoadmap: () => void;
-  onOpenMentor: () => void;
-}) {
-  const levelCards = [
-    { id: 'level-foundations', title: 'Level 1', label: 'Foundations', status: 'Ready when roadmap connects', tint: 'glass-card-purple' },
-    { id: 'level-practice', title: 'Level 2', label: 'Guided Practice', status: 'Locked until lessons arrive', tint: 'glass-card-blue' },
-    { id: 'level-project', title: 'Level 3', label: 'Project Sprint', status: 'Waiting for project data', tint: 'glass-card-teal' },
-  ];
-
-  const lessonSlots = [
-    { id: 'lesson-slot-1', title: 'Intro lesson slot', meta: 'Video, reading, or mentor task' },
-    { id: 'lesson-slot-2', title: 'Practice checkpoint', meta: 'Quiz or coding exercise' },
-    { id: 'lesson-slot-3', title: 'Applied project step', meta: 'Hands-on deliverable' },
-  ];
+function renderHomeView(
+  props: {
+    profile: UserProfile;
+    activeRoadmap: Roadmap | null;
+    activePhase: Phase | null;
+    achievements: Achievement[];
+    aiRecommendations: any[];
+    isRecsLoading: boolean;
+    setActiveTab: (tab: string) => void;
+    setActiveLesson: (lesson: { phaseId: string; levelId: string; lessonId: string } | null) => void;
+    handleSelectRecommendationTask: (rec: any) => void;
+  }
+) {
+  const {
+    profile,
+    activeRoadmap,
+    activePhase,
+    achievements,
+    aiRecommendations,
+    isRecsLoading,
+    setActiveTab,
+    setActiveLesson,
+    handleSelectRecommendationTask,
+  } = props;
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <section className="grid grid-cols-1 lg:grid-cols-[1.35fr_0.65fr] gap-6">
-        <div className="glass-card glass-card-purple p-6 md:p-7 overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
-            <div className="min-w-0">
-              <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-purple-300 font-mono">
-                <Sparkles className="w-3.5 h-3.5" />
-                Dashboard Template
-              </span>
-              <h2 className="font-display text-2xl md:text-3xl font-bold text-white mt-3">
-                Welcome back, {profile.name}
-              </h2>
-              <p className="text-xs text-zinc-350 mt-2 max-w-xl leading-relaxed">
-                Your active course progress, next lesson, and skill milestones will fill this space once a roadmap is connected.
-              </p>
-            </div>
-            <button
-              onClick={onCreateRoadmap}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-purple-500 to-blue-600 rounded-xl shadow-md hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shrink-0"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Create Roadmap</span>
-            </button>
-          </div>
-
-          <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[
-              { label: 'Course Progress', value: '0%', detail: 'No active roadmap' },
-              { label: 'Current Level', value: 'L1', detail: 'Template state' },
-              { label: 'Lessons Ready', value: '0', detail: 'Awaiting sync' },
-            ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-white/5 bg-white/5 p-4">
-                <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 font-mono">{item.label}</p>
-                <p className="font-display text-2xl font-bold text-white mt-2">{item.value}</p>
-                <p className="text-[10px] text-zinc-400 mt-1">{item.detail}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6">
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="font-semibold text-zinc-300">Overall roadmap progress</span>
-              <span className="font-mono font-bold text-zinc-400">0 / 100%</span>
-            </div>
-            <div className="h-2 rounded-full bg-white/5 border border-white/5 overflow-hidden">
-              <div className="h-full w-[8%] rounded-full bg-gradient-to-r from-purple-500/50 to-blue-500/50" />
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card glass-card-blue p-5 flex flex-col justify-between gap-5">
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="font-display font-semibold text-sm text-white">Next Lesson</h3>
-              <span className="text-[10px] font-bold text-blue-300 bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5">
-                Empty State
-              </span>
-            </div>
-            <div className="mt-5 space-y-3">
-              <div className="h-3 w-3/4 rounded-full bg-white/10 animate-pulse" />
-              <div className="h-3 w-full rounded-full bg-white/10 animate-pulse" />
-              <div className="h-3 w-2/3 rounded-full bg-white/10 animate-pulse" />
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
-            <p className="text-xs font-semibold text-white">Lesson data will appear here</p>
-            <p className="text-[10px] text-zinc-400 mt-1 leading-relaxed">
-              Title, duration, XP reward, and continue action can bind to the active lesson record.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {levelCards.map((level) => (
-          <div key={level.id} className={`${level.tint} p-5`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-widest font-bold text-zinc-400 font-mono">{level.title}</p>
-                <h3 className="font-display font-bold text-lg text-white mt-1">{level.label}</h3>
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                <Shield className="w-5 h-5 text-purple-300" />
-              </div>
-            </div>
-            <p className="text-xs text-zinc-350 mt-4">{level.status}</p>
-            <div className="mt-4 flex gap-1.5">
-              {[0, 1, 2, 3].map((slot) => (
-                <span key={slot} className="h-1.5 flex-1 rounded-full bg-white/10" />
-              ))}
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section className="grid grid-cols-1 lg:grid-cols-[1fr_0.8fr] gap-6">
-        <div className="glass-card glass-card-teal p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <h3 className="font-display font-semibold text-sm text-white">Lesson Queue</h3>
-            <span className="text-[10px] text-zinc-400 font-mono">Template slots</span>
-          </div>
-          <div className="space-y-3">
-            {lessonSlots.map((lesson, index) => (
-              <div key={lesson.id} className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 p-3">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-300">
-                  {index + 1}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-white truncate">{lesson.title}</p>
-                  <p className="text-[10px] text-zinc-400 truncate">{lesson.meta}</p>
-                </div>
-                <CheckCircle className="w-4 h-4 text-zinc-500 shrink-0" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="glass-card glass-card-orange p-5">
-          <div className="flex items-center gap-2">
-            <Bot className="w-5 h-5 text-amber-400" />
-            <h3 className="font-display font-semibold text-sm text-white">Mentor & Recommendations</h3>
-          </div>
-          <p className="text-xs text-zinc-350 mt-3 leading-relaxed">
-            Recommendation cards, mentor prompts, and personalized study nudges can render here after progress data is available.
-          </p>
-          <div className="mt-5 space-y-3">
-            <div className="h-16 rounded-2xl border border-white/5 bg-white/5 animate-pulse" />
-            <div className="h-16 rounded-2xl border border-white/5 bg-white/5 animate-pulse" />
-          </div>
-          <button
-            onClick={onOpenMentor}
-            className="mt-5 inline-flex items-center gap-2 text-xs font-bold text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
-          >
-            <Terminal className="w-4 h-4" />
-            <span>Open Mentor</span>
-          </button>
-        </div>
-      </section>
-    </div>
+    <HomeView
+      profile={profile}
+      activeRoadmap={activeRoadmap}
+      activePhase={activePhase}
+      achievements={achievements}
+      aiRecommendations={aiRecommendations}
+      isRecsLoading={isRecsLoading}
+      onContinueLearning={() => {
+        setActiveTab('roadmaps');
+        setActiveLesson(null);
+      }}
+      onGenerateRoadmap={() => {
+        setActiveTab('roadmaps');
+        setActiveLesson(null);
+      }}
+      onStartLesson={(phaseId, levelId, lessonId) => {
+        setActiveLesson({ phaseId, levelId, lessonId });
+      }}
+      onLaunchRecommendation={handleSelectRecommendationTask}
+      onOpenMentor={() => {
+        setActiveTab('mentor');
+        setActiveLesson(null);
+      }}
+      onViewProgress={() => {
+        setActiveTab('progress');
+        setActiveLesson(null);
+      }}
+    />
   );
 }
 
@@ -794,19 +688,17 @@ export default function App() {
   const renderTabContent = () => {
     if (!activeRoadmap) {
       if (activeTab === 'home') {
-        return (
-          <DashboardTemplate
-            profile={profile}
-            onCreateRoadmap={() => {
-              setActiveTab('roadmaps');
-              setActiveLesson(null);
-            }}
-            onOpenMentor={() => {
-              setActiveTab('mentor');
-              setActiveLesson(null);
-            }}
-          />
-        );
+        return renderHomeView({
+          profile,
+          activeRoadmap: null,
+          activePhase: null,
+          achievements,
+          aiRecommendations,
+          isRecsLoading,
+          setActiveTab,
+          setActiveLesson,
+          handleSelectRecommendationTask,
+        });
       }
       if (activeTab === 'mentor') {
         return (
@@ -862,61 +754,17 @@ export default function App() {
 
     switch (activeTab) {
       case 'home':
-        return (
-          <div className="space-y-6">
-            {/* 1. Progress banner card */}
-            <ProgressCard
-              progressPercent={activeRoadmap.progressPercent}
-              currentPhaseName={activePhase?.name || activeRoadmap.goal}
-              totalXp={profile.xp}
-              onContinue={() => {
-                setActiveTab('roadmaps');
-              }}
-            />
-
-            {/* 2. Bento Statistics block */}
-            <StatsCard
-              stats={{
-                hoursStudied: profile.hoursStudied,
-                completedTopics: activeRoadmap.lessonsCompleted,
-                totalXp: profile.xp,
-                streak: profile.streak,
-              }}
-            />
-
-            {/* Double grid panels */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left span: AI dynamic recommendations list */}
-              <div className="col-span-1 lg:col-span-2 space-y-3.5">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4.5 h-4.5 text-purple-400 animate-pulse" />
-                  <h4 className="font-display font-semibold text-sm text-white">Custom Recommendations</h4>
-                </div>
-
-                {isRecsLoading ? (
-                  <div className="p-8 text-center bg-[#111111] rounded-2xl border border-white/5 text-xs text-zinc-500">
-                    Formulating continuous study suggestions with Gemini...
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {aiRecommendations.map((rec) => (
-                      <AIRecommendationCard
-                        key={rec.id}
-                        recommendation={rec}
-                        onLaunch={handleSelectRecommendationTask}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Right span: learning concentric skills card */}
-              <div className="col-span-1">
-                <LearningScoreCard profile={profile} />
-              </div>
-            </div>
-          </div>
-        );
+        return renderHomeView({
+          profile,
+          activeRoadmap,
+          activePhase,
+          achievements,
+          aiRecommendations,
+          isRecsLoading,
+          setActiveTab,
+          setActiveLesson,
+          handleSelectRecommendationTask,
+        });
 
       case 'roadmaps':
         if (roadmapDetailTab === 'resources') {
