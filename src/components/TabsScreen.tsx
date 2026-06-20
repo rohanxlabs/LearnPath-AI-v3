@@ -2,19 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, Clock, Trophy, Shield, Eye, Sparkles, User, Settings, CreditCard, HelpCircle, CheckCircle, BellRing, Lock, ToggleLeft, ToggleRight, Laptop, Moon, Sun } from 'lucide-react';
 import { UserProfile, UserSettings } from '../types';
 import { XPBadge, StreakBadge } from './Badges';
+import { AIAnalytics, getUserAnalytics } from '../services/userDataService';
 
 interface AnalyticsViewProps {
   profile: UserProfile;
 }
 
 export function AnalyticsView({ profile }: AnalyticsViewProps) {
+  const [analytics, setAnalytics] = useState<AIAnalytics | null>(null);
+
+  useEffect(() => {
+    async function fetchAnalytics() {
+      if (profile.id) {
+        const data = await getUserAnalytics(profile.id);
+        setAnalytics(data);
+      }
+    }
+    fetchAnalytics();
+  }, [profile.id]);
+
   // SVG drawing dimensions for consistency chart
-  const weeklyHours = [3.2, 4.8, 1.5, 6.2, 5.0, 2.8, 4.0];
+  const weeklyHours = analytics?.weeklyHoursPerDay || [0, 0, 0, 0, 0, 0, 0];
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const maxHour = 8;
+  const maxHour = Math.max(...weeklyHours, 8);
 
   // Completion ring variables
-  const completionPercent = 84;
+  const completionPercent = analytics?.overallMasteryPercent || 0;
   const radius = 32;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (completionPercent / 100) * circumference;
@@ -41,7 +54,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
     {
       id: 'p-stat-topics',
       label: 'Syllabus Steps',
-      value: Math.floor(profile.xp / 150),
+      value: Math.floor(profile.xp / 150), // This could be derived from analytics too
       desc: 'Assessed units',
       icon: BarChart3,
       color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
@@ -57,6 +70,14 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       glass: 'glass-card-orange',
     },
   ];
+
+  if (!analytics) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-zinc-400">Loading analytics...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -96,7 +117,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
             />
           </svg>
           <div className="absolute text-center">
-            <span className="text-base font-extrabold font-display text-white">{completionPercent}%</span>
+            <span className="text-base font-extrabold font-display text-white">{Math.round(completionPercent)}%</span>
             <span className="block text-[8px] font-bold text-zinc-400 tracking-wider">DONE</span>
           </div>
         </div>
@@ -182,7 +203,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
               <circle cx="56" cy="56" r="45" className="stroke-purple-500" strokeWidth="6" strokeDasharray="282" strokeDashoffset="70" strokeLinecap="round" fill="none" />
             </svg>
             <div className="absolute text-center">
-              <span className="text-2xl font-extrabold text-white font-display">84%</span>
+              <span className="text-2xl font-extrabold text-white font-display">{Math.round(analytics.overallMasteryPercent)}%</span>
               <span className="block text-[8px] font-bold text-zinc-400 tracking-wider">MASTERY INDEX</span>
             </div>
           </div>
@@ -199,24 +220,25 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       <div className="p-5 rounded-3xl glass-card glass-card-teal">
         <h4 className="font-display font-semibold text-sm text-white mb-4">Syllabus Complete Speed Indices</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* This section can now be powered by analytics or other dynamic data */}
           <div className="space-y-4">
             <div>
               <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
                 <span className="text-zinc-300 font-medium">Monthly Practice Hours Goal</span>
-                <span className="font-mono text-white font-semibold">24.5 / 45 hrs Completion</span>
+                <span className="font-mono text-white font-semibold">{profile.hoursStudied.toFixed(1)} / 45 hrs Completion</span>
               </div>
               <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-purple-500 rounded-full" style={{ width: '54.5%' }} />
+                <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(profile.hoursStudied / 45) * 100}%` }} />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
                 <span className="text-zinc-300 font-medium">Assessments Verified</span>
-                <span className="font-mono text-white font-semibold">14 / 20 steps done</span>
+                <span className="font-mono text-white font-semibold">{Math.floor(profile.xp / 150)} / 20 steps done</span>
               </div>
               <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: '70%' }} />
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(Math.floor(profile.xp / 150) / 20) * 100}%` }} />
               </div>
             </div>
           </div>
@@ -252,29 +274,21 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
           <h4 className="font-display font-semibold text-sm text-white">Recommended Next Actions</h4>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="p-5 rounded-3xl glass-card glass-card-emerald flex flex-col justify-between">
-            <div>
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded border text-emerald-400 bg-emerald-500/10 border-emerald-500/20 uppercase tracking-wide">EASY</span>
-              <h4 className="font-semibold text-sm text-white mt-2">Take NumPy Basics Assessment</h4>
-              <p className="text-xs text-zinc-350 mt-1 lines-clamp-2">Verify foundational memory structures and vector operation skills.</p>
+          {analytics.recommendedNextActions.map((action, index) => (
+            <div key={index} className={`p-5 rounded-3xl glass-card ${action.difficulty === 'easy' ? 'glass-card-emerald' : 'glass-card-rose'} flex flex-col justify-between`}>
+              <div>
+                <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${action.difficulty === 'easy' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20'} uppercase tracking-wide`}>
+                  {action.difficulty}
+                </span>
+                <h4 className="font-semibold text-sm text-white mt-2">{action.title}</h4>
+                <p className="text-xs text-zinc-350 mt-1 lines-clamp-2">{action.description}</p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-bold text-purple-450 hover:brightness-110 cursor-pointer">
+                <span>+{action.xpReward} XP Reward</span>
+                <span>{action.difficulty === 'easy' ? 'Launch Quiz' : 'Configure Environment'}</span>
+              </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-bold text-purple-450 hover:brightness-110 cursor-pointer">
-              <span>+150 XP Reward</span>
-              <span>Launch Quiz</span>
-            </div>
-          </div>
-
-          <div className="p-5 rounded-3xl glass-card glass-card-rose flex flex-col justify-between">
-            <div>
-              <span className="text-[9px] font-bold px-2 py-0.5 rounded border text-rose-400 bg-rose-500/10 border-rose-500/20 uppercase tracking-wide">HARD</span>
-              <h4 className="font-semibold text-sm text-white mt-2">Advanced PyTorch Graph Construction</h4>
-              <p className="text-xs text-zinc-350 mt-1 lines-clamp-2">Build recursive neural mechanic topologies and custom weights calculations.</p>
-            </div>
-            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-bold text-purple-450 hover:brightness-110 cursor-pointer">
-              <span>+300 XP Reward</span>
-              <span>Configure Environment</span>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </div>

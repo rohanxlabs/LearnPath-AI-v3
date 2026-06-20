@@ -110,25 +110,23 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        code({ node, inline, className, children, ...props }) {
-                          const match = /language-(\w+)/.exec(className || '');
-                          return !inline ? (
+                        pre({ children }) {
+                          const codeElement = React.Children.toArray(children).find(React.isValidElement) as React.ReactElement<{ className?: string }> | null;
+                          const match = /language-(\w+)/.exec(codeElement?.props.className || '');
+                          return (
                             <div className="my-3 rounded-lg overflow-hidden border border-zinc-700">
                               <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-700 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
                                 <span>{match ? match[1] : 'code'} environment</span>
                                 <span className="text-[9px] bg-zinc-800 px-1 py-0.5 rounded">Terminal Readout</span>
                               </div>
                               <pre className="p-3 bg-zinc-950 overflow-x-auto text-zinc-300">
-                                <code className={className} {...props}>
-                                  {children}
-                                </code>
+                                {children}
                               </pre>
                             </div>
-                          ) : (
-                            <code className={`${className} bg-zinc-800 px-1.5 py-0.5 rounded text-purple-300`} {...props}>
-                              {children}
-                            </code>
                           );
+                        },
+                        code({ className, children, ...props }) {
+                          return <code className={className} {...props}>{children}</code>;
                         },
                         h1: ({ node, ...props }) => <h1 className="font-display font-bold text-xl text-purple-300 mt-3 mb-2" {...props} />,
                         h2: ({ node, ...props }) => <h2 className="font-display font-bold text-lg text-purple-400 mt-3 mb-1.5" {...props} />,
