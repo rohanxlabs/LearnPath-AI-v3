@@ -84,13 +84,13 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
       </div>
 
       {/* Message space panel */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
         {chats.map((ch) => {
           const isAI = ch.sender === 'assistant';
           return (
             <div
               key={ch.id}
-              className={`flex gap-3 max-w-[85%] ${isAI ? 'mr-auto' : 'ml-auto flex-row-reverse'}`}
+              className={`flex gap-3 max-w-full sm:max-w-[85%] ${isAI ? 'mr-auto' : 'ml-auto flex-row-reverse'}`}
             >
               <div className={`p-1.5 h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 border ${
                 isAI
@@ -101,7 +101,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
               </div>
 
               <div className="space-y-1">
-                <div className={`p-4 rounded-2xl text-xs select-text leading-relaxed ${
+                <div className={`p-4 rounded-2xl text-xs select-text leading-relaxed break-words ${
                   isAI
                     ? 'glass-card glass-card-purple border-purple-500/10 text-zinc-100 shadow-sm'
                     : 'glass-card glass-card-blue border-blue-500/15 text-white font-medium shadow-md'
@@ -114,12 +114,12 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
                           const codeElement = React.Children.toArray(children).find(React.isValidElement) as React.ReactElement<{ className?: string }> | null;
                           const match = /language-(\w+)/.exec(codeElement?.props.className || '');
                           return (
-                            <div className="my-3 rounded-lg overflow-hidden border border-zinc-700">
+                            <div className="my-3 max-w-full rounded-lg overflow-hidden border border-zinc-700">
                               <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-700 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
                                 <span>{match ? match[1] : 'code'} environment</span>
                                 <span className="text-[9px] bg-zinc-800 px-1 py-0.5 rounded">Terminal Readout</span>
                               </div>
-                              <pre className="p-3 bg-zinc-950 overflow-x-auto text-zinc-300">
+                              <pre className="p-3 bg-zinc-950 overflow-x-auto whitespace-pre-wrap text-zinc-300">
                                 {children}
                               </pre>
                             </div>
