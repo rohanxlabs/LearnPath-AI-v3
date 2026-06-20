@@ -17,8 +17,7 @@ import { ProjectsTab } from './components/ProjectsTab';
 import { supabase } from './lib/supabase';
 import { createEmptyProfile, DEFAULT_SETTINGS, loadUserData, saveUserData } from './userData';
 
-const USER_EMAIL_STORAGE_KEY = 'learnpath_user_email';
-const LEGACY_USER_EMAIL_STORAGE_KEY = 'learnpath_authenticated_email';
+const USER_EMAIL_STORAGE_KEY = 'userEmail';
 
 function DashboardTemplate({
   profile,
@@ -207,7 +206,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [authName, setAuthName] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   // Primary State Managers loaded from localStore
   const [profile, setProfile] = useState<UserProfile>(() => createEmptyProfile());
@@ -239,7 +239,7 @@ export default function App() {
   const [apiCallsCounter, setApiCallsCounter] = useState(0);
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem(USER_EMAIL_STORAGE_KEY) || localStorage.getItem(LEGACY_USER_EMAIL_STORAGE_KEY);
+    const savedEmail = localStorage.getItem(USER_EMAIL_STORAGE_KEY);
     const email = savedEmail?.trim().toLowerCase();
     if (!email) return;
 
@@ -331,8 +331,12 @@ export default function App() {
     });
   }, [profile, settings, roadmaps, achievements, notifications, chats, isAuthenticated]);
 
+  const getStoredUserEmail = () => localStorage.getItem(USER_EMAIL_STORAGE_KEY);
+
   // Fetch from Express recommendations API
   const fetchRecommendations = async () => {
+    if (!isAuthenticated) return;
+
     setIsRecsLoading(true);
     try {
       const activeGoal = roadmaps.find(r => r.id === activeRoadmapId)?.goal || "";
@@ -343,7 +347,8 @@ export default function App() {
           currentXp: profile.xp,
           level: profile.level,
           streak: profile.streak,
-          activeGoal
+          activeGoal,
+          userEmail: getStoredUserEmail()
         })
       });
       if (!response.ok) {
@@ -362,20 +367,46 @@ export default function App() {
     }
   };
 
-  const handleAuthenticate = () => {
-    const email = authEmail.trim().toLowerCase();
-    if (!email) return;
+  const handleAuthenticate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthError('');
 
-    const loaded = loadUserData(email, authName);
-    setProfile(loaded.profile);
-    setSettings(loaded.settings);
-    setRoadmaps(loaded.roadmaps);
-    setActiveRoadmapId(loaded.roadmaps[0]?.id || '');
-    setAchievements(loaded.achievements);
-    setNotifications(loaded.notifications);
-    setChats(loaded.chats);
-    localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
-    setIsAuthenticated(true);
+    const email = authEmail.trim().toLowerCase();
+    if (!email || !authPassword) {
+      setAuthError('Email and password are required.');
+      return;
+    }
+
+    setIsAuthenticating(true);
+    try {
+      const response = await fetch(authMode === 'login' ? '/api/login' : '/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: authPassword })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setAuthError(data.error || 'Authentication failed.');
+        return;
+      }
+
+      localStorage.setItem(USER_EMAIL_STORAGE_KEY, data.email || email);
+      const loaded = loadUserData(data.email || email);
+      setProfile(loaded.profile);
+      setSettings(loaded.settings);
+      setRoadmaps(loaded.roadmaps);
+      setActiveRoadmapId(loaded.roadmaps[0]?.id || '');
+      setAchievements(loaded.achievements);
+      setNotifications(loaded.notifications);
+      setChats(loaded.chats);
+      setIsAuthenticated(true);
+    } catch (err) {
+      console.error(err);
+      setAuthError('Authentication failed. Please try again.');
+    } finally {
+      setIsAuthenticating(false);
+    }
   };
 
   // Custom AI Roadmap Generation Trigger
@@ -391,7 +422,7 @@ export default function App() {
       const response = await fetch('/api/generate-roadmap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params)
+        body: JSON.stringify({ ...params, userEmail: getStoredUserEmail() })
       });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -469,7 +500,8 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text,
-          history: chats.slice(-6) // Send recent message slots to keep context (without the current user message since it's the new one)
+          history: chats.slice(-6),
+          userEmail: getStoredUserEmail()
         })
       });
       if (!response.ok) {
@@ -1031,24 +1063,13 @@ export default function App() {
             <p className="text-xs text-zinc-400 mt-1">Premium Full-Stack AI Learning Platform</p>
           </div>
 
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            handleAuthenticate();
-          }} className="space-y-4">
-            {authMode === 'signup' && (
-              <div className="space-y-1.5">
-                <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Full Name</label>
-                <input
-                  type="text"
-                  value={authName}
-                  onChange={(e) => setAuthName(e.target.value)}
-                  placeholder="Bobby Fisher"
-                  className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
-                  required
-                />
-              </div>
-            )}
+          {authError && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">
+              {authError}
+            </div>
+          )}
 
+          <form onSubmit={handleAuthenticate} className="space-y-4">
             <div className="space-y-1.5">
               <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Registry Email</label>
               <input
@@ -1078,9 +1099,10 @@ export default function App() {
 
             <button
               type="submit"
-              className="w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer"
+              disabled={isAuthenticating}
+              className="w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {authMode === 'login' ? 'Confirm Sign In' : 'Create Free Account'}
+              {isAuthenticating ? 'Processing...' : authMode === 'login' ? 'Confirm Sign In' : 'Create Free Account'}
             </button>
           </form>
 
@@ -1088,6 +1110,7 @@ export default function App() {
             <button
               onClick={() => {
                 setAuthMode(authMode === 'login' ? 'signup' : 'login');
+                setAuthError('');
               }}
               className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
             >
@@ -1152,9 +1175,9 @@ export default function App() {
         }}
         onLogoutClick={() => {
           localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
-          localStorage.removeItem(LEGACY_USER_EMAIL_STORAGE_KEY);
           setIsAuthenticated(false);
           setActiveLesson(null);
+          window.location.href = '/';
         }}
       />
 

@@ -78,7 +78,8 @@ export function TopicDetailView({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             topicName: level.name,
-            roadmapContext: roadmapGoal
+            roadmapContext: roadmapGoal,
+            userEmail: localStorage.getItem('userEmail')
           })
         });
         if (!response.ok) throw new Error("Failed to load");
@@ -170,7 +171,8 @@ export function TopicDetailView({
           code: code,
           instructions: les.codingExercise?.instructions,
           solution: les.codingExercise?.solutionCode,
-          hint: les.codingExercise?.hint
+          hint: les.codingExercise?.hint,
+          userEmail: localStorage.getItem('userEmail')
         }),
       });
 

@@ -53,7 +53,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
           code: userCode,
           instructions: lesson.codingExercise?.instructions,
           solution: lesson.codingExercise?.solutionCode,
-          hint: lesson.codingExercise?.hint
+          hint: lesson.codingExercise?.hint,
+          userEmail: localStorage.getItem('userEmail')
         }),
       });
 

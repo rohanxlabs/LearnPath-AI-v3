@@ -6,6 +6,7 @@ import { platform } from 'os';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import pg from 'pg';
+import bcrypt from 'bcryptjs';
 
 const app = express();
 const PORT = 3000;
@@ -157,6 +158,56 @@ app.get('/api/health', (req, res) => {
     aiActive: !!process.env.GEMINI_API_KEY
   });
 });
+
+app.post('/api/register', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  try {
+    const existingUser = await loadUserDB(email, { createIfMissing: false });
+    if (existingUser) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userDB = getDefaultUserDB();
+    userDB.passwordHash = passwordHash;
+    await saveUserDB(email, userDB);
+
+    res.json({ success: true, email: email.toLowerCase() });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  try {
+    const userDB = await loadUserDB(email, { createIfMissing: false });
+    const passwordHash = userDB?.passwordHash;
+    if (!passwordHash) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const isValid = await bcrypt.compare(password, passwordHash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    res.json({ success: true, email: email.toLowerCase() });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 // 2. API: Generate Roadmaps
 app.post('/api/generate-roadmap', async (req, res) => {
@@ -834,7 +885,10 @@ Output MUST be a valid JSON object matching this schema:
 // ============================================================================
 import fs from 'fs';
 
-type UserDB = Record<string, any[]>;
+type UserDB = {
+  passwordHash?: string;
+  [key: string]: any;
+};
 
 const dbPool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -1036,7 +1090,7 @@ function getDefaultUserDB(): UserDB {
   };
 }
 
-async function loadUserDB(userEmail: string): Promise<UserDB> {
+async function loadUserDB(userEmail: string, options: { createIfMissing?: boolean } = {}): Promise<UserDB | null> {
   await ensureUserDataTable();
 
   const result = await dbPool.query(
@@ -1046,6 +1100,10 @@ async function loadUserDB(userEmail: string): Promise<UserDB> {
 
   if (result.rows[0]?.db_json) {
     return result.rows[0].db_json;
+  }
+
+  if (options.createIfMissing === false) {
+    return null;
   }
 
   const defaultDB = getDefaultUserDB();
@@ -1078,6 +1136,9 @@ app.get('/api/supabase/select', async (req, res) => {
 
   try {
     const dbData = await loadUserDB(userEmail);
+    if (!dbData) {
+      return res.status(404).json({ error: 'User data not found' });
+    }
     let rows = dbData[table] || [];
 
     // Simple filtering
@@ -1120,6 +1181,9 @@ app.post('/api/supabase/insert', async (req, res) => {
 
   try {
     const dbData = await loadUserDB(userEmail);
+    if (!dbData) {
+      return res.status(404).json({ error: 'User data not found' });
+    }
     if (!dbData[table]) dbData[table] = [];
 
     rows.forEach((r: any) => {
@@ -1151,6 +1215,9 @@ app.post('/api/supabase/update', async (req, res) => {
 
   try {
     const dbData = await loadUserDB(userEmail);
+    if (!dbData) {
+      return res.status(404).json({ error: 'User data not found' });
+    }
     let rows = dbData[table] || [];
 
     let matchedAndUpdated = 0;
@@ -1187,6 +1254,9 @@ app.post('/api/supabase/upsert', async (req, res) => {
 
   try {
     const dbData = await loadUserDB(userEmail);
+    if (!dbData) {
+      return res.status(404).json({ error: 'User data not found' });
+    }
     if (!dbData[table]) dbData[table] = [];
 
     rows.forEach((newRow: any) => {
