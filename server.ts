@@ -166,17 +166,15 @@ app.post('/api/register', async (req, res) => {
   }
 
   try {
-    const existingUser = await loadUserDB(email, { createIfMissing: false });
-    if (existingUser) {
-      return res.status(409).json({ error: 'User already exists' });
+    const db = await loadUserDB(email);
+    if (db.passwordHash) {
+      return res.status(400).json({ error: 'User already exists' });
     }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const userDB = getDefaultUserDB();
-    userDB.passwordHash = passwordHash;
-    await saveUserDB(email, userDB);
-
-    res.json({ success: true, email: email.toLowerCase() });
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    db.passwordHash = passwordHash;
+    saveUserDB(email, db);
+    return res.json({ success: true, email });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -190,18 +188,16 @@ app.post('/api/login', async (req, res) => {
   }
 
   try {
-    const userDB = await loadUserDB(email, { createIfMissing: false });
-    const passwordHash = userDB?.passwordHash;
+    const db = await loadUserDB(email);
+    const passwordHash = db.passwordHash;
     if (!passwordHash) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
-    const isValid = await bcrypt.compare(password, passwordHash);
-    if (!isValid) {
+    const match = await bcrypt.compare(password, passwordHash);
+    if (!match) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-
-    res.json({ success: true, email: email.toLowerCase() });
+    return res.json({ success: true, email });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -892,7 +888,7 @@ type UserDB = {
 
 const dbPool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : undefined,
+  ssl: { rejectUnauthorized: false },
 });
 
 let userDataTableReady: Promise<void> | null = null;
