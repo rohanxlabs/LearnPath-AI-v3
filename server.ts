@@ -4,7 +4,6 @@ import path from 'path';
 import { exec } from 'child_process';
 import { platform } from 'os';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI, Type } from '@google/genai';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
 
@@ -76,78 +75,45 @@ function cleanAndParseJSON(rawText: string | null | undefined, fallbackDefault: 
   }
 }
 
-// High-reliability multi-model fallback and recovery utility
-async function callWithModelFallbackAndRetry<T>(
-  fn: (model: string) => Promise<T>,
-  models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'],
-  retriesPerModel = 2,
-  delay = 1000
-): Promise<T> {
-  let lastError: any = null;
-  
-  for (let i = 0; i < models.length; i++) {
-    const model = models[i];
-    let attempt = 0;
-    while (attempt <= retriesPerModel) {
-      try {
-        console.log(`[Gemini API] Dispatching content generation request using model "${model}" (attempt ${attempt + 1}/${retriesPerModel + 1})...`);
-        return await fn(model);
-      } catch (error: any) {
-        lastError = error;
-        const errorStr = (error.message || '').toLowerCase();
-        
-        // If it is a quota limit or rate exhaustion (e.g. 429), fall back to the next model IMMEDIATELY!
-        const isQuotaExceeded = errorStr.includes('429') || 
-                                errorStr.includes('quota') || 
-                                errorStr.includes('resource_exhausted') || 
-                                errorStr.includes('exhausted') ||
-                                errorStr.includes('rate_limit') ||
-                                errorStr.includes('rate limit');
-                                
-        if (isQuotaExceeded) {
-          console.log(`[Gemini API Info] Model "${model}" hit quota limit / rate exhaustion (429). Bypassing further retries and falling back to the next model immediately...`);
-          break; // break the inner loop to move to the next model in the outer list
-        }
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'qwen/qwen3:free';
 
-        const isTransient = errorStr.includes('503') || 
-                            errorStr.includes('unavailable') || 
-                            errorStr.includes('demand') || 
-                            error.status === 'UNAVAILABLE';
-        
-        if (isTransient && attempt < retriesPerModel) {
-          const currentDelay = delay * Math.pow(1.5, attempt);
-          console.log(`[Gemini API Info] Model "${model}" hit transient issue: "${error.message}". Retrying in ${currentDelay}ms... (${retriesPerModel - attempt} left)`);
-          await new Promise(resolve => setTimeout(resolve, currentDelay));
-          attempt++;
-        } else {
-          console.log(`[Gemini API Info] Model "${model}" failed/exhausted. Trying next fallback model if available... Status info: ${error.message}`);
-          break; // break the inner loop to move to the next model in the outer list
-        }
-      }
-    }
+async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7): Promise<string> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) {
+    throw new Error('OPENROUTER_API_KEY is not configured');
   }
-  
-  throw lastError || new Error("All Gemini fallback models failed.");
-}
 
-// Lazy-initialized Gemini client helper
-let geminiClient: GoogleGenAI | null = null;
-function getGeminiClient(): GoogleGenAI {
-  if (!geminiClient) {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      console.warn("WARN: GEMINI_API_KEY environment variable is not defined. Using local fallbacks.");
-    }
-    geminiClient = new GoogleGenAI({
-      apiKey: key || "MOCK_KEY_FALLBACK",
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'http://localhost:3000',
+      'X-Title': 'LearnPath AI'
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      temperature,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful AI assistant. Return valid JSON only when the prompt asks for JSON.'
+        },
+        {
+          role: 'user',
+          content: prompt
         }
-      }
-    });
+      ]
+    })
+  });
+
+  const responseText = await response.text();
+  if (!response.ok) {
+    throw new Error(responseText || `OpenRouter request failed with status ${response.status}`);
   }
-  return geminiClient;
+
+  const parsed = JSON.parse(responseText) as { choices?: Array<{ message?: { content?: string } }> };
+  return parsed.choices?.[0]?.message?.content || '';
 }
 
 // 1. API: Health Check
@@ -155,7 +121,8 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    aiActive: !!process.env.GEMINI_API_KEY
+    aiActive: !!process.env.OPENROUTER_API_KEY,
+    aiModel: OPENROUTER_MODEL
   });
 });
 
@@ -283,22 +250,8 @@ Provide interesting, highly tailored lessons and valid questions. Ensure the out
 `;
 
   try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("Missing api key");
-    }
-
-    const ai = getGeminiClient();
-    const response = await callWithModelFallbackAndRetry((selectedModel) => ai.models.generateContent({
-      model: selectedModel,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.7
-      }
-    }));
-
-    const parsedData = cleanAndParseJSON(response.text, '{}');
+    const response = await callOpenRouterChatCompletion(prompt, 0.7);
+    const parsedData = cleanAndParseJSON(response, '{}');
     return res.json(parsedData);
 
   } catch (error: any) {
@@ -309,7 +262,7 @@ Provide interesting, highly tailored lessons and valid questions. Ensure the out
         readableError = parsedError.error.message;
       }
     } catch (_) {}
-    console.error('Gemini Roadmap Generation Error, implementing safe custom backup template:', readableError);
+    console.error('OpenRouter Roadmap Generation Error, implementing safe custom backup template:', readableError);
     
     // Fallback roadmap generation based on goal
     const goalTitle = goal.length > 40 ? goal.substring(0, 37) + '...' : goal;
@@ -465,29 +418,20 @@ app.post('/api/mentor-chat', async (req, res) => {
   }
 
   try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("Missing api key");
+    if (!process.env.OPENROUTER_API_KEY) {
+      throw new Error('OPENROUTER_API_KEY is not configured');
     }
 
-    const ai = getGeminiClient();
-    
-    // Prepare conversation history
-    const contents: any[] = [];
+    const messages: Array<{ role: string; content: string }> = [];
     if (history && Array.isArray(history)) {
       history.forEach((h: any) => {
-        contents.push({
-          role: h.sender === 'user' ? 'user' : 'model',
-          parts: [{ text: h.text }]
+        messages.push({
+          role: h.sender === 'user' ? 'user' : 'assistant',
+          content: h.text || ''
         });
       });
     }
-    
-    // Add active message
-    contents.push({
-      role: 'user',
-      parts: [{ text: message }]
-    });
+    messages.push({ role: 'user', content: message });
 
     const systemInstruction = `
 You are the elite LearnPath AI Mentor - a friendly, highly intelligent, and extremely encouraging tutor.
@@ -500,43 +444,15 @@ Guidelines:
 4. Keep the tone helpful, professional, and exciting like a world-class university TA.
 `;
 
-    // Set up streaming response headers
+    const prompt = `${systemInstruction}\n\nConversation history:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}`;
+    const responseText = await callOpenRouterChatCompletion(prompt, 0.7);
+
     res.writeHead(200, {
       'Content-Type': 'text/plain; charset=utf-8',
-      'Transfer-Encoding': 'chunked',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive'
+      'Cache-Control': 'no-cache'
     });
+    res.end(responseText);
 
-    let streamingSuccess = false;
-    for (const model of ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite']) {
-      try {
-        console.log(`[Gemini API] Dispatching streaming content generation request using model "${model}"...`);
-        const stream = await ai.models.generateContentStream({
-          model,
-          contents,
-          config: { systemInstruction, temperature: 0.7 }
-        });
-        
-        for await (const chunk of stream) {
-          if (chunk.text) {
-            res.write(chunk.text);
-          }
-        }
-        streamingSuccess = true;
-        break;
-      } catch (error: any) {
-        const errorStr = (error.message || '').toLowerCase();
-        const isQuotaExceeded = errorStr.includes('429') || errorStr.includes('quota') || errorStr.includes('resource_exhausted');
-        console.log(`[Gemini API Info] Model "${model}" failed: ${error.message}. Trying next model...`);
-        if (!isQuotaExceeded) break; // Only retry on quota errors
-      }
-    }
-
-    if (!streamingSuccess) {
-      throw new Error("All Gemini fallback models failed for streaming");
-    }
-    res.end();
 
   } catch (error: any) {
     let readableError = error.message || String(error);
@@ -546,7 +462,7 @@ Guidelines:
         readableError = parsedError.error.message;
       }
     } catch (_) {}
-    console.error('Gemini Chat Error:', readableError);
+    console.error('OpenRouter Chat Error:', readableError);
     
     // Fallback offline dynamic reply
     const lowercaseMessage = message.toLowerCase();
@@ -603,22 +519,8 @@ Concoct your response as a valid JSON object matching this structure:
 `;
 
   try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("Missing api key");
-    }
-
-    const ai = getGeminiClient();
-    const response = await callWithModelFallbackAndRetry((selectedModel) => ai.models.generateContent({
-      model: selectedModel,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.3
-      }
-    }));
-
-    const parsed = cleanAndParseJSON(response.text, '{}');
+    const response = await callOpenRouterChatCompletion(prompt, 0.3);
+    const parsed = cleanAndParseJSON(response, '{}');
     return res.json(parsed);
 
   } catch (error: any) {
@@ -629,7 +531,7 @@ Concoct your response as a valid JSON object matching this structure:
         readableError = parsedError.error.message;
       }
     } catch (_) {}
-    console.error('Gemini Code Analysis fallback activation:', readableError);
+    console.error('OpenRouter Code Analysis fallback activation:', readableError);
     
     // Standard offline code validation success logic
     const score = passesLocalValidation;
@@ -670,22 +572,8 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 `;
 
   try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("Missing api key");
-    }
-
-    const ai = getGeminiClient();
-    const response = await callWithModelFallbackAndRetry((selectedModel) => ai.models.generateContent({
-      model: selectedModel,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.8
-      }
-    }));
-
-    const parsed = cleanAndParseJSON(response.text, '[]');
+    const response = await callOpenRouterChatCompletion(prompt, 0.8);
+    const parsed = cleanAndParseJSON(response, '[]');
     return res.json(parsed);
 
   } catch (error: any) {
@@ -696,7 +584,7 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
         readableError = parsedError.error.message;
       }
     } catch (_) {}
-    console.error('Gemini recommendations fallback:', readableError);
+    console.error('OpenRouter recommendations fallback:', readableError);
     
     return res.json([
       {
@@ -752,22 +640,8 @@ Output must be a JSON array of questions conforming to this exact structure:
 `;
 
   try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("Missing api key");
-    }
-
-    const ai = getGeminiClient();
-    const response = await callWithModelFallbackAndRetry((selectedModel) => ai.models.generateContent({
-      model: selectedModel,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.7
-      }
-    }));
-
-    const parsed = cleanAndParseJSON(response.text, '[]');
+    const response = await callOpenRouterChatCompletion(prompt, 0.7);
+    const parsed = cleanAndParseJSON(response, '[]');
     return res.json(parsed);
 
   } catch (error: any) {
@@ -778,7 +652,7 @@ Output must be a JSON array of questions conforming to this exact structure:
         readableError = parsedError.error.message;
       }
     } catch (_) {}
-    console.error('Gemini Dynamic Quiz error fallback:', readableError);
+    console.error('OpenRouter Dynamic Quiz error fallback:', readableError);
     
     return res.json([
       {
@@ -844,26 +718,12 @@ Output MUST be a valid JSON object matching this schema:
 `;
 
   try {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("Missing api key");
-    }
-
-    const ai = getGeminiClient();
-    const response = await callWithModelFallbackAndRetry((selectedModel) => ai.models.generateContent({
-      model: selectedModel,
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.6
-      }
-    }));
-
-    const parsed = cleanAndParseJSON(response.text, '{}');
+    const response = await callOpenRouterChatCompletion(prompt, 0.6);
+    const parsed = cleanAndParseJSON(response, '{}');
     return res.json(parsed);
 
   } catch (error: any) {
-    console.warn('Gemini Topic Overview generator fallback:', error.message || error);
+    console.warn('OpenRouter Topic Overview generator fallback:', error.message || error);
     // Dynamic fallback based on topic name
     const what = `This module delivers the core logical paradigms and mathematical definitions behind ${topicName}.`;
     const why = `Completing this section establishes the fundamental framework necessary to debug and scale complex code in ${roadmapContext || 'this domain'}.`;
@@ -873,6 +733,60 @@ Output MUST be a valid JSON object matching this schema:
       `Confidently verify functional outputs against real-world metrics.`
     ];
     return res.json({ what, why, outcomes });
+  }
+});
+
+// 8. API: GET all roadmaps for a user
+app.get('/api/roadmaps', async (req, res) => {
+  const { userEmail } = req.query as { userEmail: string };
+  
+  if (!userEmail) {
+    return res.status(400).json({ error: 'userEmail is required' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData) {
+      return res.json([]);
+    }
+    
+    const roadmaps = dbData.roadmaps || [];
+    return res.json(roadmaps);
+  } catch (error) {
+    console.error('Get roadmaps error:', error);
+    // Return empty array instead of error to allow frontend to work
+    return res.json([]);
+  }
+});
+
+// 9. API: DELETE a roadmap by id
+app.delete('/api/roadmaps/:id', async (req, res) => {
+  const { id } = req.params;
+  const { userEmail } = req.query as { userEmail: string };
+  
+  if (!userEmail) {
+    return res.status(400).json({ error: 'userEmail is required' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData) {
+      return res.status(404).json({ error: 'User data not found' });
+    }
+    
+    const originalLength = dbData.roadmaps?.length || 0;
+    dbData.roadmaps = (dbData.roadmaps || []).filter((r: any) => r.id !== id);
+    const newLength = dbData.roadmaps.length;
+    
+    if (originalLength === newLength) {
+      return res.status(404).json({ error: 'Roadmap not found' });
+    }
+    
+    await saveUserDB(userEmail, dbData);
+    return res.json({ success: true, deletedId: id });
+  } catch (error) {
+    console.error('Delete roadmap error:', error);
+    return res.status(500).json({ error: 'Failed to delete roadmap. Database unavailable.' });
   }
 });
 
@@ -888,14 +802,20 @@ type UserDB = {
 
 const dbPool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: {
+    rejectUnauthorized: false
+  },
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000,
+  max: 10
 });
 
 let userDataTableReady: Promise<void> | null = null;
 
 function ensureUserDataTable(): Promise<void> {
   if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL environment variable is required for persistent user storage.');
+    console.warn('[Database Warning] DATABASE_URL not set. Using localStorage fallback mode.');
+    return Promise.resolve();
   }
 
   if (!userDataTableReady) {
@@ -905,7 +825,15 @@ function ensureUserDataTable(): Promise<void> {
         db_json JSONB NOT NULL,
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
-    `).then(() => undefined);
+    `)
+    .then(() => {
+      console.log('[Database] Connected to PostgreSQL successfully');
+      return undefined;
+    })
+    .catch((err) => {
+      console.error('[Database Error] Failed to initialize table:', err);
+      return undefined;
+    });
   }
 
   return userDataTableReady;
@@ -1089,38 +1017,72 @@ function getDefaultUserDB(): UserDB {
 async function loadUserDB(userEmail: string, options: { createIfMissing?: boolean } = {}): Promise<UserDB | null> {
   await ensureUserDataTable();
 
-  const result = await dbPool.query(
-    'SELECT db_json FROM user_data WHERE email = $1',
-    [userEmail.toLowerCase()]
-  );
+  try {
+    const result = await dbPool.query(
+      'SELECT db_json FROM user_data WHERE email = $1',
+      [userEmail.toLowerCase()]
+    );
 
-  if (result.rows[0]?.db_json) {
-    return result.rows[0].db_json;
-  }
+    if (result.rows[0]?.db_json) {
+      const dbData = result.rows[0].db_json;
+      
+      // BACKWARD COMPATIBILITY: Migrate old single roadmap to roadmaps array
+      if (dbData.roadmap && !Array.isArray(dbData.roadmaps)) {
+        console.log('[Migration] Converting single roadmap to roadmaps array for user:', userEmail);
+        dbData.roadmaps = [{
+          ...dbData.roadmap,
+          id: dbData.roadmap.id || `roadmap-${Date.now()}`,
+          createdAt: dbData.roadmap.createdAt || new Date().toISOString()
+        }];
+        delete dbData.roadmap;
+        // Save migrated data
+        await saveUserDB(userEmail, dbData);
+      }
+      
+      // Ensure roadmaps is always an array
+      if (!dbData.roadmaps) {
+        dbData.roadmaps = [];
+      }
+      
+      return dbData;
+    }
 
-  if (options.createIfMissing === false) {
+    if (options.createIfMissing === false) {
+      return null;
+    }
+
+    const defaultDB = getDefaultUserDB();
+    await saveUserDB(userEmail, defaultDB);
+    return defaultDB;
+  } catch (error) {
+    console.error('[Database Error] Failed to load user data:', error);
+    // Return default data if database fails
+    if (options.createIfMissing !== false) {
+      return getDefaultUserDB();
+    }
     return null;
   }
-
-  const defaultDB = getDefaultUserDB();
-  await saveUserDB(userEmail, defaultDB);
-  return defaultDB;
 }
 
 async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
   await ensureUserDataTable();
 
-  await dbPool.query(
-    `
-      INSERT INTO user_data (email, db_json, updated_at)
-      VALUES ($1, $2::jsonb, NOW())
-      ON CONFLICT (email)
-      DO UPDATE SET
-        db_json = EXCLUDED.db_json,
-        updated_at = NOW()
-    `,
-    [userEmail.toLowerCase(), JSON.stringify(dbData)]
-  );
+  try {
+    await dbPool.query(
+      `
+        INSERT INTO user_data (email, db_json, updated_at)
+        VALUES ($1, $2::jsonb, NOW())
+        ON CONFLICT (email)
+        DO UPDATE SET
+          db_json = EXCLUDED.db_json,
+          updated_at = NOW()
+      `,
+      [userEmail.toLowerCase(), JSON.stringify(dbData)]
+    );
+  } catch (error) {
+    console.error('[Database Error] Failed to save user data:', error);
+    throw error;
+  }
 }
 
 // 1. Selector endpoint

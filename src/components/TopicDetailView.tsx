@@ -291,7 +291,7 @@ export function TopicDetailView({
                 <Bot className="w-4 h-4 text-purple-400" />
               </div>
               <div>
-                <span className="text-[8px] font-black tracking-widest text-[#a855f7] uppercase">Gemini AI Synthesis</span>
+                <span className="text-[8px] font-black tracking-widest text-[#a855f7] uppercase">OpenRouter AI Synthesis</span>
                 <h4 className="font-semibold text-xs text-white">Dynamic Topic Overview</h4>
               </div>
             </div>

@@ -16,6 +16,7 @@ async function safeJson(res: Response): Promise<any> {
 class SupabaseQueryBuilder {
   private table: string;
   private filters: { column: string; value: any }[] = [];
+  private pendingUpdates: any;
 
   constructor(table: string) {
     this.table = table;
@@ -70,13 +71,18 @@ class SupabaseQueryBuilder {
     }
   }
 
-  async update(updates: any) {
+  update(updates: any) {
+    this.pendingUpdates = updates;
+    return this;
+  }
+
+  async executeUpdate() {
     try {
       const userEmail = this.getUserEmail();
       const res = await fetch(`/api/supabase/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ table: this.table, userEmail, updates, filters: this.filters })
+        body: JSON.stringify({ table: this.table, userEmail, updates: this.pendingUpdates, filters: this.filters })
       });
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
@@ -87,6 +93,20 @@ class SupabaseQueryBuilder {
       console.error(`Supabase simulation error updating ${this.table}:`, err.message || err);
       return { data: null, error: err };
     }
+  }
+
+  async execute() {
+    if (this.pendingUpdates) {
+      return this.executeUpdate();
+    }
+    throw new Error('No pending query operation to execute.');
+  }
+
+  then<TResult1 = any, TResult2 = never>(
+    onfulfilled?: (value: any) => TResult1 | PromiseLike<TResult1>,
+    onrejected?: (reason?: any) => TResult2 | PromiseLike<TResult2>
+  ) {
+    return this.execute().then(onfulfilled, onrejected);
   }
 
   async upsert(rowOrRows: any) {

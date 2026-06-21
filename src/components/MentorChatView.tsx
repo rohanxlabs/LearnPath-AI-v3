@@ -74,7 +74,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
               <span>LearnPath AI Mentor</span>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             </h4>
-            <p className="text-[10px] text-zinc-400 font-mono">Gemini 3.5 Flash Model active</p>
+            <p className="text-[10px] text-zinc-400 font-mono">OpenRouter model active</p>
           </div>
         </div>
 

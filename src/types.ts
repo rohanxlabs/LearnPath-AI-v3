@@ -12,6 +12,7 @@ export interface UserProfile {
   roadmapsCompleted: number;
   hoursStudied: number;
   aiSessionsCount: number;
+  completedLessonIds?: string[];
   createdAt: string;
 }
 
@@ -48,6 +49,7 @@ export interface Lesson {
   xpReward: number;
   status: 'locked' | 'available' | 'completed';
   content: string; // HTML or Markdown
+  tags?: string[];
   quizQuestions?: QuizQuestion[];
   codingExercise?: CodingExercise;
 }
