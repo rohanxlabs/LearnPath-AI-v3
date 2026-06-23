@@ -1,18 +1,40 @@
 import 'dotenv/config';
 import express from 'express';
+import session from 'express-session';
+import { rateLimit } from 'express-rate-limit';
 import path from 'path';
 import { exec } from 'child_process';
 import { platform } from 'os';
 import { createServer as createViteServer } from 'vite';
-import pg from 'pg';
+import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 
 const app = express();
 const PORT = 3000;
-const { Pool } = pg;
 
-app.use(express.json({ limit: '50mb' }));
+const sql = neon(process.env.DATABASE_URL!, {
+  fetch: (url: string) => fetch(url)
+});
+
+app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'fallback-secret-change-me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  }
+}));
+
+const aiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please slow down.' }
+});
 
 // Resilient JSON cleaner and parser
 function cleanAndParseJSON(rawText: string | null | undefined, fallbackDefault: string = '{}'): any {
@@ -75,7 +97,25 @@ function cleanAndParseJSON(rawText: string | null | undefined, fallbackDefault: 
   }
 }
 
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'qwen/qwen3:free';
+function sanitizeForPrompt(input: string | number | undefined | null, maxLength: number = 500): string {
+  if (input === null || input === undefined) return '';
+  let cleaned = String(input).trim();
+  if (cleaned.length > maxLength) {
+    cleaned = cleaned.slice(0, maxLength);
+  }
+  cleaned = cleaned
+    .replace(/[`{}<>\\]/g, '')
+    .replace(/\b(system:|human:|assistant:)\b/gi, '');
+  return cleaned;
+}
+
+const OPENROUTER_MODELS = [
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-pro",
+  "google/gemini-2.0-flash-001",
+  "anthropic/claude-3.5-haiku",
+  "meta-llama/llama-3.3-70b-instruct"
+];
 
 async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7): Promise<string> {
   const key = process.env.OPENROUTER_API_KEY;
@@ -83,37 +123,49 @@ async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7): 
     throw new Error('OPENROUTER_API_KEY is not configured');
   }
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost:3000',
-      'X-Title': 'LearnPath AI'
-    },
-    body: JSON.stringify({
-      model: OPENROUTER_MODEL,
-      temperature,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful AI assistant. Return valid JSON only when the prompt asks for JSON.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
-    })
-  });
+  let lastError: Error | null = null;
 
-  const responseText = await response.text();
-  if (!response.ok) {
-    throw new Error(responseText || `OpenRouter request failed with status ${response.status}`);
+  for (const model of OPENROUTER_MODELS) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:5173'
+        },
+        body: JSON.stringify({
+          model,
+          temperature,
+          response_format: { type: 'json_object' },
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a helpful AI assistant. Return valid JSON only when the prompt asks for JSON.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        })
+      });
+
+      const responseText = await response.text();
+      if (!response.ok) {
+        throw new Error(responseText || `OpenRouter request failed with status ${response.status}`);
+      }
+
+      const parsed = JSON.parse(responseText) as { choices?: Array<{ message?: { content?: string } }> };
+      return parsed.choices?.[0]?.message?.content || '';
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`[Model Fallback] Model ${model} failed:`, error.message);
+      continue;
+    }
   }
 
-  const parsed = JSON.parse(responseText) as { choices?: Array<{ message?: { content?: string } }> };
-  return parsed.choices?.[0]?.message?.content || '';
+  throw lastError || new Error('All OpenRouter models failed');
 }
 
 // 1. API: Health Check
@@ -149,31 +201,28 @@ app.post('/api/register', async (req, res) => {
 });
 
 app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
+  const { email } = req.body;
+  if (!email || typeof email !== 'string' || !email.trim()) {
+    return res.status(400).json({ error: 'Email is required' });
   }
 
-  try {
-    const db = await loadUserDB(email);
-    const passwordHash = db.passwordHash;
-    if (!passwordHash) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+  req.session.userEmail = email.trim().toLowerCase();
+  return res.json({ ok: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  req.session.destroy((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to logout' });
     }
-    const match = await bcrypt.compare(password, passwordHash);
-    if (!match) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    return res.json({ success: true, email });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+    res.clearCookie('connect.sid');
+    return res.json({ ok: true });
+  });
 });
 
 
 // 2. API: Generate Roadmaps
-app.post('/api/generate-roadmap', async (req, res) => {
+app.post('/api/generate-roadmap', aiLimiter, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle } = req.body;
 
   if (!goal) {
@@ -181,8 +230,8 @@ app.post('/api/generate-roadmap', async (req, res) => {
   }
 
   const prompt = `
-Generate a structured, high-fidelity learning roadmap for this goal: "${goal}".
-The user has experience level: "${experienceLevel || 'Beginner'}", can study for ${weeklyHours || 10} hours per week, and prefers a "${preferredStyle || 'Hands-on'}" style of learning.
+Generate a structured, high-fidelity learning roadmap for this goal: "${sanitizeForPrompt(goal)}".
+The user has experience level: "${sanitizeForPrompt(experienceLevel || 'Beginner')}", can study for ${sanitizeForPrompt(weeklyHours || 10)} hours per week, and prefers a "${sanitizeForPrompt(preferredStyle || 'Hands-on')}" style of learning.
 
 Your output must be a JSON object conforming to the following structure:
 {
@@ -410,7 +459,7 @@ In this module we focus on creating robust error safety bounds.
 });
 
 // 3. API: AI Mentor Chat (Streaming)
-app.post('/api/mentor-chat', async (req, res) => {
+app.post('/api/mentor-chat', aiLimiter, async (req, res) => {
   const { message, history } = req.body;
 
   if (!message) {
@@ -427,11 +476,11 @@ app.post('/api/mentor-chat', async (req, res) => {
       history.forEach((h: any) => {
         messages.push({
           role: h.sender === 'user' ? 'user' : 'assistant',
-          content: h.text || ''
+          content: sanitizeForPrompt(h.text || '', 500)
         });
       });
     }
-    messages.push({ role: 'user', content: message });
+    messages.push({ role: 'user', content: sanitizeForPrompt(message, 500) });
 
     const systemInstruction = `
 You are the elite LearnPath AI Mentor - a friendly, highly intelligent, and extremely encouraging tutor.
@@ -475,7 +524,7 @@ Guidelines:
     } else if (lowercaseMessage.includes('quiz') || lowercaseMessage.includes('test')) {
       reply = `### Testing Knowledge & Earning XP 🧠\n\nTesting accelerates learning retention by as much as 150%! Check out your active roadmap phases. Levels containing a **Quiz** yield **50 XP**, while **Coding Exercises** reward a premium **75 XP**. Let me know if you want me to quiz you right here in chat!`;
     } else {
-      reply = `### AI Mentor Insights 🤖\n\nHello! I am standing by to help you unlock fullstack skills. You asked: *"Reflecting on: ${message}"*\n\nHere are some solid steps to tackle this:\n1. **Read & Absorb**: Check out structural markdown logs.\n2. **Experiment & Build**: Write simple scripts to verify.\n3. **Quiz & Validate**: Take standard assessments to earn XP.\n\nAsk me anything about NumPy, Neural Networks, LLM tokens, or Career Readiness!`;
+      reply = `### AI Mentor Insights 🤖\n\nHello! I am standing by to help you unlock fullstack skills. You asked: *"Reflecting on: ${sanitizeForPrompt(message)}"*\n\nHere are some solid steps to tackle this:\n1. **Read & Absorb**: Check out structural markdown logs.\n2. **Experiment & Build**: Write simple scripts to verify.\n3. **Quiz & Validate**: Take standard assessments to earn XP.\n\nAsk me anything about NumPy, Neural Networks, LLM tokens, or Career Readiness!`;
     }
 
     // If headers are already sent, just end
@@ -487,7 +536,7 @@ Guidelines:
 });
 
 // 4. API: Verify and Analyze Script Code
-app.post('/api/analyze-code', async (req, res) => {
+app.post('/api/analyze-code', aiLimiter, async (req, res) => {
   const { code, instructions, solution, hint } = req.body;
 
   if (!code) {
@@ -502,11 +551,11 @@ app.post('/api/analyze-code', async (req, res) => {
 
   const prompt = `
 Analyze the user's Python code submitted for the following exercise:
-Instructions: "${instructions || 'Implement a basic metrics calculator.'}"
-Expected solution pattern: "${solution || ''}"
+Instructions: "${sanitizeForPrompt(instructions || 'Implement a basic metrics calculator.', 500)}"
+Expected solution pattern: "${sanitizeForPrompt(solution || '', 500)}"
 User Code:
 \`\`\`python
-${code}
+${sanitizeForPrompt(code, 2000)}
 \`\`\`
 
 Evaluate if the code is logically correct based on the instructions.
@@ -548,7 +597,7 @@ Concoct your response as a valid JSON object matching this structure:
 });
 
 // 5. API: AI Adaptive Recommendations
-app.post('/api/ai-recommendations', async (req, res) => {
+app.post('/api/ai-recommendations', aiLimiter, async (req, res) => {
   const { currentXp, level, streak, activeGoal } = req.body;
 
   const prompt = `
@@ -556,7 +605,7 @@ Generate 3 highly personalized study recommendations for a user of LearnPath AI 
 - XP: ${currentXp || 1840}
 - Level: ${level || 12}
 - Streak: ${streak || 5}
-- Active Goal: "${activeGoal || 'Full-Stack AI Engineering'}"
+- Active Goal: "${sanitizeForPrompt(activeGoal || 'Full-Stack AI Engineering', 500)}"
 
 Your response must be a JSON array of exactly 3 objects matching this schema:
 [
@@ -616,7 +665,7 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 });
 
 // 6. API: Dynamic Quiz Generator
-app.post('/api/generate-quiz', async (req, res) => {
+app.post('/api/generate-quiz', aiLimiter, async (req, res) => {
   const { topicName } = req.body;
 
   if (!topicName) {
@@ -624,7 +673,7 @@ app.post('/api/generate-quiz', async (req, res) => {
   }
 
   const prompt = `
-Generate a personalized, challenging study quiz for this topic: "${topicName}".
+Generate a personalized, challenging study quiz for this topic: "${sanitizeForPrompt(topicName, 500)}".
 Generate exactly 3 multiple-choice questions.
 
 Output must be a JSON array of questions conforming to this exact structure:
@@ -703,7 +752,7 @@ app.post('/api/generate-topic-overview', async (req, res) => {
   }
 
   const prompt = `
-Generate a structured, engaging learner overview for the topic "${topicName}" within the learning domain of "${roadmapContext || 'AI and Programming'}".
+Generate a structured, engaging learner overview for the topic "${sanitizeForPrompt(topicName, 500)}" within the learning domain of "${sanitizeForPrompt(roadmapContext || 'AI and Programming', 500)}".
 Please provide:
 1. "what": A clear, 1-2 sentence description of what this skill is.
 2. "why": A 1-2 sentence explanation of why this skill is a crucial part of this learning path.
@@ -738,10 +787,10 @@ Output MUST be a valid JSON object matching this schema:
 
 // 8. API: GET all roadmaps for a user
 app.get('/api/roadmaps', async (req, res) => {
-  const { userEmail } = req.query as { userEmail: string };
+  const userEmail = req.session.userEmail;
   
   if (!userEmail) {
-    return res.status(400).json({ error: 'userEmail is required' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
@@ -762,10 +811,10 @@ app.get('/api/roadmaps', async (req, res) => {
 // 9. API: DELETE a roadmap by id
 app.delete('/api/roadmaps/:id', async (req, res) => {
   const { id } = req.params;
-  const { userEmail } = req.query as { userEmail: string };
+  const userEmail = req.session.userEmail;
   
   if (!userEmail) {
-    return res.status(400).json({ error: 'userEmail is required' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
@@ -800,43 +849,37 @@ type UserDB = {
   [key: string]: any;
 };
 
-const dbPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  },
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 30000,
-  max: 10
-});
+let usersTableReady: Promise<void> | null = null;
 
-let userDataTableReady: Promise<void> | null = null;
-
-function ensureUserDataTable(): Promise<void> {
+async function ensureUsersTable(): Promise<void> {
   if (!process.env.DATABASE_URL) {
-    console.warn('[Database Warning] DATABASE_URL not set. Using localStorage fallback mode.');
+    console.warn('[Database Warning] DATABASE_URL not set.');
     return Promise.resolve();
   }
 
-  if (!userDataTableReady) {
-    userDataTableReady = dbPool.query(`
-      CREATE TABLE IF NOT EXISTS user_data (
+  if (!usersTableReady) {
+    usersTableReady = sql`
+      CREATE TABLE IF NOT EXISTS users (
         email TEXT PRIMARY KEY,
-        db_json JSONB NOT NULL,
-        updated_at TIMESTAMPTZ DEFAULT NOW()
+        password_hash TEXT,
+        roadmap JSONB,
+        progress JSONB,
+        xp INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
       )
-    `)
-    .then(() => {
-      console.log('[Database] Connected to PostgreSQL successfully');
-      return undefined;
-    })
-    .catch((err) => {
-      console.error('[Database Error] Failed to initialize table:', err);
-      return undefined;
-    });
+    `
+      .then(() => {
+        console.log('[Database] Connected to Neon PostgreSQL successfully');
+        return undefined;
+      })
+      .catch((err: any) => {
+        console.error('[Database Error] Failed to initialize users table:', err);
+        return undefined;
+      });
   }
 
-  return userDataTableReady;
+  return usersTableReady;
 }
 
 function getDefaultUserDB(): UserDB {
@@ -1015,16 +1058,26 @@ function getDefaultUserDB(): UserDB {
 }
 
 async function loadUserDB(userEmail: string, options: { createIfMissing?: boolean } = {}): Promise<UserDB | null> {
-  await ensureUserDataTable();
+  await ensureUsersTable();
 
   try {
-    const result = await dbPool.query(
-      'SELECT db_json FROM user_data WHERE email = $1',
-      [userEmail.toLowerCase()]
-    );
+    const result = await sql`
+      SELECT password_hash, roadmap, progress, xp
+      FROM users
+      WHERE email = ${userEmail.toLowerCase()}
+    `;
 
-    if (result.rows[0]?.db_json) {
-      const dbData = result.rows[0].db_json;
+    if (result[0]) {
+      const row = result[0];
+      const roadmap = row.roadmap || {};
+      const progress = row.progress || {};
+      
+      const dbData: UserDB = {
+        ...roadmap,
+        ...progress,
+        xp: row.xp ?? 0,
+        passwordHash: row.password_hash || undefined
+      };
       
       // BACKWARD COMPATIBILITY: Migrate old single roadmap to roadmaps array
       if (dbData.roadmap && !Array.isArray(dbData.roadmaps)) {
@@ -1065,20 +1118,39 @@ async function loadUserDB(userEmail: string, options: { createIfMissing?: boolea
 }
 
 async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
-  await ensureUserDataTable();
+  await ensureUsersTable();
+
+  const { passwordHash, roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats } = dbData;
+  
+  const roadmapData = {
+    roadmaps: roadmaps || [],
+    curated_resources: curated_resources || [],
+    projects: projects || [],
+    topic_wise_quizzes: topic_wise_quizzes || []
+  };
+  
+  const progressData = {
+    profile: profile || {},
+    settings: settings || {},
+    achievements: achievements || [],
+    notifications: notifications || [],
+    chats: chats || []
+  };
+  
+  const xp = (profile as any)?.xp ?? 0;
 
   try {
-    await dbPool.query(
-      `
-        INSERT INTO user_data (email, db_json, updated_at)
-        VALUES ($1, $2::jsonb, NOW())
-        ON CONFLICT (email)
-        DO UPDATE SET
-          db_json = EXCLUDED.db_json,
-          updated_at = NOW()
-      `,
-      [userEmail.toLowerCase(), JSON.stringify(dbData)]
-    );
+    await sql`
+      INSERT INTO users (email, password_hash, roadmap, progress, xp, updated_at)
+      VALUES (${userEmail.toLowerCase()}, ${passwordHash || null}, ${roadmapData}, ${progressData}, ${xp}, NOW())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
+        roadmap = COALESCE(EXCLUDED.roadmap, users.roadmap),
+        progress = COALESCE(EXCLUDED.progress, users.progress),
+        xp = COALESCE(EXCLUDED.xp, users.xp),
+        updated_at = NOW()
+    `;
   } catch (error) {
     console.error('[Database Error] Failed to save user data:', error);
     throw error;
@@ -1087,9 +1159,10 @@ async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
 
 // 1. Selector endpoint
 app.get('/api/supabase/select', async (req, res) => {
-  const { table, userEmail, filters } = req.query as { table: string; userEmail: string; filters: string };
+  const { table, filters } = req.query as { table: string; filters: string };
+  const userEmail = req.session.userEmail;
   if (!table || !userEmail) {
-    return res.status(400).json({ error: 'Missing mandatory fields' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
@@ -1132,9 +1205,10 @@ app.get('/api/supabase/select', async (req, res) => {
 
 // 2. Insert endpoint
 app.post('/api/supabase/insert', async (req, res) => {
-  const { table, userEmail, rows } = req.body;
+  const { table, rows } = req.body;
+  const userEmail = req.session.userEmail;
   if (!table || !userEmail || !rows) {
-    return res.status(400).json({ error: 'Missing parameters' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
@@ -1166,9 +1240,10 @@ app.post('/api/supabase/insert', async (req, res) => {
 
 // 3. Update endpoint
 app.post('/api/supabase/update', async (req, res) => {
-  const { table, userEmail, updates, filters } = req.body;
+  const { table, updates, filters } = req.body;
+  const userEmail = req.session.userEmail;
   if (!table || !userEmail || !updates) {
-    return res.status(400).json({ error: 'Missing parameters' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
@@ -1205,9 +1280,10 @@ app.post('/api/supabase/update', async (req, res) => {
 
 // 4. Upsert endpoint
 app.post('/api/supabase/upsert', async (req, res) => {
-  const { table, userEmail, rows } = req.body;
+  const { table, rows } = req.body;
+  const userEmail = req.session.userEmail;
   if (!table || !userEmail || !rows) {
-    return res.status(400).json({ error: 'Missing parameters' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
