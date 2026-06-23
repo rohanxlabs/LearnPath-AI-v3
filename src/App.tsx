@@ -20,7 +20,7 @@ import { AIInsightsTab } from './components/AIInsightsTab';
 import { RoadmapHero } from './components/RoadmapHero';
 import { AIMentorAnalysis } from './components/AIMentorAnalysis';
 import { supabase } from './lib/supabase';
-import { createEmptyProfile, DEFAULT_SETTINGS, loadUserData, saveUserData } from './userData';
+import { createEmptyProfile, DEFAULT_SETTINGS, loadUserData, saveUserData, clearUserData } from './userData';
 
 const USER_EMAIL_STORAGE_KEY = 'userEmail';
 
@@ -137,21 +137,38 @@ export default function App() {
   const [apiCallsCounter, setApiCallsCounter] = useState(0);
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem(USER_EMAIL_STORAGE_KEY);
-    const email = savedEmail?.trim().toLowerCase();
-    if (!email) return;
+    const verifySession = async () => {
+      const savedEmail = localStorage.getItem(USER_EMAIL_STORAGE_KEY);
+      const email = savedEmail?.trim().toLowerCase();
+      if (!email) return;
 
-    const loaded = loadUserData(email);
-    setProfile(loaded.profile);
-    setSettings(loaded.settings);
-    setRoadmaps(loaded.roadmaps);
-    setActiveRoadmapId(loaded.roadmaps[0]?.id || '');
-    setAchievements(loaded.achievements);
-    setNotifications(loaded.notifications);
-    setChats(loaded.chats);
-    localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
-    setActiveTab('home');
-    setIsAuthenticated(true);
+      try {
+        const response = await fetch('/api/session');
+        if (!response.ok) throw new Error('Session invalid');
+        const data = await response.json();
+        if (data.authenticated && data.email === email) {
+          const loaded = loadUserData(email);
+          setProfile(loaded.profile);
+          setSettings(loaded.settings);
+          setRoadmaps(loaded.roadmaps);
+          setActiveRoadmapId(loaded.roadmaps[0]?.id || '');
+          setAchievements(loaded.achievements);
+          setNotifications(loaded.notifications);
+          setChats(loaded.chats);
+          localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
+          setActiveTab('home');
+          setIsAuthenticated(true);
+        } else {
+          throw new Error('Session mismatch');
+        }
+      } catch {
+        clearUserData(email);
+        localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
+        setIsAuthenticated(false);
+      }
+    };
+
+    verifySession();
   }, []);
 
   // Load recommendations on mount
@@ -315,6 +332,45 @@ export default function App() {
     } finally {
       setIsAuthenticating(false);
     }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch {
+      // Continue with local cleanup even if network fails
+    }
+
+    const email = localStorage.getItem(USER_EMAIL_STORAGE_KEY);
+    if (email) {
+      clearUserData(email);
+      localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
+    }
+
+    setIsAuthenticated(false);
+    setAuthEmail('');
+    setAuthPassword('');
+    setAuthMode('login');
+    setAuthError('');
+    setIsAuthenticating(false);
+    setProfile(createEmptyProfile());
+    setSettings(DEFAULT_SETTINGS);
+    setRoadmaps([]);
+    setActiveRoadmapId('');
+    setAchievements([]);
+    setNotifications([]);
+    setChats([]);
+    setActiveTab('home');
+    setIsSidebarOpen(false);
+    setActiveLesson(null);
+    setAiRecommendations([]);
+    setIsRecsLoading(false);
+    setIsAiGeneratingRoadmap(false);
+    setIsAiChatGenerating(false);
+    setStripeCheckoutStatus(null);
+    setApiCallsCounter(0);
+    setRoadmapDetailTab('roadmap');
+    setSelectedRoadmapId(null);
   };
 
   // Custom AI Roadmap Generation Trigger
@@ -1182,12 +1238,7 @@ export default function App() {
         onUpgradeClick={() => {
           setActiveTab('profile');
         }}
-        onLogoutClick={() => {
-          localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
-          setIsAuthenticated(false);
-          setActiveLesson(null);
-          window.location.href = '/';
-        }}
+        onLogoutClick={handleLogout}
       />
 
       {/* Sticky Horizontal Sub-Navigation Bar for Roadmap Details */}

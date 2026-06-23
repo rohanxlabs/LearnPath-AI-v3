@@ -14,6 +14,12 @@ const PORT = 3000;
 
 const sql = neon(process.env.DATABASE_URL!);
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+if (isProduction && !process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET is required in production');
+}
+
 declare module 'express-session' {
   interface SessionData {
     userEmail?: string;
@@ -28,6 +34,8 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
+    sameSite: 'lax',
+    secure: isProduction,
     maxAge: 7 * 24 * 60 * 60 * 1000
   }
 }));
@@ -38,6 +46,22 @@ const aiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please slow down.' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please try again later.' }
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts. Please try again later.' }
 });
 
 // Resilient JSON cleaner and parser
@@ -114,11 +138,7 @@ function sanitizeForPrompt(input: string | number | undefined | null, maxLength:
 }
 
 const OPENROUTER_MODELS = [
-  "google/gemini-2.5-flash",
-  "google/gemini-2.5-pro",
-  "google/gemini-2.0-flash-001",
-  "anthropic/claude-3.5-haiku",
-  "meta-llama/llama-3.3-70b-instruct"
+  "openrouter/free"
 ];
 
 async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7): Promise<string> {
@@ -182,7 +202,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required' });
@@ -204,14 +224,36 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-app.post('/api/login', async (req, res) => {
-  const { email } = req.body;
+app.post('/api/login', loginLimiter, async (req, res) => {
+  const { email, password } = req.body;
+
   if (!email || typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email is required' });
   }
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Password is required' });
+  }
 
-  req.session.userEmail = email.trim().toLowerCase();
-  return res.json({ ok: true });
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const dbUser = await loadUserDB(normalizedEmail, { createIfMissing: false });
+
+  if (!dbUser || !dbUser.passwordHash) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  const passwordMatches = await bcrypt.compare(password, dbUser.passwordHash);
+  if (!passwordMatches) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  req.session.regenerate((err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Session initialization failed' });
+    }
+    req.session.userEmail = normalizedEmail;
+    return res.json({ ok: true });
+  });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -222,6 +264,14 @@ app.post('/api/logout', (req, res) => {
     res.clearCookie('connect.sid');
     return res.json({ ok: true });
   });
+});
+
+app.get('/api/session', (req, res) => {
+  const userEmail = req.session.userEmail;
+  if (!userEmail) {
+    return res.status(401).json({ authenticated: false });
+  }
+  return res.json({ authenticated: true, email: userEmail });
 });
 
 

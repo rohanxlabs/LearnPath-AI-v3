@@ -76,3 +76,12 @@ export function saveUserData(email: string, data: Partial<{
     localStorage.setItem(storageKey(email, key), JSON.stringify(value));
   });
 }
+
+export function clearUserData(email: string) {
+  if (typeof window === 'undefined' || !email) return;
+  const safeEmail = email.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_');
+  const keys = ['profile', 'settings', 'roadmaps', 'achievements', 'notifications', 'chats'];
+  keys.forEach(key => {
+    localStorage.removeItem(`learnpath_${safeEmail}_${key}`);
+  });
+}
