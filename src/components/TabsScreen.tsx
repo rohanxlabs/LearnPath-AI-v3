@@ -2,32 +2,50 @@ import React, { useState, useEffect } from 'react';
 import { BarChart3, Clock, Trophy, Shield, Eye, Sparkles, User, Settings, CreditCard, HelpCircle, CheckCircle, BellRing, Lock, ToggleLeft, ToggleRight, Laptop, Moon, Sun } from 'lucide-react';
 import { UserProfile, UserSettings } from '../types';
 import { XPBadge, StreakBadge } from './Badges';
-import { AIAnalytics, getUserAnalytics } from '../services/userDataService';
+
+interface UserStats {
+  xp: number;
+  streak: number;
+  hoursStudied: number;
+  lessonsCompleted: number;
+  overallMastery: number;
+}
 
 interface AnalyticsViewProps {
   profile: UserProfile;
 }
 
 export function AnalyticsView({ profile }: AnalyticsViewProps) {
-  const [analytics, setAnalytics] = useState<AIAnalytics | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchAnalytics() {
-      if (profile.id) {
-        const data = await getUserAnalytics(profile.id);
-        setAnalytics(data);
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/user-stats');
+        const data = await res.json();
+        setStats(data);
+      } catch (err) {
+        console.error('Failed to fetch user stats:', err);
+        setStats({
+          xp: 0,
+          streak: 0,
+          hoursStudied: 0,
+          lessonsCompleted: 0,
+          overallMastery: 0
+        });
+      } finally {
+        setIsLoading(false);
       }
     }
-    fetchAnalytics();
-  }, [profile.id]);
+    fetchStats();
+  }, []);
 
-  // SVG drawing dimensions for consistency chart
-  const weeklyHours = analytics?.weeklyHoursPerDay || [0, 0, 0, 0, 0, 0, 0];
+  const weeklyHours = [0, 0, 0, 0, 0, 0, 0];
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const maxHour = Math.max(...weeklyHours, 8);
+  const maxHour = 8;
 
-  // Completion ring variables
-  const completionPercent = analytics?.overallMasteryPercent || 0;
+  const completionPercent = stats?.overallMastery || 0;
   const radius = 32;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (completionPercent / 100) * circumference;
@@ -36,7 +54,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
     {
       id: 'p-stat-xp',
       label: 'Earned XP',
-      value: profile.xp.toLocaleString(),
+      value: (stats?.xp ?? 0).toLocaleString(),
       desc: 'Overall points',
       icon: Trophy,
       color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
@@ -45,7 +63,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
     {
       id: 'p-stat-hours',
       label: 'Hours Studied',
-      value: profile.hoursStudied.toFixed(1),
+      value: (stats?.hoursStudied ?? 0).toFixed(1),
       desc: 'Active runtime',
       icon: Clock,
       color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
@@ -54,7 +72,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
     {
       id: 'p-stat-topics',
       label: 'Syllabus Steps',
-      value: Math.floor(profile.xp / 150), // This could be derived from analytics too
+      value: stats?.lessonsCompleted ?? 0,
       desc: 'Assessed units',
       icon: BarChart3,
       color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
@@ -63,7 +81,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
     {
       id: 'p-stat-streak',
       label: 'Daily Streak',
-      value: profile.streak,
+      value: stats?.streak ?? 0,
       desc: 'Study log streak',
       icon: Sparkles,
       color: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
@@ -71,7 +89,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
     },
   ];
 
-  if (!analytics) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-zinc-400">Loading analytics...</p>
@@ -160,7 +178,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
               <h4 className="font-display font-semibold text-sm text-white">Weekly Study Consistency</h4>
               <p className="text-[10px] text-zinc-400">Daily hours dedicated to syllabus exercises</p>
             </div>
-            <span className="text-xs font-bold text-purple-300 font-mono">Tot: {profile.hoursStudied} hrs worked</span>
+            <span className="text-xs font-bold text-purple-300 font-mono">Tot: {(stats?.hoursStudied ?? 0).toFixed(1)} hrs worked</span>
           </div>
 
           {/* SVG Visual bar drawings */}
@@ -203,14 +221,14 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
               <circle cx="56" cy="56" r="45" className="stroke-purple-500" strokeWidth="6" strokeDasharray="282" strokeDashoffset="70" strokeLinecap="round" fill="none" />
             </svg>
             <div className="absolute text-center">
-              <span className="text-2xl font-extrabold text-white font-display">{Math.round(analytics.overallMasteryPercent)}%</span>
+               <span className="text-2xl font-extrabold text-white font-display">{Math.round(completionPercent)}%</span>
               <span className="block text-[8px] font-bold text-zinc-400 tracking-wider">MASTERY INDEX</span>
             </div>
           </div>
 
           <div className="text-center pt-2">
             <p className="text-xs text-zinc-300">
-              Your streak is <strong className="text-amber-400 font-bold">{profile.streak} days</strong> strong. Keep learning each day to unlock legendary achievements.
+                             Your streak is <strong className="text-amber-400 font-bold">{stats?.streak ?? 0} days</strong> strong. Keep learning each day to unlock legendary achievements.
             </p>
           </div>
         </div>
@@ -225,20 +243,20 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
             <div>
               <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
                 <span className="text-zinc-300 font-medium">Monthly Practice Hours Goal</span>
-                <span className="font-mono text-white font-semibold">{profile.hoursStudied.toFixed(1)} / 45 hrs Completion</span>
+                <span className="font-mono text-white font-semibold">{(stats?.hoursStudied ?? 0).toFixed(1)} / 45 hrs Completion</span>
               </div>
               <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(profile.hoursStudied / 45) * 100}%` }} />
+                  <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(((stats?.hoursStudied ?? 0) / 45) * 100)}%` }} />
               </div>
             </div>
 
             <div>
               <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
                 <span className="text-zinc-300 font-medium">Assessments Verified</span>
-                <span className="font-mono text-white font-semibold">{Math.floor(profile.xp / 150)} / 20 steps done</span>
+                 <span className="font-mono text-white font-semibold">{stats?.lessonsCompleted ?? 0} / 20 steps done</span>
               </div>
               <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(Math.floor(profile.xp / 150) / 20) * 100}%` }} />
+                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${((stats?.lessonsCompleted ?? 0) / 20) * 100}%` }} />
               </div>
             </div>
           </div>
@@ -268,29 +286,38 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       </div>
 
       {/* Progress Page Recommendations as glass cards below */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-purple-400" />
-          <h4 className="font-display font-semibold text-sm text-white">Recommended Next Actions</h4>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {analytics.recommendedNextActions.map((action, index) => (
-            <div key={index} className={`p-5 rounded-3xl glass-card ${action.difficulty === 'easy' ? 'glass-card-emerald' : 'glass-card-rose'} flex flex-col justify-between`}>
-              <div>
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${action.difficulty === 'easy' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20'} uppercase tracking-wide`}>
-                  {action.difficulty}
-                </span>
-                <h4 className="font-semibold text-sm text-white mt-2">{action.title}</h4>
-                <p className="text-xs text-zinc-350 mt-1 lines-clamp-2">{action.description}</p>
+      {stats && stats.lessonsCompleted > 0 ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-purple-400" />
+            <h4 className="font-display font-semibold text-sm text-white">Recommended Next Actions</h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(stats.lessonsCompleted < 5
+              ? [{ title: 'Complete more lessons', description: 'Keep learning to unlock personalized recommendations.', difficulty: 'easy', xpReward: 50 }]
+              : []
+            ).map((action, index) => (
+              <div key={index} className={`p-5 rounded-3xl glass-card ${action.difficulty === 'easy' ? 'glass-card-emerald' : 'glass-card-rose'} flex flex-col justify-between`}>
+                <div>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded border ${action.difficulty === 'easy' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20'} uppercase tracking-wide`}>
+                    {action.difficulty}
+                  </span>
+                  <h4 className="font-semibold text-sm text-white mt-2">{action.title}</h4>
+                  <p className="text-xs text-zinc-350 mt-1 lines-clamp-2">{action.description}</p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-bold text-purple-450 hover:brightness-110 cursor-pointer">
+                  <span>+{action.xpReward} XP Reward</span>
+                  <span>{action.difficulty === 'easy' ? 'Launch Quiz' : 'Configure Environment'}</span>
+                </div>
               </div>
-              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-bold text-purple-450 hover:brightness-110 cursor-pointer">
-                <span>+{action.xpReward} XP Reward</span>
-                <span>{action.difficulty === 'easy' ? 'Launch Quiz' : 'Configure Environment'}</span>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-5 rounded-3xl glass-card text-center">
+          <p className="text-xs text-zinc-400">Complete your first lesson to unlock personalized recommendations.</p>
+        </div>
+      )}
     </div>
   );
 }

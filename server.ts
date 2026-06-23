@@ -12,9 +12,13 @@ import bcrypt from 'bcryptjs';
 const app = express();
 const PORT = 3000;
 
-const sql = neon(process.env.DATABASE_URL!, {
-  fetch: (url: string) => fetch(url)
-});
+const sql = neon(process.env.DATABASE_URL!);
+
+declare module 'express-session' {
+  interface SessionData {
+    userEmail?: string;
+  }
+}
 
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -174,7 +178,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     aiActive: !!process.env.OPENROUTER_API_KEY,
-    aiModel: OPENROUTER_MODEL
+    aiModel: OPENROUTER_MODELS[0]
   });
 });
 
@@ -839,6 +843,136 @@ app.delete('/api/roadmaps/:id', async (req, res) => {
   }
 });
 
+// 10. API: Get user stats
+app.get('/api/user-stats', async (req, res) => {
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData) {
+      return res.json({
+        xp: 0,
+        streak: 0,
+        hoursStudied: 0,
+        lessonsCompleted: 0,
+        overallMastery: 0
+      });
+    }
+
+    const roadmaps = dbData.roadmaps || [];
+    let totalLessons = 0;
+    let completedLessons = 0;
+
+    for (const roadmap of roadmaps) {
+      for (const phase of roadmap.phases || []) {
+        for (const level of phase.levels || []) {
+          for (const lesson of level.lessons || []) {
+            totalLessons++;
+            if (lesson.status === 'completed') {
+              completedLessons++;
+            }
+          }
+        }
+      }
+    }
+
+    const overallMastery = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+
+    return res.json({
+      xp: dbData.xp || 0,
+      streak: dbData.streak ?? 0,
+      hoursStudied: (dbData.profile as any)?.hoursStudied || 0,
+      lessonsCompleted: completedLessons,
+      overallMastery: Math.round(overallMastery)
+    });
+  } catch (error) {
+    console.error('Get user stats error:', error);
+    return res.json({
+      xp: 0,
+      streak: 0,
+      hoursStudied: 0,
+      lessonsCompleted: 0,
+      overallMastery: 0
+    });
+  }
+});
+
+// 11. API: Complete a lesson
+app.post('/api/complete-lesson', async (req, res) => {
+  const { lessonId, xpReward, roadmapId } = req.body;
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!lessonId || !xpReward) {
+    return res.status(400).json({ error: 'lessonId and xpReward are required' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData) {
+      return res.status(404).json({ error: 'User data not found' });
+    }
+
+    const roadmaps = dbData.roadmaps || [];
+    let lessonFound = false;
+    let totalLessons = 0;
+    let completedLessons = 0;
+
+    const targetRoadmaps = roadmapId ? roadmaps.filter((r: any) => r.id === roadmapId) : roadmaps;
+
+    for (const roadmap of targetRoadmaps) {
+      for (const phase of roadmap.phases || []) {
+        for (const level of phase.levels || []) {
+          for (const lesson of level.lessons || []) {
+            totalLessons++;
+            if (lesson.id === lessonId) {
+              if (lesson.status !== 'completed') {
+                lesson.status = 'completed';
+                lessonFound = true;
+              }
+            }
+            if (lesson.status === 'completed') {
+              completedLessons++;
+            }
+          }
+        }
+      }
+    }
+
+    if (!lessonFound) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+
+    const newXP = (dbData.xp || 0) + Number(xpReward);
+    if (!dbData.profile) dbData.profile = {};
+    dbData.profile.xp = newXP;
+    dbData.xp = newXP;
+
+    const completionPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+    await saveUserDB(userEmail, dbData);
+
+    const newStreak = await updateStreak(userEmail);
+
+    return res.json({
+      xp: newXP,
+      streak: newStreak,
+      completionPercent
+    });
+  } catch (error) {
+    console.error('Complete lesson error:', error);
+    return res.status(500).json({ error: 'Failed to complete lesson. Database unavailable.' });
+  }
+});
+
+
 // ============================================================================
 // SUPABASE CLIENT SIMULATION PERSISTENCE ROUTING
 // ============================================================================
@@ -869,7 +1003,9 @@ async function ensureUsersTable(): Promise<void> {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `
-      .then(() => {
+      .then(async () => {
+        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date DATE`;
+        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0`;
         console.log('[Database] Connected to Neon PostgreSQL successfully');
         return undefined;
       })
@@ -1062,7 +1198,7 @@ async function loadUserDB(userEmail: string, options: { createIfMissing?: boolea
 
   try {
     const result = await sql`
-      SELECT password_hash, roadmap, progress, xp
+      SELECT password_hash, roadmap, progress, xp, last_active_date, streak
       FROM users
       WHERE email = ${userEmail.toLowerCase()}
     `;
@@ -1076,7 +1212,9 @@ async function loadUserDB(userEmail: string, options: { createIfMissing?: boolea
         ...roadmap,
         ...progress,
         xp: row.xp ?? 0,
-        passwordHash: row.password_hash || undefined
+        passwordHash: row.password_hash || undefined,
+        last_active_date: row.last_active_date,
+        streak: row.streak ?? 0
       };
       
       // BACKWARD COMPATIBILITY: Migrate old single roadmap to roadmaps array
@@ -1157,6 +1295,53 @@ async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
   }
 }
 
+async function updateStreak(userEmail: string): Promise<number> {
+  await ensureUsersTable();
+
+  const today = new Date().toISOString().split('T')[0];
+  
+  try {
+    const result = await sql`
+      SELECT streak, last_active_date
+      FROM users
+      WHERE email = ${userEmail.toLowerCase()}
+    `;
+
+    let currentStreak = 0;
+    let lastActiveDate: string | null = null;
+
+    if (result[0]) {
+      currentStreak = result[0].streak ?? 0;
+      lastActiveDate = result[0].last_active_date;
+    }
+
+    if (lastActiveDate === today) {
+      return currentStreak;
+    }
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    if (lastActiveDate === yesterdayStr) {
+      currentStreak += 1;
+    } else if (!lastActiveDate || lastActiveDate < yesterdayStr) {
+      currentStreak = 1;
+    }
+
+    await sql`
+      UPDATE users
+      SET streak = ${currentStreak}, last_active_date = ${today}
+      WHERE email = ${userEmail.toLowerCase()}
+    `;
+
+    return currentStreak;
+  } catch (error) {
+    console.error('[Database Error] Failed to update streak:', error);
+    return 0;
+  }
+}
+
 // 1. Selector endpoint
 app.get('/api/supabase/select', async (req, res) => {
   const { table, filters } = req.query as { table: string; filters: string };
@@ -1231,7 +1416,9 @@ app.post('/api/supabase/insert', async (req, res) => {
     });
 
     await saveUserDB(userEmail, dbData);
-    return res.json({ success: true, count: rows.length, data: rows });
+
+    const streak = await updateStreak(userEmail);
+    return res.json({ success: true, count: rows.length, data: rows, streak });
   } catch (err) {
     console.error('PostgreSQL insert error:', err);
     return res.status(500).json({ error: 'Persistent storage write failed' });
@@ -1271,7 +1458,9 @@ app.post('/api/supabase/update', async (req, res) => {
     });
 
     await saveUserDB(userEmail, dbData);
-    return res.json({ success: true, count: matchedAndUpdated, updates });
+
+    const streak = await updateStreak(userEmail);
+    return res.json({ success: true, count: matchedAndUpdated, updates, streak });
   } catch (err) {
     console.error('PostgreSQL update error:', err);
     return res.status(500).json({ error: 'Persistent storage write failed' });
@@ -1308,7 +1497,9 @@ app.post('/api/supabase/upsert', async (req, res) => {
     });
 
     await saveUserDB(userEmail, dbData);
-    return res.json({ success: true, data: rows });
+
+    const streak = await updateStreak(userEmail);
+    return res.json({ success: true, data: rows, streak });
   } catch (err) {
     console.error('PostgreSQL upsert error:', err);
     return res.status(500).json({ error: 'Persistent storage write failed' });

@@ -1230,7 +1230,7 @@ export default function App() {
       )}
 
       {/* Primary tab Content Layout with desktop alignment container constraint */}
-      <main className="max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]">
+      <main className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}>
         {selectedLevelObj ? (
           <TopicDetailView
             level={selectedLevelObj}

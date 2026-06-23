@@ -62,7 +62,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)] md:h-[calc(100vh-8.5rem)] rounded-3xl glass-card border border-white/5 shadow-2xl relative overflow-hidden">
+    <div className="flex flex-col h-full w-full relative overflow-hidden">
       {/* Upper info panel */}
       <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-zinc-950/25 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
