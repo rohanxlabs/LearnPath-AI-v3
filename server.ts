@@ -903,15 +903,20 @@ app.get('/api/user-stats', async (req, res) => {
 
 // 11. API: Complete a lesson
 app.post('/api/complete-lesson', async (req, res) => {
-  const { lessonId, xpReward, roadmapId } = req.body;
+  const { lessonId, xpEarned, xpReward, roadmapId } = req.body;
   const userEmail = req.session.userEmail;
 
   if (!userEmail) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  if (!lessonId || !xpReward) {
-    return res.status(400).json({ error: 'lessonId and xpReward are required' });
+  if (!lessonId) {
+    return res.status(400).json({ error: 'lessonId is required' });
+  }
+
+  const xpValue = Number(xpEarned ?? xpReward);
+  if (!xpValue || xpValue <= 0) {
+    return res.status(400).json({ error: 'xpEarned is required' });
   }
 
   try {
@@ -926,8 +931,9 @@ app.post('/api/complete-lesson', async (req, res) => {
     let completedLessons = 0;
 
     const targetRoadmaps = roadmapId ? roadmaps.filter((r: any) => r.id === roadmapId) : roadmaps;
+    const allRoadmaps = roadmapId ? roadmaps : targetRoadmaps;
 
-    for (const roadmap of targetRoadmaps) {
+    for (const roadmap of allRoadmaps) {
       for (const phase of roadmap.phases || []) {
         for (const level of phase.levels || []) {
           for (const lesson of level.lessons || []) {
@@ -950,10 +956,10 @@ app.post('/api/complete-lesson', async (req, res) => {
       return res.status(404).json({ error: 'Lesson not found' });
     }
 
-    const newXP = (dbData.xp || 0) + Number(xpReward);
+    const newXP = (dbData.xp || 0) + xpValue;
+    dbData.xp = newXP;
     if (!dbData.profile) dbData.profile = {};
     dbData.profile.xp = newXP;
-    dbData.xp = newXP;
 
     const completionPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
@@ -964,7 +970,8 @@ app.post('/api/complete-lesson', async (req, res) => {
     return res.json({
       xp: newXP,
       streak: newStreak,
-      completionPercent
+      completionPercent,
+      message: 'Lesson complete!'
     });
   } catch (error) {
     console.error('Complete lesson error:', error);
