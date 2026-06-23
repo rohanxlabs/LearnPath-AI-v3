@@ -1004,7 +1004,7 @@ export default function App() {
           return <AIInsightsTab roadmap={selectedRm} profile={profile} />;
         }
         return (
-          <RoadmapsTabContainer
+           <RoadmapsTabContainer
             roadmaps={roadmaps}
             selectedRoadmapId={selectedRoadmapId}
             onSelectRoadmap={(id) => {
@@ -1017,6 +1017,9 @@ export default function App() {
             isGenerating={isAiGeneratingRoadmap}
             profile={profile}
             onAiAction={handleAiAction}
+            onLessonClick={(phaseId, levelId, lessonId) => {
+              setActiveLesson({ phaseId, levelId, lessonId });
+            }}
           />
         );
 

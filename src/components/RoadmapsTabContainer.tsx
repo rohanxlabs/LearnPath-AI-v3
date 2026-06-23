@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Sparkles, PlusCircle, GraduationCap } from 'lucide-react';
+import { useState } from 'react';
+import React from 'react';
+import { Sparkles, PlusCircle, GraduationCap } from 'lucide-react';
 import { Roadmap, UserProfile } from '../types';
 import { RoadmapsList } from './RoadmapsList';
-import { RoadmapHero } from './RoadmapHero';
-import RoadmapTree from './RoadmapTree';
-import { AIMentorAnalysis } from './AIMentorAnalysis';
+import { RoadmapHeader } from './RoadmapHeader';
+import { RoadmapProgress } from './RoadmapProgress';
+import { RoadmapTimeline } from './RoadmapTimeline';
+import { XPCard } from './XPCard';
+import { MilestonesCard } from './MilestonesCard';
 
 interface RoadmapsTabContainerProps {
   roadmaps: Roadmap[];
@@ -15,6 +18,7 @@ interface RoadmapsTabContainerProps {
   onGenerateRoadmap: (params: any) => Promise<void>;
   isGenerating: boolean;
   profile: UserProfile;
+  onLessonClick?: (phaseId: string, levelId: string, lessonId: string) => void;
   onAiAction?: (actionType: string, phaseName: string) => void;
 }
 
@@ -61,7 +65,8 @@ export function RoadmapsTabContainer({
   onGenerateRoadmap,
   isGenerating,
   profile,
-  onAiAction
+  onLessonClick,
+  onAiAction,
 }: RoadmapsTabContainerProps) {
   const [showGenerator, setShowGenerator] = useState(false);
   const [goal, setGoal] = useState('');
@@ -220,38 +225,51 @@ export function RoadmapsTabContainer({
     );
   }
 
-  // Detail View
   const selectedRoadmap = roadmaps.find(r => r.id === selectedRoadmapId);
   if (!selectedRoadmap) {
     onBackToList();
     return null;
   }
 
-  const mentorAnalysisData = generateMentorAnalysis(selectedRoadmap, profile);
-
   return (
     <div className="space-y-6">
-      {/* Back Button */}
-      <button
-        onClick={onBackToList}
-        className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-700 font-semibold transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        All Roadmaps
-      </button>
-
-      {/* Roadmap Detail Content */}
-      <RoadmapHero roadmap={selectedRoadmap} />
-      
-      <AIMentorAnalysis
-        strengths={mentorAnalysisData.strengths}
-        weaknesses={mentorAnalysisData.weaknesses}
-        recommendation={mentorAnalysisData.recommendation}
+      <RoadmapHeader
+        roadmap={selectedRoadmap}
+        onBack={onBackToList}
       />
 
-      <RoadmapTree
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <RoadmapProgress
+          progress={selectedRoadmap.progressPercent}
+          recommendedLessonName={
+            selectedRoadmap.phases
+              .flatMap(p => p.levels)
+              .flatMap(l => l.lessons)
+              .find(l => l.status === 'available')?.name
+          }
+        />
+        <XPCard
+          xp={selectedRoadmap.totalXp}
+          level={profile.level}
+          levelName={selectedRoadmap.experienceLevel}
+        />
+      </div>
+
+      <RoadmapTimeline
         roadmap={selectedRoadmap}
-        onAiAction={onAiAction}
+        onLessonClick={(phaseId, levelId, lessonId) => {
+          if (onLessonClick) onLessonClick(phaseId, levelId, lessonId);
+        }}
+        onRegenerate={() => {
+          if (onGenerateRoadmap) {
+            onGenerateRoadmap({ goal: selectedRoadmap.goal, experienceLevel: selectedRoadmap.experienceLevel, weeklyHours: 10, preferredStyle: 'Hands-on' });
+          }
+        }}
+      />
+
+      <MilestonesCard
+        lessonsCompleted={selectedRoadmap.lessonsCompleted}
+        progressPercent={selectedRoadmap.progressPercent}
       />
     </div>
   );
