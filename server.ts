@@ -18,8 +18,8 @@ const sql = neon(process.env.DATABASE_URL!);
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-if (isProduction && !process.env.SESSION_SECRET) {
-  throw new Error('SESSION_SECRET is required in production');
+if (!process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET is required');
 }
 
 declare module 'express-session' {
@@ -31,7 +31,7 @@ declare module 'express-session' {
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'fallback-secret-change-me',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -65,6 +65,13 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts. Please try again later.' }
 });
+
+function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!req.session.userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
 
 // Resilient JSON cleaner and parser
 function cleanAndParseJSON(rawText: string | null | undefined, fallbackDefault: string = '{}'): any {
@@ -286,7 +293,7 @@ app.get('/api/session', (req, res) => {
 
 
 // 2. API: Generate Roadmaps
-app.post('/api/generate-roadmap', aiLimiter, async (req, res) => {
+app.post('/api/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle } = req.body;
 
   if (!goal) {
@@ -577,7 +584,7 @@ In this module we focus on creating robust error safety bounds.
   }
 });
 
-app.post('/api/generate-projects', aiLimiter, async (req, res) => {
+app.post('/api/generate-projects', aiLimiter, requireAuth, async (req, res) => {
   const { goal, phases } = req.body;
 
   if (!goal) {
@@ -631,7 +638,7 @@ Rules:
 });
 
 // 3. API: AI Mentor Chat (Streaming)
-app.post('/api/mentor-chat', aiLimiter, async (req, res) => {
+app.post('/api/mentor-chat', aiLimiter, requireAuth, async (req, res) => {
   const { message, history } = req.body;
 
   if (!message) {
@@ -708,7 +715,7 @@ Guidelines:
 });
 
 // 4. API: Verify and Analyze Script Code
-app.post('/api/analyze-code', aiLimiter, async (req, res) => {
+app.post('/api/analyze-code', aiLimiter, requireAuth, async (req, res) => {
   const { code, instructions, solution, hint } = req.body;
 
   if (!code) {
@@ -769,7 +776,7 @@ Concoct your response as a valid JSON object matching this structure:
 });
 
 // 5. API: AI Adaptive Recommendations
-app.post('/api/ai-recommendations', aiLimiter, async (req, res) => {
+app.post('/api/ai-recommendations', aiLimiter, requireAuth, async (req, res) => {
   const { currentXp, level, streak, activeGoal } = req.body;
 
   const prompt = `
@@ -837,7 +844,7 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 });
 
 // 6. API: Dynamic Quiz Generator
-app.post('/api/generate-quiz', aiLimiter, async (req, res) => {
+app.post('/api/generate-quiz', aiLimiter, requireAuth, async (req, res) => {
   const { topicName } = req.body;
 
   if (!topicName) {
@@ -917,7 +924,7 @@ Output must be a JSON array of questions conforming to this exact structure:
 });
 
 // 7. API: Dynamic Topic Overview Generator
-app.post('/api/generate-topic-overview', async (req, res) => {
+app.post('/api/generate-topic-overview', requireAuth, async (req, res) => {
   const { topicName, roadmapContext } = req.body;
   if (!topicName) {
     return res.status(400).json({ error: 'Topic name is required' });
@@ -957,7 +964,7 @@ Output MUST be a valid JSON object matching this schema:
   }
 });
 
-app.post('/api/update-roadmap', async (req, res) => {
+app.post('/api/update-roadmap', requireAuth, async (req, res) => {
   const { roadmapId, updates } = req.body;
   const userEmail = req.session.userEmail;
 
@@ -1014,7 +1021,7 @@ app.post('/api/update-roadmap', async (req, res) => {
 });
 
 // 8. API: GET all roadmaps for a user
-app.get('/api/roadmaps', async (req, res) => {
+app.get('/api/roadmaps', requireAuth, async (req, res) => {
   const userEmail = req.session.userEmail;
   
   if (!userEmail) {
@@ -1037,7 +1044,7 @@ app.get('/api/roadmaps', async (req, res) => {
 });
 
 // 9. API: DELETE a roadmap by id
-app.delete('/api/roadmaps/:id', async (req, res) => {
+app.delete('/api/roadmaps/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   const userEmail = req.session.userEmail;
   
@@ -1068,7 +1075,7 @@ app.delete('/api/roadmaps/:id', async (req, res) => {
 });
 
 // 10. API: Get user stats
-app.get('/api/user-stats', async (req, res) => {
+app.get('/api/user-stats', requireAuth, async (req, res) => {
   const userEmail = req.session.userEmail;
 
   if (!userEmail) {
@@ -1126,7 +1133,7 @@ app.get('/api/user-stats', async (req, res) => {
 });
 
 // 11. API: Complete a lesson
-app.post('/api/complete-lesson', async (req, res) => {
+app.post('/api/complete-lesson', requireAuth, async (req, res) => {
   const { lessonId, xpEarned, xpReward, roadmapId } = req.body;
   const userEmail = req.session.userEmail;
 
@@ -1574,7 +1581,7 @@ async function updateStreak(userEmail: string): Promise<number> {
 }
 
 // 1. Selector endpoint
-app.get('/api/supabase/select', async (req, res) => {
+app.get('/api/supabase/select', requireAuth, async (req, res) => {
   const { table, filters } = req.query as { table: string; filters: string };
   const userEmail = req.session.userEmail;
   if (!table || !userEmail) {
@@ -1620,7 +1627,7 @@ app.get('/api/supabase/select', async (req, res) => {
 });
 
 // 2. Insert endpoint
-app.post('/api/supabase/insert', async (req, res) => {
+app.post('/api/supabase/insert', requireAuth, async (req, res) => {
   const { table, rows } = req.body;
   const userEmail = req.session.userEmail;
   if (!table || !userEmail || !rows) {
@@ -1657,7 +1664,7 @@ app.post('/api/supabase/insert', async (req, res) => {
 });
 
 // 3. Update endpoint
-app.post('/api/supabase/update', async (req, res) => {
+app.post('/api/supabase/update', requireAuth, async (req, res) => {
   const { table, updates, filters } = req.body;
   const userEmail = req.session.userEmail;
   if (!table || !userEmail || !updates) {
@@ -1699,7 +1706,7 @@ app.post('/api/supabase/update', async (req, res) => {
 });
 
 // 4. Upsert endpoint
-app.post('/api/supabase/upsert', async (req, res) => {
+app.post('/api/supabase/upsert', requireAuth, async (req, res) => {
   const { table, rows } = req.body;
   const userEmail = req.session.userEmail;
   if (!table || !userEmail || !rows) {
