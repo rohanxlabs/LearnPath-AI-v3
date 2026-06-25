@@ -2,7 +2,6 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { BookOpen, Video, FileText, Bookmark, ExternalLink, CheckCircle, Search, ChevronDown, Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Roadmap, CuratedResource } from '../types';
-import { supabase } from '../lib/supabase';
 import { getRecommendationsForRoadmap } from '../lib/recommendations';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
@@ -27,7 +26,6 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
   useEffect(() => {
     async function loadResources() {
       setLoading(true);
-      const { data, error } = await supabase.from('curated_resources').select('*');
 
       let combined: CuratedResource[] = [];
 
@@ -36,14 +34,6 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
       } else {
         const recommendations = getRecommendationsForRoadmap(roadmap);
         combined = [...recommendations];
-        if (data && !error) {
-          const seenIds = new Set(combined.map(r => r.id));
-          data.forEach((r: any) => {
-            if (!seenIds.has(r.id)) {
-              combined.push(r);
-            }
-          });
-        }
       }
       
       setResources(combined);

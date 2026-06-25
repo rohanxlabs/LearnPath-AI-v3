@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '../lib/supabase';
 import { ProjectTrack, Roadmap } from '../types';
 import ProjectCard from './ProjectCard';
 import ProjectFilters from './ProjectFilters';
@@ -52,10 +51,8 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
         console.warn('[ProjectsTab] /api/generate-projects failed, falling back to seed data:', e);
       }
 
-      const { data, error } = await supabase.from('projects').select('*');
-      if (data && !error) {
-        setProjects((data as ProjectTrack[]).sort((a, b) => a.title.localeCompare(b.title)));
-      }
+      const updatedProjects = roadmap.projects || [];
+      setProjects(updatedProjects.sort((a, b) => a.title.localeCompare(b.title)));
       setLoading(false);
     }
     loadProjects();
@@ -87,10 +84,20 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
       return;
     }
 
-    const { error } = await supabase.from('projects').update({ progress: newProgress }).eq('id', id);
-    if (!error) {
-      setProjects(prev => prev.map(p => (p.id === id ? { ...p, progress: newProgress } : p)));
-      if (newProgress === 100 && prevProgress < 100) onAddXp(50);
+    const updatedProjects = projects.map(p => (p.id === id ? { ...p, progress: newProgress } : p));
+    setProjects(updatedProjects);
+    if (newProgress === 100 && prevProgress < 100) onAddXp(50);
+    try {
+      await fetch('/api/update-roadmap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roadmapId: roadmap.id,
+          updates: { projects: updatedProjects }
+        })
+      });
+    } catch (e) {
+      console.warn('[ProjectsTab] Could not persist project progress:', e);
     }
   };
 

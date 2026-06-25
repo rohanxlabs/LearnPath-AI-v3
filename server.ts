@@ -1074,6 +1074,97 @@ app.delete('/api/roadmaps/:id', requireAuth, async (req, res) => {
   }
 });
 
+// 10a. API: Create a new roadmap
+app.post('/api/roadmaps', requireAuth, async (req, res) => {
+  const userEmail = req.session.userEmail!;
+  const roadmap = req.body;
+
+  if (!roadmap || !roadmap.id || !roadmap.goal) {
+    return res.status(400).json({ error: 'Valid roadmap object with id and goal is required' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData) {
+      return res.status(404).json({ error: 'User data not found' });
+    }
+
+    const roadmaps = dbData.roadmaps || [];
+    const existingIndex = roadmaps.findIndex((r: any) => r.id === roadmap.id);
+
+    if (existingIndex >= 0) {
+      roadmaps[existingIndex] = { ...roadmaps[existingIndex], ...roadmap };
+    } else {
+      roadmaps.push({
+        ...roadmap,
+        createdAt: roadmap.createdAt || new Date().toISOString()
+      });
+    }
+
+    dbData.roadmaps = roadmaps;
+    await saveUserDB(userEmail, dbData);
+
+    return res.json({ success: true, roadmap: roadmaps[existingIndex >= 0 ? existingIndex : roadmaps.length - 1] });
+  } catch (error) {
+    console.error('Create roadmap error:', error);
+    return res.status(500).json({ error: 'Failed to create roadmap' });
+  }
+});
+
+// 10b. API: Topic-wise quiz attempts
+app.get('/api/topic-wise-quizzes', requireAuth, async (req, res) => {
+  const userEmail = req.session.userEmail!;
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    const attempts = dbData?.topic_wise_quizzes || [];
+    return res.json(attempts);
+  } catch (error) {
+    console.error('Get topic wise quizzes error:', error);
+    return res.json([]);
+  }
+});
+
+app.post('/api/topic-wise-quizzes', requireAuth, async (req, res) => {
+  const userEmail = req.session.userEmail!;
+  const attempt = req.body;
+
+  if (!attempt || !attempt.quizId) {
+    return res.status(400).json({ error: 'quizId is required' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData) {
+      return res.status(404).json({ error: 'User data not found' });
+    }
+
+    const quizzes = dbData.topic_wise_quizzes || [];
+    const idx = quizzes.findIndex((q: any) => q.quizId === attempt.quizId);
+
+    if (idx >= 0) {
+      quizzes[idx] = { ...quizzes[idx], ...attempt };
+    } else {
+      quizzes.push({
+        ...attempt,
+        id: attempt.id || `quiz-${Date.now()}`,
+        quizId: attempt.quizId,
+        quizName: attempt.quizName || 'Untitled Quiz',
+        score: attempt.score || 0,
+        totalQuestions: attempt.totalQuestions || 0,
+        attemptsCount: attempt.attemptsCount || 0,
+        lastAttemptedAt: attempt.lastAttemptedAt || new Date().toISOString()
+      });
+    }
+
+    dbData.topic_wise_quizzes = quizzes;
+    await saveUserDB(userEmail, dbData);
+    return res.json({ success: true, attempt: quizzes[idx >= 0 ? idx : quizzes.length - 1] });
+  } catch (error) {
+    console.error('Upsert topic wise quiz error:', error);
+    return res.status(500).json({ error: 'Failed to save quiz attempt' });
+  }
+});
+
 // 10. API: Get user stats
 app.get('/api/user-stats', requireAuth, async (req, res) => {
   const userEmail = req.session.userEmail;
@@ -1496,34 +1587,41 @@ async function loadUserDB(userEmail: string, options: { createIfMissing?: boolea
 async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
   await ensureUsersTable();
 
-  const { passwordHash, roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats } = dbData;
-  
-  const roadmapData = {
-    roadmaps: roadmaps || [],
-    curated_resources: curated_resources || [],
-    projects: projects || [],
-    topic_wise_quizzes: topic_wise_quizzes || []
-  };
-  
-  const progressData = {
-    profile: profile || {},
-    settings: settings || {},
-    achievements: achievements || [],
-    notifications: notifications || [],
-    chats: chats || []
-  };
-  
-  const xp = (profile as any)?.xp ?? 0;
-
   try {
+    const result = await sql`
+      SELECT roadmap, progress FROM users WHERE email = ${userEmail.toLowerCase()}
+    `;
+
+    const currentRoadmap = result[0]?.roadmap || {};
+    const currentProgress = result[0]?.progress || {};
+
+    const { passwordHash, roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats } = dbData;
+
+    const newRoadmapData = {
+      roadmaps: roadmaps || currentRoadmap.roadmaps || [],
+      curated_resources: curated_resources || currentRoadmap.curated_resources || [],
+      projects: projects || currentRoadmap.projects || [],
+      topic_wise_quizzes: topic_wise_quizzes || currentRoadmap.topic_wise_quizzes || []
+    };
+
+    const newProgressData = {
+      profile: profile || currentProgress.profile || {},
+      settings: settings || currentProgress.settings || {},
+      achievements: achievements || currentProgress.achievements || [],
+      notifications: notifications || currentProgress.notifications || [],
+      chats: chats || currentProgress.chats || []
+    };
+
+    const xp = (profile as any)?.xp ?? (currentProgress.profile as any)?.xp ?? 0;
+
     await sql`
       INSERT INTO users (email, password_hash, roadmap, progress, xp, updated_at)
-      VALUES (${userEmail.toLowerCase()}, ${passwordHash || null}, ${roadmapData}, ${progressData}, ${xp}, NOW())
+      VALUES (${userEmail.toLowerCase()}, ${passwordHash || null}, ${newRoadmapData}, ${newProgressData}, ${xp}, NOW())
       ON CONFLICT (email)
       DO UPDATE SET
         password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
-        roadmap = COALESCE(EXCLUDED.roadmap, users.roadmap),
-        progress = COALESCE(EXCLUDED.progress, users.progress),
+        roadmap = EXCLUDED.roadmap,
+        progress = EXCLUDED.progress,
         xp = COALESCE(EXCLUDED.xp, users.xp),
         updated_at = NOW()
     `;
@@ -1579,171 +1677,6 @@ async function updateStreak(userEmail: string): Promise<number> {
     return 0;
   }
 }
-
-// 1. Selector endpoint
-app.get('/api/supabase/select', requireAuth, async (req, res) => {
-  const { table, filters } = req.query as { table: string; filters: string };
-  const userEmail = req.session.userEmail;
-  if (!table || !userEmail) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  try {
-    const dbData = await loadUserDB(userEmail);
-    if (!dbData) {
-      return res.status(404).json({ error: 'User data not found' });
-    }
-    let rows = dbData[table] || [];
-
-    // Simple filtering
-    if (filters) {
-      try {
-        const parsedFilters = JSON.parse(filters);
-        parsedFilters.forEach((f: { column: string; value: any }) => {
-          rows = rows.filter(r => r[f.column] === f.value);
-        });
-      } catch (_) {}
-    }
-
-    // Deduplicate on read by id to guarantee complete uniqueness of returned data
-    const uniqueRows: any[] = [];
-    const seenIds = new Set<string>();
-    rows.forEach((r: any) => {
-      if (r && r.id) {
-        if (!seenIds.has(r.id)) {
-          seenIds.add(r.id);
-          uniqueRows.push(r);
-        }
-      } else {
-        uniqueRows.push(r);
-      }
-    });
-
-    return res.json(uniqueRows);
-  } catch (err) {
-    console.error('PostgreSQL select error:', err);
-    return res.status(500).json({ error: 'Persistent storage query failed' });
-  }
-});
-
-// 2. Insert endpoint
-app.post('/api/supabase/insert', requireAuth, async (req, res) => {
-  const { table, rows } = req.body;
-  const userEmail = req.session.userEmail;
-  if (!table || !userEmail || !rows) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  try {
-    const dbData = await loadUserDB(userEmail);
-    if (!dbData) {
-      return res.status(404).json({ error: 'User data not found' });
-    }
-    if (!dbData[table]) dbData[table] = [];
-
-    rows.forEach((r: any) => {
-      // Generate secure id if absent
-      if (!r.id) r.id = 'supabase_' + Math.random().toString(36).substr(2, 9);
-      
-      const existingIndex = dbData[table].findIndex((item: any) => item.id === r.id);
-      if (existingIndex > -1) {
-        dbData[table][existingIndex] = { ...dbData[table][existingIndex], ...r };
-      } else {
-        dbData[table].push(r);
-      }
-    });
-
-    await saveUserDB(userEmail, dbData);
-
-    const streak = await updateStreak(userEmail);
-    return res.json({ success: true, count: rows.length, data: rows, streak });
-  } catch (err) {
-    console.error('PostgreSQL insert error:', err);
-    return res.status(500).json({ error: 'Persistent storage write failed' });
-  }
-});
-
-// 3. Update endpoint
-app.post('/api/supabase/update', requireAuth, async (req, res) => {
-  const { table, updates, filters } = req.body;
-  const userEmail = req.session.userEmail;
-  if (!table || !userEmail || !updates) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  try {
-    const dbData = await loadUserDB(userEmail);
-    if (!dbData) {
-      return res.status(404).json({ error: 'User data not found' });
-    }
-    let rows = dbData[table] || [];
-
-    let matchedAndUpdated = 0;
-    dbData[table] = rows.map((r: any) => {
-      // Check if matches filters
-      let matches = true;
-      if (filters && Array.isArray(filters)) {
-        filters.forEach((f: { column: string; value: any }) => {
-          if (r[f.column] !== f.value) matches = false;
-        });
-      }
-
-      if (matches) {
-        matchedAndUpdated++;
-        return { ...r, ...updates };
-      }
-      return r;
-    });
-
-    await saveUserDB(userEmail, dbData);
-
-    const streak = await updateStreak(userEmail);
-    return res.json({ success: true, count: matchedAndUpdated, updates, streak });
-  } catch (err) {
-    console.error('PostgreSQL update error:', err);
-    return res.status(500).json({ error: 'Persistent storage write failed' });
-  }
-});
-
-// 4. Upsert endpoint
-app.post('/api/supabase/upsert', requireAuth, async (req, res) => {
-  const { table, rows } = req.body;
-  const userEmail = req.session.userEmail;
-  if (!table || !userEmail || !rows) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
-  try {
-    const dbData = await loadUserDB(userEmail);
-    if (!dbData) {
-      return res.status(404).json({ error: 'User data not found' });
-    }
-    if (!dbData[table]) dbData[table] = [];
-
-    rows.forEach((newRow: any) => {
-      if (!newRow.id) {
-        newRow.id = 'supabase_' + Math.random().toString(36).substr(2, 9);
-        dbData[table].push(newRow);
-      } else {
-        const idx = dbData[table].findIndex((item: any) => item.id === newRow.id);
-        if (idx > -1) {
-          dbData[table][idx] = { ...dbData[table][idx], ...newRow };
-        } else {
-          dbData[table].push(newRow);
-        }
-      }
-    });
-
-    await saveUserDB(userEmail, dbData);
-
-    const streak = await updateStreak(userEmail);
-    return res.json({ success: true, data: rows, streak });
-  } catch (err) {
-    console.error('PostgreSQL upsert error:', err);
-    return res.status(500).json({ error: 'Persistent storage write failed' });
-  }
-});
-
 
 // Helper to prepare PWA assets on start
 function preparePWAAssets() {

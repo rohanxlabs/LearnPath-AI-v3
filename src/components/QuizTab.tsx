@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Award, Brain, CheckCircle, XCircle, Video, Bookmark, BookOpen, ExternalLink, Trophy, Repeat, BarChart2, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Roadmap, TopicQuizAttempt } from '../types';
-import { supabase } from '../lib/supabase';
 import { getQuizRecommendations } from '../lib/recommendations';
 import { QUIZ_QUESTIONS } from '../quizData';
 
@@ -44,13 +43,13 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
 
       let seedAttempts: TopicQuizAttempt[] = [];
       try {
-        const { data, error } = await supabase.from('topic_wise_quizzes').select('*');
+        const response = await fetch('/api/topic-wise-quizzes');
         if (!cancelled) {
-          if (data && !error) {
-            console.log('[QuizTab] Loaded quiz attempts:', data);
-            seedAttempts = data as TopicQuizAttempt[];
+          if (response.ok) {
+            seedAttempts = await response.json();
+            console.log('[QuizTab] Loaded quiz attempts:', seedAttempts.length);
           } else {
-            console.log('[QuizTab] No quiz attempts found or error:', error);
+            console.log('[QuizTab] No quiz attempts found from server');
           }
         }
       } catch (e: any) {
@@ -188,10 +187,17 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
       lastAttemptedAt: new Date().toLocaleString()
     };
 
-    await supabase.from('topic_wise_quizzes').upsert({ ...updatedAttempt, quizId });
+    await fetch('/api/topic-wise-quizzes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...updatedAttempt, quizId })
+    });
 
-    const { data } = await supabase.from('topic_wise_quizzes').select('*');
-    if (data) setQuizzes(data as TopicQuizAttempt[]);
+    const response = await fetch('/api/topic-wise-quizzes');
+    if (response.ok) {
+      const data = await response.json();
+      if (data) setQuizzes(data as TopicQuizAttempt[]);
+    }
 
     setQuizResult({ score, correct: correctCount, total: totalQuestions, xp: xpEarned });
     setActiveQuizId(null);

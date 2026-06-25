@@ -49,13 +49,12 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
       const response = await fetch('/api/analyze-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code: userCode,
-          instructions: lesson.codingExercise?.instructions,
-          solution: lesson.codingExercise?.solutionCode,
-          hint: lesson.codingExercise?.hint,
-          userEmail: localStorage.getItem('userEmail')
-        }),
+          body: JSON.stringify({
+            code: userCode,
+            instructions: lesson.codingExercise?.instructions,
+            solution: lesson.codingExercise?.solutionCode,
+            hint: lesson.codingExercise?.hint
+          }),
       });
 
       if (!response.ok) {

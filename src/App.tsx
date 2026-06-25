@@ -19,8 +19,7 @@ import { ProjectsTab } from './components/ProjectsTab';
 import { AIInsightsTab } from './components/AIInsightsTab';
 import { RoadmapHero } from './components/RoadmapHero';
 import { AIMentorAnalysis } from './components/AIMentorAnalysis';
-import { supabase } from './lib/supabase';
-import { createEmptyProfile, DEFAULT_SETTINGS, loadUserData, saveUserData, clearUserData } from './userData';
+import { createEmptyProfile, DEFAULT_SETTINGS } from './userData';
 
 const USER_EMAIL_STORAGE_KEY = 'userEmail';
 
@@ -147,14 +146,14 @@ export default function App() {
         if (!response.ok) throw new Error('Session invalid');
         const data = await response.json();
         if (data.authenticated && data.email === email) {
-          const loaded = loadUserData(email);
-          setProfile(loaded.profile);
-          setSettings(loaded.settings);
-          setRoadmaps(loaded.roadmaps);
-          setActiveRoadmapId(loaded.roadmaps[0]?.id || '');
-          setAchievements(loaded.achievements);
-          setNotifications(loaded.notifications);
-          setChats(loaded.chats);
+          const name = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+          setProfile(prev => ({ ...createEmptyProfile(email, name), name, avatar: prev.avatar }));
+          setSettings(DEFAULT_SETTINGS);
+          setRoadmaps([]);
+          setActiveRoadmapId('');
+          setAchievements([]);
+          setNotifications([]);
+          setChats([]);
           localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
           setActiveTab('home');
           setIsAuthenticated(true);
@@ -162,7 +161,6 @@ export default function App() {
           throw new Error('Session mismatch');
         }
       } catch {
-        clearUserData(email);
         localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
         setIsAuthenticated(false);
       }
@@ -201,17 +199,16 @@ export default function App() {
   // Sync roadmaps with Database per user
   useEffect(() => {
     async function syncRoadmapsFromDatabase() {
+      if (!isAuthenticated) return;
       const email = profile.email;
-      if (!email || !isAuthenticated) return;
+      if (!email) return;
       localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
 
       try {
-        // Fetch directly from backend database
-        const response = await fetch(`/api/roadmaps?userEmail=${encodeURIComponent(email)}`);
+        const response = await fetch('/api/roadmaps');
         if (response.ok) {
           const data = await response.json();
           
-          // Sanitize duplicates
           const uniqueList: Roadmap[] = [];
           const seen = new Set<string>();
           data.forEach((r: Roadmap) => {
@@ -222,9 +219,6 @@ export default function App() {
           });
 
           setRoadmaps(uniqueList);
-          // Also save to localStorage as cache
-          saveUserData(email, { roadmaps: uniqueList });
-          
           const hasRoadmap = uniqueList.some(r => r.id === activeRoadmapId);
           if (!hasRoadmap && uniqueList[0]) {
             setActiveRoadmapId(uniqueList[0].id);
@@ -242,19 +236,6 @@ export default function App() {
       syncRoadmapsFromDatabase();
     }
   }, [profile.email, isAuthenticated]);
-
-  // Hydrate local localStorage changes on change
-  useEffect(() => {
-    if (!isAuthenticated || !profile.email) return;
-    saveUserData(profile.email, {
-      profile,
-      settings,
-      roadmaps,
-      achievements,
-      notifications,
-      chats
-    });
-  }, [profile, settings, roadmaps, achievements, notifications, chats, isAuthenticated]);
 
   const getStoredUserEmail = () => localStorage.getItem(USER_EMAIL_STORAGE_KEY);
 
@@ -317,14 +298,14 @@ export default function App() {
       }
 
       localStorage.setItem(USER_EMAIL_STORAGE_KEY, data.email || email);
-      const loaded = loadUserData(data.email || email);
-      setProfile(loaded.profile);
-      setSettings(loaded.settings);
-      setRoadmaps(loaded.roadmaps);
-      setActiveRoadmapId(loaded.roadmaps[0]?.id || '');
-      setAchievements(loaded.achievements);
-      setNotifications(loaded.notifications);
-      setChats(loaded.chats);
+      const name = (data.email || email).split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      setProfile(prev => ({ ...createEmptyProfile(data.email || email, name), name, avatar: prev.avatar }));
+      setSettings(DEFAULT_SETTINGS);
+      setRoadmaps([]);
+      setActiveRoadmapId('');
+      setAchievements([]);
+      setNotifications([]);
+      setChats([]);
       setIsAuthenticated(true);
     } catch (err) {
       console.error(err);
@@ -341,11 +322,7 @@ export default function App() {
       // Continue with local cleanup even if network fails
     }
 
-    const email = localStorage.getItem(USER_EMAIL_STORAGE_KEY);
-    if (email) {
-      clearUserData(email);
-      localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
-    }
+    localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
 
     setIsAuthenticated(false);
     setAuthEmail('');
@@ -398,7 +375,7 @@ export default function App() {
       const data = await response.json();
       
       const newRoadmap: Roadmap = {
-        id: `roadmap-${Date.now()}`,
+        id: data.id || `roadmap-${Date.now()}`,
         goal: data.goal || params.goal,
         experienceLevel: data.experienceLevel || params.experienceLevel,
         weeklyHours: data.weeklyHours || params.weeklyHours,
@@ -407,25 +384,23 @@ export default function App() {
         totalXp: data.totalXp || 0,
         lessonsCompleted: data.lessonsCompleted || 0,
         hoursRemaining: data.hoursRemaining || 40,
-        createdAt: new Date().toISOString(),
+        createdAt: data.createdAt || new Date().toISOString(),
         phases: data.phases || [],
         resources: data.resources || [],
         projects: data.projects || [],
       };
 
-      // Save to database via supabase endpoint
-      await supabase.from('roadmaps').insert(newRoadmap);
+      await fetch('/api/roadmaps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRoadmap)
+      }).catch(err => console.warn('Failed to persist roadmap:', err));
       
       // Update state
       const updatedRoadmaps = [newRoadmap, ...roadmaps];
       setRoadmaps(updatedRoadmaps);
       setActiveRoadmapId(newRoadmap.id);
       setSelectedRoadmapId(newRoadmap.id);
-      
-      // Cache to localStorage
-      if (profile.email) {
-        saveUserData(profile.email, { roadmaps: updatedRoadmaps });
-      }
       
       // Dispatch alert notify
       const newNotif: SystemNotification = {
@@ -456,7 +431,7 @@ export default function App() {
         return;
       }
 
-      const response = await fetch(`/api/roadmaps/${id}?userEmail=${encodeURIComponent(userEmail)}`, {
+      const response = await fetch(`/api/roadmaps/${id}`, {
         method: 'DELETE'
       });
       
@@ -464,11 +439,6 @@ export default function App() {
         // Update local state immediately
         const updatedRoadmaps = roadmaps.filter(r => r.id !== id);
         setRoadmaps(updatedRoadmaps);
-        
-        // Update localStorage cache
-        if (profile.email) {
-          saveUserData(profile.email, { roadmaps: updatedRoadmaps });
-        }
         
         // Update active roadmap if needed
         if (activeRoadmapId === id) {
@@ -685,33 +655,21 @@ export default function App() {
     });
 
     setRoadmaps(updatedRoadmaps);
-    // Save updated roadmaps to database
+    
+    // Persist lesson completion and XP/streak
     const targetRoadmap = updatedRoadmaps.find(r => r.id === targetRoadmapId);
-    if (targetRoadmap) {
-      supabase.from('roadmaps').upsert(targetRoadmap);
-    }
-
-    // 2. Add XP to global UserProfile
-    const isNextLevelThreshold = profile.xp + xpAdded >= (profile.level * 200);
-    setProfile(prev => ({
-      ...prev,
-      xp: prev.xp + xpAdded,
-      level: isNextLevelThreshold ? prev.level + 1 : prev.level,
-      streak: prev.streak + 1,
-      hoursStudied: prev.hoursStudied + 0.5,
-    }));
-
-    // Trigger alert modal if level up occurs
-    if (isNextLevelThreshold) {
-      const levelNotif: SystemNotification = {
-        id: `notif-lvl-${Date.now()}`,
-        title: `Congratulations! Leveled Up! 🎉`,
-        message: `You successfully advanced to LearnPath Level ${profile.level + 1}! Keep conquering dynamic syllabus trees.`,
-        category: 'achievement',
-        read: false,
-        timestamp: new Date().toISOString()
-      };
-      setNotifications(prev => [levelNotif, ...prev]);
+    
+    if (targetRoadmapId) {
+      const xpValue = Number.isFinite(xpAdded) && xpAdded > 0 ? xpAdded : Number(activeLesson.xpReward || 0);
+      fetch('/api/complete-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lessonId: targetLessonId,
+          xpEarned: xpValue,
+          roadmapId: targetRoadmapId
+        })
+      }).catch(err => console.warn('Failed to persist lesson completion:', err));
     }
 
     // Unlocking preset accomplishments
@@ -807,16 +765,6 @@ export default function App() {
 
   // Admin maintenance triggers
   const handleClearCache = () => {
-    if (profile.email) {
-      saveUserData(profile.email, {
-        profile: createEmptyProfile(profile.email, profile.name),
-        settings,
-        roadmaps: [],
-        achievements: [],
-        notifications: [],
-        chats: [],
-      });
-    }
     window.location.reload();
   };
 
