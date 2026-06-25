@@ -86,6 +86,9 @@ export interface Roadmap {
   lessonsCompleted: number;
   hoursRemaining: number;
   createdAt: string;
+  resources?: CuratedResource[];
+  projects?: ProjectTrack[];
+  quizzes?: Record<string, { questions: any[]; name: string }>;
 }
 
 export interface Achievement {

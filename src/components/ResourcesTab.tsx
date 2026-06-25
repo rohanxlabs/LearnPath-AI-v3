@@ -28,17 +28,22 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
     async function loadResources() {
       setLoading(true);
       const { data, error } = await supabase.from('curated_resources').select('*');
-      
-      const recommendations = getRecommendationsForRoadmap(roadmap);
-      let combined = [...recommendations];
-      
-      if (data && !error) {
-        const seenIds = new Set(combined.map(r => r.id));
-        data.forEach((r: any) => {
-          if (!seenIds.has(r.id)) {
-            combined.push(r);
-          }
-        });
+
+      let combined: CuratedResource[] = [];
+
+      if (roadmap.resources && roadmap.resources.length > 0) {
+        combined = [...roadmap.resources];
+      } else {
+        const recommendations = getRecommendationsForRoadmap(roadmap);
+        combined = [...recommendations];
+        if (data && !error) {
+          const seenIds = new Set(combined.map(r => r.id));
+          data.forEach((r: any) => {
+            if (!seenIds.has(r.id)) {
+              combined.push(r);
+            }
+          });
+        }
       }
       
       setResources(combined);

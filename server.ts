@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { setDefaultResultOrder } from 'dns';
+setDefaultResultOrder('ipv4first');
 import express from 'express';
 import session from 'express-session';
 import { rateLimit } from 'express-rate-limit';
@@ -138,6 +140,9 @@ function sanitizeForPrompt(input: string | number | undefined | null, maxLength:
 }
 
 const OPENROUTER_MODELS = [
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "qwen/qwen3-coder:free",
+  "google/gemma-4-31b-it:free",
   "openrouter/free"
 ];
 
@@ -151,6 +156,8 @@ async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7): 
 
   for (const model of OPENROUTER_MODELS) {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -172,8 +179,10 @@ async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7): 
               content: prompt
             }
           ]
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       const responseText = await response.text();
       if (!response.ok) {
@@ -184,7 +193,8 @@ async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7): 
       return parsed.choices?.[0]?.message?.content || '';
     } catch (error: any) {
       lastError = error;
-      console.warn(`[Model Fallback] Model ${model} failed:`, error.message);
+      const reason = error.name === 'AbortError' ? 'timed out after 15s' : error.message;
+      console.warn(`[Model Fallback] Model ${model} failed:`, reason);
       continue;
     }
   }
@@ -353,8 +363,61 @@ Provide interesting, highly tailored lessons and valid questions. Ensure the out
 `;
 
   try {
-    const response = await callOpenRouterChatCompletion(prompt, 0.7);
-    const parsedData = cleanAndParseJSON(response, '{}');
+    const roadmapResponse = await callOpenRouterChatCompletion(prompt, 0.7);
+    const parsedData = cleanAndParseJSON(roadmapResponse, '{}');
+
+    const phases = parsedData.phases || [];
+    if (phases.length > 0) {
+      const resourcesProjectsPrompt = `
+Generate learning resources and project ideas for this roadmap.
+
+Goal: "${sanitizeForPrompt(goal)}"
+Phases and skills:
+${phases.map((ph: any) => `- ${ph.name}: ${(ph.skillsCovered || []).join(', ')}`).join('\n')}
+
+Return ONLY a valid JSON object with this shape:
+{
+  "resources": [
+    {
+      "id": "ai-res-1",
+      "phaseId": "use the exact phase id from above",
+      "title": "Resource title specific to the skill",
+      "type": "video" | "article" | "course" | "paper",
+      "provider": "Platform or author name",
+      "url": "https://...",
+      "duration": "15 mins",
+      "description": "2-3 sentences on relevance."
+    }
+  ],
+  "projects": [
+    {
+      "id": "ai-proj-1",
+      "title": "Project title",
+      "difficulty": "beginner" | "intermediate" | "advanced",
+      "description": "2-3 sentences",
+      "techStack": ["React", "Python"],
+      "features": ["Feature 1", "Feature 2"],
+      "progress": 0
+    }
+  ]
+}
+
+Rules: 6-8 resources across all phases, 3-5 projects. Be specific to "${sanitizeForPrompt(goal)}" — no generic placeholders. All URLs must look real.
+`;
+
+      try {
+        const rpResponse = await callOpenRouterChatCompletion(resourcesProjectsPrompt, 0.7);
+        const rpData = cleanAndParseJSON(rpResponse, '{}');
+        parsedData.resources = rpData.resources || [];
+        parsedData.projects = rpData.projects || [];
+        console.log(`[AI-Generated] Resources and projects generated for roadmap goal: "${sanitizeForPrompt(goal, 80)}"`);
+      } catch (rpError: any) {
+        console.error('[AI-Fallback] Could not generate resources/projects, leaving empty:', rpError.message || rpError);
+        parsedData.resources = [];
+        parsedData.projects = [];
+      }
+    }
+
     return res.json(parsedData);
 
   } catch (error: any) {
@@ -366,8 +429,8 @@ Provide interesting, highly tailored lessons and valid questions. Ensure the out
       }
     } catch (_) {}
     console.error('OpenRouter Roadmap Generation Error, implementing safe custom backup template:', readableError);
+    console.warn(`[AI-Fallback] Roadmap fallback (template) activated for goal: "${sanitizeForPrompt(goal, 80)}"`);
     
-    // Fallback roadmap generation based on goal
     const goalTitle = goal.length > 40 ? goal.substring(0, 37) + '...' : goal;
     const fallbackRoadmap = {
       id: `roadmap-${Date.now()}`,
@@ -380,6 +443,8 @@ Provide interesting, highly tailored lessons and valid questions. Ensure the out
       lessonsCompleted: 0,
       hoursRemaining: 40,
       createdAt: new Date().toISOString(),
+      resources: [],
+      projects: [],
       phases: [
         {
           id: 'ph-fallback-1',
@@ -445,7 +510,7 @@ We will verify this with a simple multiple-choice quiz up next!
         {
           id: 'ph-fallback-2',
           name: 'Applied Integration',
-          description: `Applying concepts with practical hands-on mini-projects.`,
+          description: 'Applying concepts with practical hands-on mini-projects.',
           progress: 0,
           estimatedHours: 16,
           skillsCovered: ['Local Configurations', 'Script execution', 'Error Handling', 'Debugging'],
@@ -509,6 +574,59 @@ In this module we focus on creating robust error safety bounds.
     };
 
     return res.json(fallbackRoadmap);
+  }
+});
+
+app.post('/api/generate-projects', aiLimiter, async (req, res) => {
+  const { goal, phases } = req.body;
+
+  if (!goal) {
+    return res.status(400).json({ error: 'Goal is required for project generation' });
+  }
+
+  const prompt = `
+Generate 3-5 hands-on project ideas for this learning goal: "${sanitizeForPrompt(goal)}".
+
+Skills covered in phases:
+${(phases || []).map((ph: any) => `- ${ph.name || ph.id}: ${(ph.skillsCovered || []).join(', ')}`).join('\n')}
+
+Return ONLY a valid JSON object matching this shape:
+{
+  "projects": [
+    {
+      "id": "ai-proj-1",
+      "title": "Project title",
+      "difficulty": "beginner" | "intermediate" | "advanced",
+      "description": "2-3 sentence project description specific to ${sanitizeForPrompt(goal)}",
+      "techStack": ["Tech1", "Tech2", "Tech3"],
+      "features": ["Feature 1", "Feature 2"],
+      "progress": 0
+    }
+  ]
+}
+
+Rules:
+- At least one beginner, one intermediate, one advanced
+- All project descriptions must be specific to "${sanitizeForPrompt(goal)}" — no generic filler
+- techStack entries must be real, recognizable technologies
+`;
+
+  try {
+    const response = await callOpenRouterChatCompletion(prompt, 0.7);
+    const parsed = cleanAndParseJSON(response, '{"projects":[]}');
+    const projects = parsed.projects || [];
+    return res.json({ projects });
+
+  } catch (error: any) {
+    let readableError = error.message || String(error);
+    try {
+      const parsedError = JSON.parse(error.message);
+      if (parsedError?.error?.message) {
+        readableError = parsedError.error.message;
+      }
+    } catch (_) {}
+    console.error('[AI-Fallback] /api/generate-projects fallback:', readableError);
+    return res.json({ projects: [] });
   }
 });
 
@@ -836,6 +954,62 @@ Output MUST be a valid JSON object matching this schema:
       `Confidently verify functional outputs against real-world metrics.`
     ];
     return res.json({ what, why, outcomes });
+  }
+});
+
+app.post('/api/update-roadmap', async (req, res) => {
+  const { roadmapId, updates } = req.body;
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (!roadmapId || !updates || typeof updates !== 'object') {
+    return res.status(400).json({ error: 'roadmapId and updates object are required' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData || !dbData.roadmaps) {
+      return res.status(404).json({ error: 'User or roadmaps not found' });
+    }
+
+    const idx = dbData.roadmaps.findIndex((r: any) => r.id === roadmapId);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Roadmap not found' });
+    }
+
+    const existing = dbData.roadmaps[idx];
+    const merged = { ...existing };
+
+    for (const key of Object.keys(updates)) {
+      const uVal = (updates as any)[key];
+      const eVal = existing[key];
+
+      if (key === 'quizzes' && uVal && typeof uVal === 'object' && !Array.isArray(uVal)) {
+        merged.quizzes = { ...(eVal || {}), ...uVal };
+      } else if (key === 'resources' && Array.isArray(uVal)) {
+        const existingRes = (eVal || []) as any[];
+        const byId = new Map(existingRes.map(r => [r.id, r]));
+        uVal.forEach((r: any) => { byId.set(r.id, r); });
+        merged.resources = Array.from(byId.values());
+      } else if (key === 'projects' && Array.isArray(uVal)) {
+        const existingProj = (eVal || []) as any[];
+        const byId = new Map(existingProj.map(p => [p.id, p]));
+        uVal.forEach((p: any) => { byId.set(p.id, p); });
+        merged.projects = Array.from(byId.values());
+      } else {
+        merged[key] = uVal;
+      }
+    }
+
+    dbData.roadmaps[idx] = merged;
+    await saveUserDB(userEmail, dbData);
+
+    return res.json({ success: true, roadmap: dbData.roadmaps[idx] });
+  } catch (error) {
+    console.error('Update roadmap error:', error);
+    return res.status(500).json({ error: 'Failed to update roadmap' });
   }
 });
 

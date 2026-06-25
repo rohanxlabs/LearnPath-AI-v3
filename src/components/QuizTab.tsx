@@ -6,6 +6,13 @@ import { supabase } from '../lib/supabase';
 import { getQuizRecommendations } from '../lib/recommendations';
 import { QUIZ_QUESTIONS } from '../quizData';
 
+interface CachedPhaseQuiz {
+  questions: { id: string; question: string; options: string[]; correctIndex: number; explanation: string }[];
+  phaseName: string;
+  loading: boolean;
+  error?: string;
+}
+
 interface QuizTabProps {
   roadmap: Roadmap;
   onAddXp: (amount: number) => void;
@@ -21,67 +28,265 @@ interface Question {
 export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
   const [quizzes, setQuizzes] = useState<TopicQuizAttempt[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState<number>(0);
   const [activeQuizId, setActiveQuizId] = useState<string | null>(null);
+  const [activeQuizSource, setActiveQuizSource] = useState<'seed' | 'ai' | null>(null);
   const [quizResult, setQuizResult] = useState<{ score: number; correct: number; total: number; xp: number } | null>(null);
+  const [phaseQuizCache, setPhaseQuizCache] = useState<Record<string, CachedPhaseQuiz>>({});
 
   useEffect(() => {
+    let cancelled = false;
     async function loadQuizAttempts() {
+      console.log('[QuizTab] Loading quiz attempts for roadmap:', roadmap.id);
       setLoading(true);
-      const { data, error } = await supabase.from('topic_wise_quizzes').select('*');
-      if (data && !error) {
-        setQuizzes(data as TopicQuizAttempt[]);
+      setLoadError(null);
+
+      let seedAttempts: TopicQuizAttempt[] = [];
+      try {
+        const { data, error } = await supabase.from('topic_wise_quizzes').select('*');
+        if (!cancelled) {
+          if (data && !error) {
+            console.log('[QuizTab] Loaded quiz attempts:', data);
+            seedAttempts = data as TopicQuizAttempt[];
+          } else {
+            console.log('[QuizTab] No quiz attempts found or error:', error);
+          }
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          console.error('[QuizTab] Failed to load quiz attempts:', e);
+          setLoadError(e.message || 'Failed to load quiz attempts.');
+        }
       }
-      setLoading(false);
+
+      if (!cancelled) {
+        const phaseQuizzes: TopicQuizAttempt[] = (roadmap.phases || [])
+          .filter((ph: any) => ph.status !== 'locked')
+          .map((ph: any) => {
+            const attempt = seedAttempts.find(q => q.quizId === ph.id);
+            return {
+              id: attempt?.id || `phase-quiz-${ph.id}`,
+              quizId: ph.id,
+              quizName: ph.name,
+              score: attempt?.score || 0,
+              totalQuestions: attempt?.totalQuestions || 0,
+              attemptsCount: attempt?.attemptsCount || 0,
+              lastAttemptedAt: attempt?.lastAttemptedAt || ''
+            };
+          });
+
+        setQuizzes(phaseQuizzes);
+
+        if (roadmap.quizzes && typeof roadmap.quizzes === 'object') {
+          const restored: Record<string, CachedPhaseQuiz> = {};
+          for (const [phaseId, entry] of Object.entries(roadmap.quizzes)) {
+            restored[phaseId] = {
+              questions: Array.isArray((entry as any).questions) ? (entry as any).questions : [],
+              phaseName: (entry as any).name || phaseId,
+              loading: false
+            };
+          }
+          setPhaseQuizCache(restored);
+        }
+        setLoading(false);
+      }
     }
     loadQuizAttempts();
-  }, [roadmap.id]);
+    return () => { cancelled = true; };
+  }, [roadmap.id, retryKey]);
+
+  const generatePhaseQuiz = async (phaseId: string, phaseName: string, skillsCovered?: string[]) => {
+    const topicName = skillsCovered && skillsCovered.length > 0
+      ? `${phaseName}: ${skillsCovered.join(', ')}`
+      : phaseName;
+
+    console.log('[QuizTab] Generating quiz for phase:', { phaseId, phaseName, topicName });
+    
+    setPhaseQuizCache(prev => ({ ...prev, [phaseId]: { questions: [], phaseName, loading: true } }));
+
+    try {
+      const res = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topicName })
+      });
+      if (res.ok) {
+        const questions = await res.json();
+        console.log('[QuizTab] Generated quiz questions:', questions.length);
+        setPhaseQuizCache(prev => ({ ...prev, [phaseId]: { questions, phaseName, loading: false } }));
+        try {
+          await fetch('/api/update-roadmap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roadmapId: roadmap.id,
+              updates: {
+                quizzes: {
+                  ...(roadmap.quizzes || {}),
+                  [phaseId]: { questions, name: phaseName }
+                }
+              }
+            })
+          });
+          console.log('[QuizTab] Successfully persisted quiz to roadmap');
+
+        } catch (e) {
+          console.warn('[QuizTab] Could not persist quiz to roadmap:', e);
+        }
+        return questions;
+      } else {
+        throw new Error(`HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      console.error(`[QuizTab-AI-Fallback] Could not generate quiz for phase "${phaseName}":`, e);
+      setPhaseQuizCache(prev => ({
+        ...prev,
+        [phaseId]: { questions: [], phaseName, loading: false, error: e.message }
+      }));
+      return [];
+    }
+  };
+
+  const handlePhaseQuizStart = async (phaseId: string, phaseName: string, skillsCovered?: string[]) => {
+    console.log('[QuizTab] Starting phase quiz:', { phaseId, phaseName });
+    setQuizResult(null);
+    const cached = phaseQuizCache[phaseId];
+    if (cached && cached.questions.length > 0) {
+      console.log('[QuizTab] Using cached quiz questions');
+      setActiveQuizId(phaseId);
+      setActiveQuizSource('ai');
+    } else if (cached && cached.loading) {
+      console.log('[QuizTab] Quiz generation already in progress');
+      return;
+    } else {
+      console.log('[QuizTab] Generating new quiz for phase');
+      const questions = await generatePhaseQuiz(phaseId, phaseName, skillsCovered);
+      if (questions.length > 0) {
+        setActiveQuizId(phaseId);
+        setActiveQuizSource('ai');
+      }
+    }
+  };
 
   const handleQuizComplete = async (quizId: string, score: number, correctCount: number, totalQuestions: number) => {
     const existing = quizzes.find(q => q.quizId === quizId);
     const prevAttempts = existing?.attemptsCount || 0;
     const prevScore = existing?.score || 0;
-    
+
     let xpEarned = 0;
     if (score === 100 && prevScore < 100) xpEarned = 50;
     else if (score >= 70 && prevScore < 70) xpEarned = 25;
     if (xpEarned > 0) onAddXp(xpEarned);
 
+    const phaseName = phaseQuizCache[quizId]?.phaseName || 'Phase Quiz';
     const updatedAttempt = {
-      quizName: existing?.quizName || 'AI Quiz',
+      quizName: phaseName,
       score: Math.max(prevScore, score),
       totalQuestions: totalQuestions,
       attemptsCount: prevAttempts + 1,
       lastAttemptedAt: new Date().toLocaleString()
     };
-    
-    await supabase.from('topic_wise_quizzes').update(updatedAttempt).eq('quizId', quizId);
-    
+
+    await supabase.from('topic_wise_quizzes').upsert({ ...updatedAttempt, quizId });
+
     const { data } = await supabase.from('topic_wise_quizzes').select('*');
     if (data) setQuizzes(data as TopicQuizAttempt[]);
 
     setQuizResult({ score, correct: correctCount, total: totalQuestions, xp: xpEarned });
     setActiveQuizId(null);
+    setActiveQuizSource(null);
   };
 
-  const handleStartQuiz = (quizId: string) => {
+  const handleSeedQuizStart = (quizId: string) => {
     setQuizResult(null);
-    setActiveQuizId(quizId);
+    const phase = (roadmap.phases || []).find((ph: any) => ph.id === quizId);
+    if (phase && phase.status !== 'locked') {
+      handlePhaseQuizStart(phase.id, phase.name, phase.skillsCovered);
+    } else {
+      setActiveQuizId(quizId);
+      setActiveQuizSource('seed');
+    }
   };
 
-  if (loading) return <LoadingSpinner />;
+  const handleQuizExit = () => {
+    setActiveQuizId(null);
+    setActiveQuizSource(null);
+  };
+
+  const activeQuestions = useMemo(() => {
+    if (!activeQuizId) return [];
+    if (activeQuizSource === 'seed') return QUIZ_QUESTIONS[activeQuizId] || [];
+    const cached = phaseQuizCache[activeQuizId];
+    return cached ? cached.questions : [];
+  }, [activeQuizId, activeQuizSource, phaseQuizCache]);
+
+  if (loadError) {
+    return (
+      <div className="p-4 text-red-500">
+        Failed to load quiz data. <button onClick={() => { setLoadError(null); setRetryKey(k => k + 1); }} className="ml-2 underline">Retry</button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <div className="p-4">Loading quiz...</div>;
+  }
 
   return (
     <div className="space-y-6 font-sans">
       <Header />
+      {loadError && (
+        <div className="p-4 rounded-2xl border border-red-500/30 bg-red-500/10 flex items-start gap-3">
+          <XCircle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm text-red-300">{loadError}</p>
+            <button onClick={() => { setLoadError(null); setRetryKey(k => k + 1); }} className="mt-2 text-sm text-red-200 hover:text-red-100 underline">
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
       <AnimatePresence mode="wait">
-        {activeQuizId ? (
+        {activeQuizId && activeQuestions.length > 0 ? (
           <motion.div key="quiz-active" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <ActiveQuiz quizId={activeQuizId} onComplete={handleQuizComplete} onExit={() => setActiveQuizId(null)} />
+            <ActiveQuiz
+              quizId={activeQuizId}
+              source={activeQuizSource}
+              questions={activeQuestions}
+              onComplete={handleQuizComplete}
+              onExit={handleQuizExit}
+            />
           </motion.div>
         ) : (
           <motion.div key="quiz-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             {quizResult && <QuizResultDisplay result={quizResult} onDismiss={() => setQuizResult(null)} />}
-            <QuizList quizzes={quizzes} onStartQuiz={handleStartQuiz} />
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-bold text-lg text-white">Phase Quizzes</h3>
+                <p className="text-sm text-zinc-400">Test your knowledge for each phase. AI-generated questions are tailored to your roadmap.</p>
+                {quizzes.length > 0 ? (
+                  <QuizList quizzes={quizzes} onStartQuiz={handleSeedQuizStart} />
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-zinc-500">No phases available</p>
+                  </div>
+                )}
+              </div>
+              
+              {/* Empty State when no quizzes of any type */}
+              {quizzes.length === 0 && !quizResult && (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4">
+                    <BookOpen className="w-10 h-10 text-zinc-500" />
+                  </div>
+                  <h3 className="font-bold text-lg text-white">No quizzes available</h3>
+                  <p className="text-sm text-zinc-400 max-w-xl">
+                    Start by selecting a roadmap phase to generate a personalized quiz, or check back later for assessments.
+                  </p>
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -149,8 +354,13 @@ const PrepResource = ({ resource }) => {
     );
 };
 
-const ActiveQuiz = ({ quizId, onComplete, onExit }) => {
-  const questions = useMemo(() => QUIZ_QUESTIONS[quizId] || [], [quizId]);
+const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
+  quizId: string;
+  source: 'seed' | 'ai';
+  questions: Question[];
+  onComplete: (quizId: string, score: number, correctCount: number, totalQuestions: number) => void;
+  onExit: () => void;
+}) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
   const [selectedOpt, setSelectedOpt] = useState(null);

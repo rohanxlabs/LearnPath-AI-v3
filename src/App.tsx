@@ -408,7 +408,9 @@ export default function App() {
         lessonsCompleted: data.lessonsCompleted || 0,
         hoursRemaining: data.hoursRemaining || 40,
         createdAt: new Date().toISOString(),
-        phases: data.phases || []
+        phases: data.phases || [],
+        resources: data.resources || [],
+        projects: data.projects || [],
       };
 
       // Save to database via supabase endpoint

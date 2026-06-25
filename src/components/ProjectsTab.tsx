@@ -19,6 +19,39 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
   useEffect(() => {
     async function loadProjects() {
       setLoading(true);
+
+      if (roadmap.projects && roadmap.projects.length > 0) {
+        setProjects(roadmap.projects);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const body = {
+          goal: roadmap.goal,
+          phases: roadmap.phases?.map((ph: any) => ({
+            id: ph.id,
+            name: ph.name,
+            skillsCovered: ph.skillsCovered || []
+          })) || []
+        };
+        const res = await fetch('/api/generate-projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.projects && data.projects.length > 0) {
+            setProjects(data.projects as ProjectTrack[]);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('[ProjectsTab] /api/generate-projects failed, falling back to seed data:', e);
+      }
+
       const { data, error } = await supabase.from('projects').select('*');
       if (data && !error) {
         setProjects((data as ProjectTrack[]).sort((a, b) => a.title.localeCompare(b.title)));
@@ -26,20 +59,38 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
       setLoading(false);
     }
     loadProjects();
-  }, [roadmap.id]);
+  }, [roadmap.id, roadmap]);
 
   const handleUpdateProgress = async (id: string, newProgress: number) => {
     const prevProj = projects.find(p => p.id === id);
     if (!prevProj) return;
 
     const prevProgress = prevProj.progress || 0;
+    const isRoadmapProject = (roadmap.projects || []).some((p: any) => p.id === id);
+
+    if (isRoadmapProject) {
+      const updatedProjects = projects.map(p => (p.id === id ? { ...p, progress: newProgress } : p));
+      setProjects(updatedProjects);
+      if (newProgress === 100 && prevProgress < 100) onAddXp(50);
+      try {
+        await fetch('/api/update-roadmap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roadmapId: roadmap.id,
+            updates: { projects: updatedProjects }
+          })
+        });
+      } catch (e) {
+        console.warn('[ProjectsTab] Could not persist project progress:', e);
+      }
+      return;
+    }
 
     const { error } = await supabase.from('projects').update({ progress: newProgress }).eq('id', id);
     if (!error) {
       setProjects(prev => prev.map(p => (p.id === id ? { ...p, progress: newProgress } : p)));
-      if (newProgress === 100 && prevProgress < 100) {
-        onAddXp(50); // Award 50 XP for project completion
-      }
+      if (newProgress === 100 && prevProgress < 100) onAddXp(50);
     }
   };
 
