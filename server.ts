@@ -148,7 +148,7 @@ function sanitizeForPrompt(input: string | number | undefined | null, maxLength:
 
 const OPENROUTER_MODELS = [
   "nvidia/nemotron-3-super-120b-a12b:free",
-  "qwen/qwen3-coder:free",
+  "openrouter/free",
   "google/gemma-4-31b-it:free",
   "openrouter/free"
 ];
