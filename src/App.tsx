@@ -660,7 +660,7 @@ export default function App() {
     const targetRoadmap = updatedRoadmaps.find(r => r.id === targetRoadmapId);
     
     if (targetRoadmapId) {
-      const xpValue = Number.isFinite(xpAdded) && xpAdded > 0 ? xpAdded : Number(activeLesson.xpReward || 0);
+      const xpValue = xpAdded || 0;
       fetch('/api/complete-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

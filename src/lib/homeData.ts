@@ -40,9 +40,9 @@ export interface TodayTask {
 }
 
 function walkLessons(roadmap: Roadmap, fn: (ctx: LessonContext) => void) {
-  for (const phase of roadmap.phases) {
-    for (const level of phase.levels) {
-      for (const lesson of level.lessons) {
+  for (const phase of roadmap.phases || []) {
+    for (const level of phase.levels || []) {
+      for (const lesson of level.lessons || []) {
         fn({ phase, level, lesson });
       }
     }
@@ -74,11 +74,11 @@ export function computeRoadmapStats(roadmap: Roadmap | null): RoadmapStats {
   let projectsCompleted = 0;
   let completedLevels = 0;
 
-  for (const phase of roadmap.phases) {
-    for (const level of phase.levels) {
+  for (const phase of roadmap.phases || []) {
+    for (const level of phase.levels || []) {
       if (level.status === 'completed') completedLevels += 1;
 
-      for (const lesson of level.lessons) {
+      for (const lesson of level.lessons || []) {
         totalLessons += 1;
         if (lesson.status === 'completed') {
           completedLessons += 1;
@@ -122,18 +122,18 @@ export function findCurrentModule(roadmap: Roadmap): { phase: Phase; level: Leve
   const current = findCurrentLesson(roadmap);
   if (current) return { phase: current.phase, level: current.level };
 
-  const currentPhase = roadmap.phases.find((p) => p.status === 'current') ?? roadmap.phases[0];
+  const currentPhase = roadmap.phases?.find((p) => p.status === 'current') ?? roadmap.phases?.[0];
   if (!currentPhase) return null;
 
   const currentLevel =
-    currentPhase.levels.find((l) => l.status === 'current') ?? currentPhase.levels[0];
+    currentPhase.levels?.find((l) => l.status === 'current') ?? currentPhase.levels?.[0];
   if (!currentLevel) return null;
 
   return { phase: currentPhase, level: currentLevel };
 }
 
 export function getModuleProgress(level: Level): number {
-  if (level.lessons.length === 0) return 0;
+  if (!level.lessons || level.lessons.length === 0) return 0;
   const completed = level.lessons.filter((l) => l.status === 'completed').length;
   return Math.round((completed / level.lessons.length) * 100);
 }

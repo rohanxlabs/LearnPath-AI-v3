@@ -153,42 +153,50 @@ const OPENROUTER_MODELS = [
   "openrouter/free"
 ];
 
-async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7): Promise<string> {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    throw new Error('OPENROUTER_API_KEY is not configured');
-  }
+async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7, asJSON = false): Promise<string> {
+   const key = process.env.OPENROUTER_API_KEY;
+   if (!key) {
+     throw new Error('OPENROUTER_API_KEY is not configured');
+   }
 
-  let lastError: Error | null = null;
+   let lastError: Error | null = null;
 
-  for (const model of OPENROUTER_MODELS) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+   for (const model of OPENROUTER_MODELS) {
+     try {
+       const controller = new AbortController();
+       const timeoutId = setTimeout(() => controller.abort(), 15000);
+       
+       const body: any = {
+         model,
+         temperature,
+         messages: [
+           {
+             role: 'system',
+             content: asJSON 
+               ? 'You are a helpful AI assistant. Return valid JSON only.'
+               : 'You are a helpful AI assistant. Provide responses in markdown format with clear headings and bullet points.'
+           },
+           {
+             role: 'user',
+             content: prompt
+           }
+         ]
+       };
+       
+       if (asJSON) {
+         body.response_format = { type: 'json_object' };
+       }
+       
+       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'http://localhost:5173'
         },
-        body: JSON.stringify({
-          model,
-          temperature,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a helpful AI assistant. Return valid JSON only when the prompt asks for JSON.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ]
-        }),
-        signal: controller.signal
-      });
+body: JSON.stringify(body),
+         signal: controller.signal
+       });
       clearTimeout(timeoutId);
 
       const responseText = await response.text();
@@ -369,9 +377,9 @@ In each Level, write exactly 1 'learn' lesson and 1 'quiz' lesson.
 Provide interesting, highly tailored lessons and valid questions. Ensure the output is valid JSON.
 `;
 
-  try {
-    const roadmapResponse = await callOpenRouterChatCompletion(prompt, 0.7);
-    const parsedData = cleanAndParseJSON(roadmapResponse, '{}');
+try {
+     const roadmapResponse = await callOpenRouterChatCompletion(prompt, 0.7, true);
+     const parsedData = cleanAndParseJSON(roadmapResponse, '{}');
 
     const phases = parsedData.phases || [];
     if (phases.length > 0) {
@@ -511,6 +519,94 @@ We will verify this with a simple multiple-choice quiz up next!
                   ]
                 }
               ]
+            },
+            {
+              id: 'lvl-fallback-1-2',
+              name: 'Core Concepts',
+              type: 'Basics',
+              status: 'locked',
+              lessons: [
+                {
+                  id: 'les-f1-2-learn',
+                  name: 'Essential Patterns',
+                  type: 'learn',
+                  xpReward: 20,
+                  status: 'locked',
+                  content: `### Essential Patterns
+
+Learn the foundational patterns that power ${goalTitle}. Understand how to structure your code for clarity and maintainability.
+
+- **Pattern recognition**: Identify common structures in problems.
+- **Code organization**: Structure code with clear boundaries.
+- **Documentation basics**: Write comments that explain why, not what.`
+                },
+                {
+                  id: 'les-f1-2-quiz',
+                  name: 'Core Concepts Quiz',
+                  type: 'quiz',
+                  xpReward: 50,
+                  status: 'locked',
+                  content: 'Verify your understanding of core patterns.',
+                  quizQuestions: [
+                    {
+                      id: 'q-f1-2',
+                      question: `Which principle helps organize code for better maintainability?`,
+                      options: [
+                        'Copy-paste everywhere',
+                        'Structure with clear boundaries',
+                        'Write as much code as possible',
+                        'Ignore documentation'
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Clear structure and boundaries make code easier to understand and modify.'
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'lvl-fallback-1-3',
+              name: 'Foundational Skills',
+              type: 'Basics',
+              status: 'locked',
+              lessons: [
+                {
+                  id: 'les-f1-3-learn',
+                  name: 'Building Blocks',
+                  type: 'learn',
+                  xpReward: 20,
+                  status: 'locked',
+                  content: `### Building Blocks
+
+Practice the core skills needed throughout your ${goalTitle} journey. These fundamentals will be applied in every subsequent module.
+
+- **Repetition**: Reinforce learning through practice.
+- **Variation**: Apply concepts in different contexts.
+- **Validation**: Check your work against expected outcomes.`
+                },
+                {
+                  id: 'les-f1-3-quiz',
+                  name: 'Foundational Skills Quiz',
+                  type: 'quiz',
+                  xpReward: 50,
+                  status: 'locked',
+                  content: 'Test your foundational skills.',
+                  quizQuestions: [
+                    {
+                      id: 'q-f1-3',
+                      question: `What is the best way to reinforce learning?`,
+                      options: [
+                        'Memorize once',
+                        'Apply concepts in different contexts',
+                        'Skip practice',
+                        'Only watch videos'
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Applying concepts in different contexts deepens understanding and retention.'
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -544,6 +640,116 @@ In this module we focus on creating robust error safety bounds.
 - **Check Constraints**: Validate that data structures are non-empty.
 - **Fail Fast**: Log errors, propagate fallback status, and raise clean warnings.
 `
+                },
+                {
+                  id: 'les-f2-quiz',
+                  name: 'Practical Mechanics Quiz',
+                  type: 'quiz',
+                  xpReward: 50,
+                  status: 'locked',
+                  content: 'Test your practical knowledge.',
+                  quizQuestions: [
+                    {
+                      id: 'q-f2-1',
+                      question: `Why should you validate data structures?`,
+                      options: [
+                        'To make code slower',
+                        'To prevent runtime errors',
+                        'To ignore problems',
+                        'To reduce code quality'
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Validating data ensures your code handles edge cases gracefully.'
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'lvl-fallback-2-2',
+              name: 'Integration Patterns',
+              type: 'Foundations',
+              status: 'locked',
+              lessons: [
+                {
+                  id: 'les-f2-2-learn',
+                  name: 'Connecting Components',
+                  type: 'learn',
+                  xpReward: 20,
+                  status: 'locked',
+                  content: `### Connecting Components
+
+Learn how to integrate different parts of your project. Understand data flow and interface design.
+
+- **API connections**: Link different services.
+- **Data pipelines**: Move data between components.
+- **Error boundaries**: Handle failures gracefully.`
+                },
+                {
+                  id: 'les-f2-2-quiz',
+                  name: 'Integration Quiz',
+                  type: 'quiz',
+                  xpReward: 50,
+                  status: 'locked',
+                  content: 'Verify integration knowledge.',
+                  quizQuestions: [
+                    {
+                      id: 'q-f2-2',
+                      question: `What is the purpose of error boundaries in integration?`,
+                      options: [
+                        'To crash the whole system',
+                        'To handle failures gracefully',
+                        'To ignore errors',
+                        'To hide problems'
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Error boundaries ensure failures in one component don\'t break the entire system.'
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'lvl-fallback-2-3',
+              name: 'Testing Strategies',
+              type: 'Foundations',
+              status: 'locked',
+              lessons: [
+                {
+                  id: 'les-f2-3-learn',
+                  name: 'Verification Methods',
+                  type: 'learn',
+                  xpReward: 20,
+                  status: 'locked',
+                  content: `### Verification Methods
+
+Learn different ways to verify your code works correctly. Testing is crucial for reliable applications.
+
+- **Unit tests**: Test individual functions.
+- **Integration tests**: Test component interaction.
+- **Edge cases**: Handle unusual inputs.`
+                },
+                {
+                  id: 'les-f2-3-quiz',
+                  name: 'Testing Quiz',
+                  type: 'quiz',
+                  xpReward: 50,
+                  status: 'locked',
+                  content: 'Assess your testing knowledge.',
+                  quizQuestions: [
+                    {
+                      id: 'q-f2-3',
+                      question: `What is the primary purpose of unit tests?`,
+                      options: [
+                        'To test everything at once',
+                        'To test individual functions',
+                        'To avoid testing',
+                        'To break code'
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Unit tests verify individual functions work correctly in isolation.'
+                    }
+                  ]
                 }
               ]
             }
@@ -572,6 +778,116 @@ In this module we focus on creating robust error safety bounds.
                   xpReward: 20,
                   status: 'locked',
                   content: '### Scaling the System\nUnderstand the trade-offs between speed, latency, and costs under heavy loads.'
+                },
+                {
+                  id: 'les-f3-quiz',
+                  name: 'Mastery Quiz',
+                  type: 'quiz',
+                  xpReward: 50,
+                  status: 'locked',
+                  content: 'Final assessment of mastery.',
+                  quizQuestions: [
+                    {
+                      id: 'q-f3-1',
+                      question: `What is the main trade-off when scaling systems?`,
+                      options: [
+                        'Speed vs. Quality',
+                        'Speed, latency, and costs',
+                        'Features vs. Design',
+                        'Colors vs. Fonts'
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Scaling involves balancing throughput speed, response latency, and operational costs.'
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'lvl-fallback-3-2',
+              name: 'Performance Optimization',
+              type: 'Advanced',
+              status: 'locked',
+              lessons: [
+                {
+                  id: 'les-f3-2-learn',
+                  name: 'Optimization Techniques',
+                  type: 'learn',
+                  xpReward: 20,
+                  status: 'locked',
+                  content: `### Optimization Techniques
+
+Learn to make your code faster and more efficient. Performance matters in production systems.
+
+- **Profiling**: Find bottlenecks in code.
+- **Caching**: Store computed results.
+- **Lazy loading**: Load only when needed.`
+                },
+                {
+                  id: 'les-f3-2-quiz',
+                  name: 'Optimization Quiz',
+                  type: 'quiz',
+                  xpReward: 50,
+                  status: 'locked',
+                  content: 'Test optimization knowledge.',
+                  quizQuestions: [
+                    {
+                      id: 'q-f3-2',
+                      question: `What is caching used for?`,
+                      options: [
+                        'To store computed results',
+                        'To delete data',
+                        'To slow down systems',
+                        'To ignore performance'
+                      ],
+                      correctIndex: 0,
+                      explanation: 'Caching stores results of expensive operations for faster subsequent access.'
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'lvl-fallback-3-3',
+              name: 'Production Readiness',
+              type: 'Advanced',
+              status: 'locked',
+              lessons: [
+                {
+                  id: 'les-f3-3-learn',
+                  name: 'Deployment Best Practices',
+                  type: 'learn',
+                  xpReward: 20,
+                  status: 'locked',
+                  content: `### Deployment Best Practices
+
+Prepare your application for production deployment. Learn the essentials of running systems reliably.
+
+- **Environment variables**: Configure without code changes.
+- **Health checks**: Monitor system status.
+- **Logging**: Track operations and errors.`
+                },
+                {
+                  id: 'les-f3-3-quiz',
+                  name: 'Deployment Quiz',
+                  type: 'quiz',
+                  xpReward: 50,
+                  status: 'locked',
+                  content: 'Final deployment readiness check.',
+                  quizQuestions: [
+                    {
+                      id: 'q-f3-3',
+                      question: `Why use environment variables in production?`,
+                      options: [
+                        'To hardcode configuration',
+                        'To configure without code changes',
+                        'To make code less secure',
+                        'To complicate deployments'
+                      ],
+                      correctIndex: 1,
+                      explanation: 'Environment variables allow configuration changes without modifying code.'
+                    }
+                  ]
                 }
               ]
             }
@@ -662,18 +978,28 @@ app.post('/api/mentor-chat', aiLimiter, requireAuth, async (req, res) => {
     messages.push({ role: 'user', content: sanitizeForPrompt(message, 500) });
 
     const systemInstruction = `
-You are the elite LearnPath AI Mentor - a friendly, highly intelligent, and extremely encouraging tutor.
-You help people of all experience levels master artificial intelligence, python, math, code scripting, neural architectures, LLMs, and RAG pipelines.
+You are the LearnPath AI Mentor - a world-class university TA who excels at breaking down complex concepts into digestible, practical explanations.
 
-Guidelines:
-1. Provide extremely structured, markdown-rich responses using headings, bold bullet points, and codeblocks.
-2. If the user presents software scripts, explain what it does and highlight optimizations using syntax highlighting.
-3. Suggest 2-3 specific study tips or interesting quick exercises at the end of each answer.
-4. Keep the tone helpful, professional, and exciting like a world-class university TA.
+Your expertise: AI/ML, Python, Neural Networks, LLMs, RAG pipelines, System Design.
+
+When responding to ANY question, ALWAYS follow this exact structure:
+
+1. Start with a clear ### heading summarizing the topic
+2. Write a 1-2 sentence plain English overview
+3. List 3-4 **Key Points** using bold bullets
+4. Add a **quick exercise** (2-3 minutes, actionable)
+5. End with **next step** and **pro tip**
+
+For code explanations:
+- Identify the core algorithm/pattern first
+- Explain each key line in simple terms
+- Suggest optimizations and "why" behind design
+
+Use friendly tone, avoid jargon, provide practical value.
 `;
 
-    const prompt = `${systemInstruction}\n\nConversation history:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}`;
-    const responseText = await callOpenRouterChatCompletion(prompt, 0.7);
+    const prompt = `${systemInstruction}\n\nUser question: ${message}\n\nPrevious messages:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}`;
+    const responseText = await callOpenRouterChatCompletion(prompt, 0.5);
 
     res.writeHead(200, {
       'Content-Type': 'text/plain; charset=utf-8',
@@ -697,13 +1023,25 @@ Guidelines:
     let reply = "";
 
     if (lowercaseMessage.includes('python')) {
-      reply = `### Python Study Roadmap Insight 🐍\n\nPython is foundational for AI. Focus heavily on:\n- **NumPy & Vectorization**: Avoid slow native Python loops.\n- **Pandas DataFrames**: Essential for structured learning samples.\n- **Object Oriented Python**: Writing clean reusable modeling layers.\n\n*Suggested Tip*: Try writing a numpy computing vector matrix subtraction to calculate Mean Squared Error!`;
+      reply = `### Python for AI Mastery 🐍\n\nPython is the foundation of modern AI development. These core libraries are essential:\n\n**Key Points**:\n- **NumPy Vectorization**: Replace slow Python loops with array operations\n- **Pandas DataFrames**: Handle structured learning data efficiently\n- **Object-Oriented Patterns**: Write reusable ML model components\n\n**Quick Exercise**: Write a NumPy array subtraction to compute Mean Squared Error between predicted and actual values\n**Next Step**: Explore PyTorch tensor operations for neural network foundations\n**Pro Tip**: Always vectorize computations - avoid native Python loops in numerical code`;
     } else if (lowercaseMessage.includes('roadmap') || lowercaseMessage.includes('generate')) {
-      reply = `### Custom Roadmap Engineering 🗺️\n\nI can generate roadmaps for any goal in AI! Go to the **Roadmaps tab**, click **Generate Custom Roadmap**, enter your goal (e.g. "Stable Diffusion from scratch"), set your preferred weekly hours, and I will craft a perfect Duolingo-style tree path for you!`;
+      reply = `### Custom Roadmap Engineering 🗺️\n\nI craft personalized learning paths for any AI goal! Here's how:\n\n**Key Points**:\n- **Phases**: 3-5 digestible milestones breaking down complex topics\n- **Levels**: Foundations → Practice → Mastery progression\n- **Lessons**: Learn (theory) + Quiz (validation) format per level\n\n**Quick Exercise**: Define your target skill (e.g., "Build a chatbot with RAG") and I'll generate a roadmap\n**Next Step**: Click **Generate Custom Roadmap** in the Roadmaps tab\n**Pro Tip**: Start with 2-3 hours/week commitment for sustainable progress`;
     } else if (lowercaseMessage.includes('quiz') || lowercaseMessage.includes('test')) {
-      reply = `### Testing Knowledge & Earning XP 🧠\n\nTesting accelerates learning retention by as much as 150%! Check out your active roadmap phases. Levels containing a **Quiz** yield **50 XP**, while **Coding Exercises** reward a premium **75 XP**. Let me know if you want me to quiz you right here in chat!`;
+      reply = `### Knowledge Testing & XP Gains 🧠\n\nQuizzes reinforce learning through active recall:\n\n**Key Points**:\n- **Quiz Lessons**: 50 XP reward, multiple-choice with explanations\n- **Coding Exercises**: 75 XP reward, hands-on implementation\n- **Retention Boost**: Testing improves retention by up to 150%\n\n**Quick Exercise**: Ask for 3 questions on LLM tokenization to practice now\n**Next Step**: Complete quizzes in active roadmap phases to unlock next levels\n**Pro Tip**: Review incorrect answers - they reveal knowledge gaps to focus on`;
+    } else if (lowercaseMessage.includes('neural') || lowercaseMessage.includes('network')) {
+      reply = `### Neural Network Foundations 🧠\n\nNeural networks learn patterns through layered transformations:\n\n**Key Points**:\n- **Input Layer**: Receives feature vectors (e.g., pixel values)\n- **Hidden Layers**: Apply weighted transformations with activation functions\n- **Output Layer**: Produces predictions (probabilities, regressions, etc.)\n\n**Training Process**: Forward pass → Loss → Backpropagation adjusts weights\n\n**Quick Exercise**: Implement a single-layer perceptron with sigmoid activation in NumPy\n**Next Step**: Study backpropagation chain rule for multi-layer gradient flow\n**Pro Tip**: Initialize weights with Xavier/Glorot to prevent vanishing gradients`;
+    } else if (lowercaseMessage.includes('attention') || lowercaseMessage.includes('transformer')) {
+      reply = `### Self-Attention Mechanics 🎯\n\nSelf-attention lets models focus on relevant input parts:\n\n**Key Points**:\n- **Query-Key-Value**: Each position embedded into three vectors\n- **Similarity Scores**: Q·K^T measures relevance between positions\n- **Weighted Sum**: V weighted by softmax-normalized attention scores\n\n**Quick Exercise**: Given Q=[1,0], K=[1,1], compute attention score and explain intuition\n**Next Step**: Explore multi-head attention for parallel perspective learning\n**Pro Tip**: Scaled dot-product (÷√d_k) prevents extreme softmax values in high dimensions`;
+    } else if (lowercaseMessage.includes('rag') || lowercaseMessage.includes('retrieval')) {
+      reply = `### RAG Pipeline Architecture 🔄\n\nRAG grounds LLMs in external knowledge sources:\n\n**Key Points**:\n- **Retrieval**: Query vector database for relevant documents\n- **Augmentation**: Inject retrieved context into prompt\n- **Generation**: LLM produces answer from grounded context\n\n**Quick Exercise**: Design a prompt template: "Answer using only: {retrieved_chunks}"\n**Next Step**: Implement chunk overlap (20%) for better context continuity\n**Pro Tip**: Use re-ranking models to improve retrieval relevance beyond basic similarity`;
+    } else if (lowercaseMessage.includes('llm') || lowercaseMessage.includes('token')) {
+      reply = `### LLM Tokenization 🔤\n\nTokenization converts text to numerical IDs for model processing:\n\n**Key Points**:\n- **BPE Algorithm**: Byte-Pair Encoding merges frequent character pairs\n- **Vocabulary**: Model's known tokens (typically 32K-100K entries)\n- **Context Windows**: Limits how much text model can process at once\n\n**Quick Exercise**: Count tokens in your last question using \`len(text.split())\` approximation\n**Next Step**: Compare GPT-4 vs Llama tokenization strategies\n**Pro Tip**: Add 30% buffer for safety when estimating token usage`;
+    } else if (lowercaseMessage.includes('numpy') || lowercaseMessage.includes('vector')) {
+      reply = `### NumPy Vectorization ⚡\n\nVectorization enables fast array operations without Python loops:\n\n**Key Points**:\n- **Broadcasting**: Automatically expand smaller arrays to match shapes\n- **Memory Efficiency**: Operate on entire arrays at C speed\n- **SIMD**: Single instruction processes multiple data points\n\n**Quick Exercise**: \`np.array([1,2,3]) * np.array([4,5,6])\` vs native Python loop timing\n**Next Step**: Explore NumPy's advanced indexing for data selection\n**Pro Tip**: Always pre-allocate arrays with \`np.zeros()\` or \`np.empty()\` for performance`;
+    } else if (lowercaseMessage.includes('help') || lowercaseMessage.includes('stuck')) {
+      reply = `### Getting Unstuck 🆘\n\nHere's my debugging approach:\n\n**Strategy**:\n- **Isolate**: Create minimal reproduction of the problem\n- **Print**: Add debug statements at each step\n- **Verify**: Check inputs/outputs match expectations\n- **Simplify**: Remove complexity until it works\n\n**Quick Exercise**: Take your problem, strip to simplest case, fix, then rebuild\n**Next Step**: Share the specific error - I'll help decode it\n**Pro Tip**: Rubber duck debugging (explain aloud) solves 40% of problems`;
     } else {
-      reply = `### AI Mentor Insights 🤖\n\nHello! I am standing by to help you unlock fullstack skills. You asked: *"Reflecting on: ${sanitizeForPrompt(message)}"*\n\nHere are some solid steps to tackle this:\n1. **Read & Absorb**: Check out structural markdown logs.\n2. **Experiment & Build**: Write simple scripts to verify.\n3. **Quiz & Validate**: Take standard assessments to earn XP.\n\nAsk me anything about NumPy, Neural Networks, LLM tokens, or Career Readiness!`;
+      reply = `### AI Mentor Ready to Help 🤖\n\nYou asked: *"${sanitizeForPrompt(message)}"* - let me break this down!\n\n**My Approach**:\n- **Explain**: Concepts in plain English with practical analogies\n- **Show**: Code examples with line-by-line walkthroughs\n- **Practice**: Quick exercises to reinforce learning\n- **Extend**: Next steps and pro tips\n\n**Quick Exercise**: Pick any AI topic - I'll give you a 3-minute hands-on task\n**Next Step**: Share what you're learning, and I'll suggest a personalized path\n**Pro Tip**: Active recall (quizzing yourself) beats passive reading 3x for retention`;
     }
 
     // If headers are already sent, just end
@@ -746,10 +1084,10 @@ Concoct your response as a valid JSON object matching this structure:
 }
 `;
 
-  try {
-    const response = await callOpenRouterChatCompletion(prompt, 0.3);
-    const parsed = cleanAndParseJSON(response, '{}');
-    return res.json(parsed);
+try {
+     const response = await callOpenRouterChatCompletion(prompt, 0.3, true);
+     const parsed = cleanAndParseJSON(response, '{}');
+     return res.json(parsed);
 
   } catch (error: any) {
     let readableError = error.message || String(error);
@@ -794,10 +1132,10 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 ]
 `;
 
-  try {
-    const response = await callOpenRouterChatCompletion(prompt, 0.8);
-    const parsed = cleanAndParseJSON(response, '[]');
-    return res.json(parsed);
+try {
+     const response = await callOpenRouterChatCompletion(prompt, 0.8, true);
+     const parsed = cleanAndParseJSON(response, '[]');
+     return res.json(parsed);
 
   } catch (error: any) {
     let readableError = error.message || String(error);
@@ -862,10 +1200,10 @@ Output must be a JSON array of questions conforming to this exact structure:
 ]
 `;
 
-  try {
-    const response = await callOpenRouterChatCompletion(prompt, 0.7);
-    const parsed = cleanAndParseJSON(response, '[]');
-    return res.json(parsed);
+try {
+     const response = await callOpenRouterChatCompletion(prompt, 0.7, true);
+     const parsed = cleanAndParseJSON(response, '[]');
+     return res.json(parsed);
 
   } catch (error: any) {
     let readableError = error.message || String(error);
@@ -940,10 +1278,10 @@ Output MUST be a valid JSON object matching this schema:
 }
 `;
 
-  try {
-    const response = await callOpenRouterChatCompletion(prompt, 0.6);
-    const parsed = cleanAndParseJSON(response, '{}');
-    return res.json(parsed);
+try {
+     const response = await callOpenRouterChatCompletion(prompt, 0.6, true);
+     const parsed = cleanAndParseJSON(response, '{}');
+     return res.json(parsed);
 
   } catch (error: any) {
     console.warn('OpenRouter Topic Overview generator fallback:', error.message || error);

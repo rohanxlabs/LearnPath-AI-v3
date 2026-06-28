@@ -27,8 +27,9 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
   moduleStatus,
   phaseId,
 }) => {
-  const totalLessons = level.lessons.length;
-  const completedLessons = level.lessons.filter((l) => l.status === 'completed').length;
+  const lessons = level.lessons || [];
+  const totalLessons = lessons.length;
+  const completedLessons = lessons.filter((l) => l.status === 'completed').length;
   const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
   
   const getStatusBadge = () => {
@@ -116,20 +117,20 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
             transition={{ duration: 0.3, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="px-5 pb-5 pt-1">
-              <div className="h-px bg-slate-100 mb-3" />
-              <div className="space-y-2">
-                {level.lessons.map((lesson) => (
-                  <LessonItem
-                    key={lesson.id}
-                    lesson={lesson}
-                    displayStatus={getLessonDisplayStatus(lesson)}
-                    onClick={() => onLessonClick(phaseId, level.id, lesson.id)}
-                    isRecommended={lesson.id === recommendedLessonId}
-                  />
-                ))}
-              </div>
-            </div>
+<div className="px-5 pb-5 pt-1">
+               <div className="h-px bg-slate-100 mb-3" />
+               <div className="space-y-2">
+                 {lessons.map((lesson) => (
+                   <LessonItem
+                     key={lesson.id}
+                     lesson={lesson}
+                     displayStatus={getLessonDisplayStatus(lesson)}
+                     onClick={() => onLessonClick(phaseId, level.id, lesson.id)}
+                     isRecommended={lesson.id === recommendedLessonId}
+                   />
+                 ))}
+               </div>
+             </div>
           </motion.div>
         )}
       </AnimatePresence>

@@ -13,9 +13,9 @@ export const RoadmapTimeline: React.FC<{
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   
   const recommendedLesson = useMemo(() => {
-    for (const phase of roadmap.phases) {
-      for (const level of phase.levels) {
-        for (const lesson of level.lessons) {
+    for (const phase of roadmap.phases || []) {
+      for (const level of phase.levels || []) {
+        for (const lesson of level.lessons || []) {
           if (lesson.status === 'available') {
             return {
               phaseId: phase.id,
@@ -43,8 +43,8 @@ export const RoadmapTimeline: React.FC<{
   };
   
   const getModuleStatus = (level: Level): ModuleDisplayStatus => {
-    const total = level.lessons.length;
-    const completed = level.lessons.filter((l) => l.status === 'completed').length;
+    const total = level.lessons?.length || 0;
+    const completed = (level.lessons || []).filter((l) => l.status === 'completed').length;
     if (total === 0) return 'not-started';
     if (completed === 0) return 'not-started';
     if (completed === total) return 'completed';
@@ -52,8 +52,8 @@ export const RoadmapTimeline: React.FC<{
   };
   
   const modules: { level: Level; phaseId: string; phaseName: string }[] = [];
-  roadmap.phases.forEach((phase: Phase) => {
-    phase.levels.forEach((level: Level) => {
+  (roadmap.phases || []).forEach((phase: Phase) => {
+    (phase.levels || []).forEach((level: Level) => {
       modules.push({ level, phaseId: phase.id, phaseName: phase.name });
     });
   });

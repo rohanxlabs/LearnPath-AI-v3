@@ -18,21 +18,21 @@ interface RoadmapTreeProps {
 const transformRoadmapToSkillTree = (roadmap?: Roadmap): SkillNode | null => {
   if (!roadmap || !roadmap.phases?.length) return null;
 
-  const firstIncomplete = roadmap.phases
-    .flatMap(phase => phase.levels.map(level => ({ phase, level })))
-    .flatMap(({ phase, level }) => level.lessons.map(lesson => ({ phase, level, lesson })))
+  const firstIncomplete = (roadmap.phases || [])
+    .flatMap(phase => (phase.levels || []).map(level => ({ phase, level })))
+    .flatMap(({ phase, level }) => (level.lessons || []).map(lesson => ({ phase, level, lesson })))
     .find(({ lesson }) => lesson.status !== 'completed');
 
   return {
     name: roadmap.goal,
     status: 'current',
-    children: roadmap.phases.map(phase => ({
+    children: (roadmap.phases || []).map(phase => ({
       name: phase.name,
-      status: phase.levels.every(level => level.lessons.every(lesson => lesson.status === 'completed')) ? 'completed' : 'current',
-      children: phase.levels.map(level => ({
+      status: (phase.levels || []).every(level => (level.lessons || []).every(lesson => lesson.status === 'completed')) ? 'completed' : 'current',
+      children: (phase.levels || []).map(level => ({
         name: level.name,
-        status: level.lessons.every(lesson => lesson.status === 'completed') ? 'completed' : 'current',
-        children: level.lessons.map(lesson => {
+        status: (level.lessons || []).every(lesson => lesson.status === 'completed') ? 'completed' : 'current',
+        children: (level.lessons || []).map(lesson => {
           const status: SkillNode['status'] =
             lesson.status === 'completed'
               ? 'completed'

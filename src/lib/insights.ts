@@ -30,7 +30,9 @@ export interface AIInsight {
 // This function would live on the backend and be called via an API.
 // For now, we simulate it here.
 export const generateInsightsData = (roadmap: Roadmap, profile: UserProfile) => {
-  const allLessons: Lesson[] = roadmap.phases.flatMap(p => p.levels.flatMap(l => l.lessons));
+  const allLessons: Lesson[] = (roadmap.phases || [])
+    .flatMap(p => (p.levels || [])
+      .flatMap(l => (l.lessons || [])));
   const completedLessonIds = new Set(profile.completedLessonIds || []);
   const completedLessons = allLessons.filter(l => completedLessonIds.has(l.id));
 
