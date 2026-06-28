@@ -72,11 +72,11 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
     } catch (err) {
       console.error(err);
       setCodeFeedback({
-        passed: true, // Fail-safety offline grace
-        suggestions: "Offline compilation bypassed. Your indentation looks excellent! Function compiles with high stability.",
-        explanation: "The logic creates an iterative loop to multiply elements by subtraction parameters, successfully outputting results to standard stdout."
+        passed: false,
+        systemError: true,
+        suggestions: "",
+        explanation: "Verification service unavailable. Please retry."
       });
-      setHasCompleted(true);
     } finally {
       setCodeIsVerifying(false);
     }

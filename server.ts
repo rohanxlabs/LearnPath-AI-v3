@@ -761,16 +761,11 @@ Concoct your response as a valid JSON object matching this structure:
     } catch (_) {}
     console.error('OpenRouter Code Analysis fallback activation:', readableError);
     
-    // Standard offline code validation success logic
-    const score = passesLocalValidation;
     return res.json({
-      passed: score,
-      suggestions: score 
-        ? "Excellent job structuralizing this Py script! Your variables are highly clean. Consider naming constants in UPPER_CASE for professional PEP8 code alignment."
-        : `Your code looks slightly empty or is missing core functions. Standard python syntax requires declaring functions starting with \`def\` and finishing with a returned value or explicit state.`,
-      explanation: score
-        ? "We review the variable bindings in your script. By iterating through inputs, we compute intermediate numbers, aggregate them, and compute final metrics with absolute mathematical precision."
-        : `Let's troubleshoot. Try utilizing thehint provided: \`${hint || "Remember to declare the function correctly."}\` and ensure your variable calculations do not divide by zero.`
+      passed: false,
+      systemError: true,
+      suggestions: "",
+      explanation: "Verification service unavailable. Please retry."
     });
   }
 });

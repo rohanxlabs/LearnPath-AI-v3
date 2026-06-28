@@ -188,16 +188,15 @@ export function TopicDetailView({
       }
     } catch (err) {
       console.warn("Offline code verification:", err);
-      // Automatic backup/grace parameters
       setCodeFeedbacks(prev => ({
         ...prev,
         [les.id]: {
-          passed: true,
-          suggestions: "Offline compilation bypassed. Your coding syntax compiles with absolute high-integrity stability!",
-          explanation: "The logic successfully aligns with targeted parameters. Slices executed flawlessly."
+          passed: false,
+          systemError: true,
+          suggestions: "",
+          explanation: "Verification service unavailable. Please retry."
         }
       }));
-      handleMarkLessonDone(les.id, les.xpReward);
     } finally {
       setCodeIsVerifyingId(null);
     }
