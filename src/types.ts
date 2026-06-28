@@ -27,11 +27,12 @@ export interface UserSettings {
 export type LessonType = 'learn' | 'quiz' | 'coding' | 'challenge' | 'ai_session' | 'boss_challenge';
 
 export interface QuizQuestion {
-  id: string;
-  question: string;
-  options: string[];
-  correctIndex: number;
-  explanation: string;
+   id: string;
+   question: string;
+   options: string[];
+   correctIndex: number;
+   explanation: string;
+   misconceptionNotes?: string[]; // Why wrong options are tempting/misleading
 }
 
 export interface CodingExercise {
@@ -43,15 +44,17 @@ export interface CodingExercise {
 }
 
 export interface Lesson {
-  id: string;
-  name: string;
-  type: LessonType;
-  xpReward: number;
-  status: 'locked' | 'available' | 'completed';
-  content: string; // HTML or Markdown
-  tags?: string[];
-  quizQuestions?: QuizQuestion[];
-  codingExercise?: CodingExercise;
+   id: string;
+   name: string;
+   type: LessonType;
+   xpReward: number;
+   status: 'locked' | 'available' | 'completed';
+   content: string; // HTML or Markdown
+   tags?: string[];
+   quizQuestions?: QuizQuestion[];
+   codingExercise?: CodingExercise;
+   prerequisites?: string[]; // Lesson IDs that must be completed first
+   misconceptionNotes?: string[]; // Common wrong understanding for this topic
 }
 
 export interface Level {

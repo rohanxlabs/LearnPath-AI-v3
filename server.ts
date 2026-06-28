@@ -308,130 +308,42 @@ app.post('/api/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Goal is required' });
   }
 
-  const prompt = `
-Generate a structured, high-fidelity learning roadmap for this goal: "${sanitizeForPrompt(goal)}".
-The user has experience level: "${sanitizeForPrompt(experienceLevel || 'Beginner')}", can study for ${sanitizeForPrompt(weeklyHours || 10)} hours per week, and prefers a "${sanitizeForPrompt(preferredStyle || 'Hands-on')}" style of learning.
+const prompt = `
+Generate a learning roadmap for: "${sanitizeForPrompt(goal)}".
+Experience: "${sanitizeForPrompt(experienceLevel || 'Beginner')}", ${sanitizeForPrompt(weeklyHours || 5)} hrs/week, "${sanitizeForPrompt(preferredStyle || 'Hands-on')}" style.
 
-Your output must be a JSON object conforming to the following structure:
-{
-  "goal": string,
-  "experienceLevel": string,
-  "weeklyHours": number,
-  "preferredStyle": string,
-  "progressPercent": 0,
-  "totalXp": 0,
-  "lessonsCompleted": 0,
-  "hoursRemaining": number,
-  "phases": [
-    {
-      "id": "ph-1",
-      "name": "Phase Name (e.g. Foundations, Core, etc.)",
-      "description": "Short description of what the user learns",
-      "progress": 0,
-      "estimatedHours": number,
-      "skillsCovered": ["skill1", "skill2"],
-      "xpEarned": 0,
-      "status": "current" or "locked" (make the very first phase "current" and rest "locked"),
-      "levels": [
-        {
-          "id": "lvl-1",
-          "name": "Level Name (e.g., Basics & Definitions)",
-          "type": "Basics",
-          "status": "current" or "locked" (make first phase first level "current" and preceding ones of that level complete),
-          "lessons": [
-            {
-              "id": "les-1",
-              "name": "Lesson Name",
-              "type": "learn",
-              "xpReward": 20,
-              "status": "available",
-              "content": "A short, engaging Markdown lesson explaining the concepts, incorporating clear formatting, and standard diagrams or math if applicable."
-            },
-            {
-              "id": "les-2",
-              "name": "Quiz Time",
-              "type": "quiz",
-              "xpReward": 50,
-              "status": "locked",
-              "content": "Quick multiple choice verification quiz questions.",
-              "quizQuestions": [
-                {
-                  "id": "q-1-1",
-                  "question": "Multiple choice question related to this level?",
-                  "options": ["Option A", "Option B", "Option C", "Option D"],
-                  "correctIndex": number,
-                  "explanation": "Why this answer is correct."
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
+Return JSON with:
+{ "goal": "...", "phases": [{ "id": "ph-1", "name": "Foundations", "skillsCovered": ["skill"], "levels": [{ "id": "lvl-1", "name": "Basics", "lessons": [{ "id": "les-1", "name": "Intro", "type": "learn", "xpReward": 20, "status": "available", "content": "Markdown lesson (brief)" }, { "id": "les-2", "name": "Quiz", "type": "quiz", "xpReward": 50, "status": "locked", "content": "Quiz description", "quizQuestions": [{ "id": "q-1", "question": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "...", "misconceptionNotes": ["Why wrong"] }] }] }] }] }
 
-Please generate exactly 3-4 cohesive learning Phases.
-In each Phase, generate 3 sequential Levels.
-In each Level, write exactly 1 'learn' lesson and 1 'quiz' lesson.
-Provide interesting, highly tailored lessons and valid questions. Ensure the output is valid JSON.
+Generate 2-3 phases, 2 levels per phase, 1 learn + 1 quiz per level.
 `;
 
-try {
+  try {
      const roadmapResponse = await callOpenRouterChatCompletion(prompt, 0.7, true);
      const parsedData = cleanAndParseJSON(roadmapResponse, '{}');
 
     const phases = parsedData.phases || [];
     if (phases.length > 0) {
-      const resourcesProjectsPrompt = `
-Generate learning resources and project ideas for this roadmap.
+const resourcesProjectsPrompt = `
+Generate resources and projects for roadmap goal: "${sanitizeForPrompt(goal, 100)}".
 
-Goal: "${sanitizeForPrompt(goal)}"
-Phases and skills:
-${phases.map((ph: any) => `- ${ph.name}: ${(ph.skillsCovered || []).join(', ')}`).join('\n')}
+Return JSON: { "resources": [{ "id": "r1", "phaseId": "...", "title": "...", "type": "article|video|course|paper", "provider": "...", "url": "https://...", "description": "..." }], "projects": [{ "id": "p1", "title": "...", "difficulty": "beginner|intermediate|advanced", "description": "...", "techStack": ["..."], "features": ["..."], "progress": 0 }] }
 
-Return ONLY a valid JSON object with this shape:
-{
-  "resources": [
-    {
-      "id": "ai-res-1",
-      "phaseId": "use the exact phase id from above",
-      "title": "Resource title specific to the skill",
-      "type": "video" | "article" | "course" | "paper",
-      "provider": "Platform or author name",
-      "url": "https://...",
-      "duration": "15 mins",
-      "description": "2-3 sentences on relevance."
-    }
-  ],
-  "projects": [
-    {
-      "id": "ai-proj-1",
-      "title": "Project title",
-      "difficulty": "beginner" | "intermediate" | "advanced",
-      "description": "2-3 sentences",
-      "techStack": ["React", "Python"],
-      "features": ["Feature 1", "Feature 2"],
-      "progress": 0
-    }
-  ]
-}
-
-Rules: 6-8 resources across all phases, 3-5 projects. Be specific to "${sanitizeForPrompt(goal)}" — no generic placeholders. All URLs must look real.
+Generate exactly 3 resources and 2 projects. Keep descriptions under 25 words.
 `;
 
-      try {
-        const rpResponse = await callOpenRouterChatCompletion(resourcesProjectsPrompt, 0.7);
-        const rpData = cleanAndParseJSON(rpResponse, '{}');
-        parsedData.resources = rpData.resources || [];
-        parsedData.projects = rpData.projects || [];
-        console.log(`[AI-Generated] Resources and projects generated for roadmap goal: "${sanitizeForPrompt(goal, 80)}"`);
-      } catch (rpError: any) {
-        console.error('[AI-Fallback] Could not generate resources/projects, leaving empty:', rpError.message || rpError);
-        parsedData.resources = [];
-        parsedData.projects = [];
-      }
-    }
+       try {
+         const rpResponse = await callOpenRouterChatCompletion(resourcesProjectsPrompt, 0.7, true);
+         const rpData = cleanAndParseJSON(rpResponse, '{}');
+         parsedData.resources = rpData.resources || [];
+         parsedData.projects = rpData.projects || [];
+         console.log(`[AI-Generated] Resources: ${rpData.resources?.length || 0}, Projects: ${rpData.projects?.length || 0}`);
+       } catch (rpError: any) {
+         console.error('[AI-Fallback] Could not generate resources/projects, leaving empty:', rpError.message || rpError);
+         parsedData.resources = [];
+         parsedData.projects = [];
+       }
+     }
 
     return res.json(parsedData);
 
@@ -934,11 +846,11 @@ Rules:
 - techStack entries must be real, recognizable technologies
 `;
 
-  try {
-    const response = await callOpenRouterChatCompletion(prompt, 0.7);
-    const parsed = cleanAndParseJSON(response, '{"projects":[]}');
-    const projects = parsed.projects || [];
-    return res.json({ projects });
+try {
+     const response = await callOpenRouterChatCompletion(prompt, 0.7, true);
+     const parsed = cleanAndParseJSON(response, '{"projects":[]}');
+     const projects = parsed.projects || [];
+     return res.json({ projects });
 
   } catch (error: any) {
     let readableError = error.message || String(error);
@@ -1184,26 +1096,36 @@ app.post('/api/generate-quiz', aiLimiter, requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Topic name is required for quiz' });
   }
 
-  const prompt = `
+const prompt = `
 Generate a personalized, challenging study quiz for this topic: "${sanitizeForPrompt(topicName, 500)}".
-Generate exactly 3 multiple-choice questions.
+Generate exactly 3 multiple-choice questions. Include misconceptionNotes for wrong answers.
 
-Output must be a JSON array of questions conforming to this exact structure:
+Output must be a JSON array of questions:
 [
   {
-    "id": string (unique id e.g. q1),
+    "id": string,
     "question": "What is...?",
     "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
     "correctIndex": number (index of correct option 0-3),
-    "explanation": "Complete pedagogical explanation of the solution."
+    "explanation": "Pedagogical explanation of the solution.",
+    "misconceptionNotes": ["Why option 1 seems plausible but is wrong"]
   }
 ]
 `;
 
 try {
-     const response = await callOpenRouterChatCompletion(prompt, 0.7, true);
-     const parsed = cleanAndParseJSON(response, '[]');
-     return res.json(parsed);
+      const response = await callOpenRouterChatCompletion(prompt, 0.7, true);
+      const parsed = cleanAndParseJSON(response, '[]');
+      
+      if (Array.isArray(parsed)) {
+        for (const q of parsed) {
+          if (!q.misconceptionNotes) {
+            q.misconceptionNotes = ['Common misunderstanding - test again.'];
+          }
+        }
+      }
+      
+      return res.json(parsed);
 
   } catch (error: any) {
     let readableError = error.message || String(error);

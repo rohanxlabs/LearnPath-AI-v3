@@ -6,10 +6,10 @@ import { getQuizRecommendations } from '../lib/recommendations';
 import { QUIZ_QUESTIONS } from '../quizData';
 
 interface CachedPhaseQuiz {
-  questions: { id: string; question: string; options: string[]; correctIndex: number; explanation: string }[];
-  phaseName: string;
-  loading: boolean;
-  error?: string;
+   questions: { id: string; question: string; options: string[]; correctIndex: number; explanation: string; misconceptionNotes?: string[] }[];
+   phaseName: string;
+   loading: boolean;
+   error?: string;
 }
 
 interface QuizTabProps {
@@ -18,10 +18,11 @@ interface QuizTabProps {
 }
 
 interface Question {
-  question: string;
-  options: string[];
-  correctIndex: number;
-  explanation: string;
+   question: string;
+   options: string[];
+   correctIndex: number;
+   explanation: string;
+   misconceptionNotes?: string[];
 }
 
 export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
@@ -434,20 +435,31 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
               );
             })}
           </div>
-          {showFeedback && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-white/5 border border-white/10 rounded-lg text-zinc-300 text-sm">
-              <p className="font-bold text-white mb-1">Explanation</p>
-              {currentQ.explanation}
-            </motion.div>
-          )}
-          <div className="flex justify-between items-center pt-4 border-t border-white/10">
-            <button onClick={onExit} className="text-sm text-zinc-400 hover:text-white">Exit Quiz</button>
-            {showFeedback ? (
-              <button onClick={handleNext} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-blue-600 font-bold text-white rounded-lg">{currentIdx === questions.length - 1 ? 'Finish' : 'Next Question'}</button>
-            ) : (
-              <button onClick={handleSubmit} disabled={selectedOpt === null} className="px-6 py-2 bg-white/10 text-white font-bold rounded-lg disabled:opacity-50">Submit</button>
-            )}
-          </div>
+{showFeedback && (
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-white/5 border border-white/10 rounded-lg text-zinc-300 text-sm space-y-3">
+               <p className="font-bold text-white mb-1">Explanation</p>
+               <p>{currentQ.explanation}</p>
+               
+               {currentQ.misconceptionNotes && selectedOpt !== currentQ.correctIndex && (
+                 <div className="pt-2 border-t border-white/10">
+                   <p className="font-bold text-amber-300 mb-1">Common Misconceptions</p>
+                   <ul className="list-disc ml-4 space-y-1 text-zinc-400 text-xs">
+                     {currentQ.misconceptionNotes.map((note, idx) => (
+                       <li key={idx}>{note}</li>
+                     ))}
+                   </ul>
+                 </div>
+               )}
+             </motion.div>
+           )}
+           <div className="flex justify-between items-center pt-4 border-t border-white/10">
+             <button onClick={onExit} className="text-sm text-zinc-400 hover:text-white">Exit Quiz</button>
+             {showFeedback ? (
+               <button onClick={handleNext} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-blue-600 font-bold text-white rounded-lg">{currentIdx === questions.length - 1 ? 'Finish' : 'Next Question'}</button>
+             ) : (
+               <button onClick={handleSubmit} disabled={selectedOpt === null} className="px-6 py-2 bg-white/10 text-white font-bold rounded-lg disabled:opacity-50">Submit</button>
+             )}
+           </div>
         </motion.div>
       </AnimatePresence>
     </div>

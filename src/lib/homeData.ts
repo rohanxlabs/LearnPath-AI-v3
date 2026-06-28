@@ -303,3 +303,138 @@ export function estimateLessonDuration(lesson: Lesson): string {
   };
   return `${minutes[lesson.type] ?? 15} min`;
 }
+
+export interface ProgressionValidation {
+  hasGaps: boolean;
+  gaps: Array<{ lessonId: string; reason: string }>;
+  prerequisitesMet: boolean;
+  missingPrerequisites: string[];
+  quizMatchesContent: boolean;
+  mismatchedQuizzes: string[];
+}
+
+export function validateRoadmapProgression(roadmap: Roadmap | null): ProgressionValidation {
+  if (!roadmap) {
+    return {
+      hasGaps: false,
+      gaps: [],
+      prerequisitesMet: true,
+      missingPrerequisites: [],
+      quizMatchesContent: true,
+      mismatchedQuizzes: [],
+    };
+  }
+
+  const gaps: Array<{ lessonId: string; reason: string }> = [];
+  const missingPrerequisites: string[] = [];
+  const mismatchedQuizzes: string[] = [];
+
+  const allLessons = getAllLessonsInOrder(roadmap);
+  const completedLessons = allLessons.filter(ctx => ctx.lesson.status === 'completed');
+
+  for (let i = 0; i < allLessons.length; i++) {
+    const ctx = allLessons[i];
+    const lesson = ctx.lesson;
+
+    if (lesson.status === 'locked' || lesson.status === 'available') {
+      const lockedBeforeCompleted = allLessons
+        .slice(0, i)
+        .some(ctx => ctx.lesson.status === 'completed');
+
+      if (lesson.status === 'locked' && lockedBeforeCompleted) {
+        gaps.push({
+          lessonId: lesson.id,
+          reason: 'Locked lesson appears after completed lessons - progression gap detected',
+        });
+      }
+    }
+
+    if (lesson.type === 'quiz') {
+      const hasLearnBefore = allLessons
+        .slice(0, i)
+        .some(ctx => ctx.lesson.type === 'learn' && ctx.lesson.status === 'completed');
+
+      if (!hasLearnBefore && lesson.status === 'available') {
+        gaps.push({
+          lessonId: lesson.id,
+          reason: 'Quiz unlocked without prior learning lesson completed',
+        });
+      }
+
+      if (!lesson.quizQuestions || lesson.quizQuestions.length === 0) {
+        mismatchedQuizzes.push(lesson.id);
+      }
+    }
+  }
+
+  for (const ctx of allLessons) {
+    const lesson = ctx.lesson;
+    if (lesson.prerequisites) {
+      for (const prereqId of lesson.prerequisites) {
+        const prereqExists = allLessons.some(l => l.lesson.id === prereqId);
+        const prereqCompleted = allLessons.some(l => l.lesson.id === prereqId && l.lesson.status === 'completed');
+        if (!prereqExists) {
+          missingPrerequisites.push(`${lesson.id}: missing prerequisite ${prereqId}`);
+        } else if (!prereqCompleted && lesson.status === 'available') {
+          missingPrerequisites.push(`${lesson.id}: prerequisite ${prereqId} not completed`);
+        }
+      }
+    }
+  }
+
+  return {
+    hasGaps: gaps.length > 0,
+    gaps,
+    prerequisitesMet: missingPrerequisites.length === 0,
+    missingPrerequisites,
+    quizMatchesContent: mismatchedQuizzes.length === 0,
+    mismatchedQuizzes,
+  };
+}
+
+export function unlockNextAvailableLesson(roadmap: Roadmap): { updatedRoadmap: Roadmap; unlocked: boolean } {
+  if (!roadmap) {
+    return { updatedRoadmap: {} as Roadmap, unlocked: false };
+  }
+
+  const updatedRoadmap = { ...roadmap };
+  let unlocked = false;
+
+  for (const phase of updatedRoadmap.phases || []) {
+    for (const level of phase.levels || []) {
+      const allCompleted = (level.lessons || []).every(l => l.status === 'completed');
+      const hasAvailable = (level.lessons || []).some(l => l.status === 'available');
+
+      if (allCompleted && !hasAvailable) {
+        const nextLevel = updatedRoadmap.phases
+          ?.flatMap(p => p.levels || [])
+          .find(l => (l.lessons || []).some(ll => ll.status === 'locked'));
+
+        if (nextLevel) {
+          for (const lesson of nextLevel.lessons || []) {
+            if (lesson.status === 'locked') {
+              lesson.status = 'available';
+              unlocked = true;
+              break;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  return { updatedRoadmap, unlocked };
+}
+
+export function computeAdaptiveDifficulty(
+  lessonHistory: Array<{ lessonId: string; correct: boolean; attempts: number }>,
+  currentLesson: Lesson
+): 'Easy' | 'Medium' | 'Hard' {
+  const lessonAttempts = lessonHistory.filter(h => h.lessonId === currentLesson.id);
+  const correctRatio = lessonAttempts.filter(h => h.correct).length / Math.max(1, lessonAttempts.length);
+
+  if (correctRatio >= 0.8 && lessonAttempts.length >= 3) return 'Easy';
+  if (correctRatio < 0.5) return 'Hard';
+  return 'Medium';
+}
