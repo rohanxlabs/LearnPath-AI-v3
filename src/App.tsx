@@ -5,6 +5,7 @@ import { usePWA } from './lib/usePWA';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
 import { AchievementCard, NotificationCard } from './components/Cards';
 import { HomeView } from './components/HomeView';
+import { LearningWorkspace } from './components/LearningWorkspace';
 import RoadmapTree from './components/RoadmapTree';
 import { RoadmapOverview } from './components/RoadmapOverview';
 import { RoadmapsTabContainer } from './components/RoadmapsTabContainer';
@@ -23,8 +24,8 @@ import { createEmptyProfile, DEFAULT_SETTINGS } from './userData';
 
 const USER_EMAIL_STORAGE_KEY = 'userEmail';
 
-function renderHomeView(
-  props: {
+export function renderHomeView(
+   props: {
     profile: UserProfile;
     activeRoadmap: Roadmap | null;
     activePhase: Phase | null;
@@ -1328,27 +1329,16 @@ return renderHomeView({
         </div>
       )}
 
-      {/* Primary tab Content Layout with desktop alignment container constraint */}
-      <main className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}>
-{selectedLevelObj ? (
-           <TopicDetailView
-             level={selectedLevelObj}
-             roadmapGoal={activeRoadmap?.goal || 'General AI'}
-             initialLessonId={selectedLessonObj?.id}
-             onClose={() => setActiveLesson(null)}
-             onCompleteLesson={(lessonId, xpReward) => handleLessonComplete(xpReward, lessonId)}
-             onNavigateNext={(phaseId, levelId, lessonId) => {
-               // Find and navigate to next available lesson in roadmap
-               const nextLesson = getNextIncompleteLesson(activeRoadmap);
-               if (nextLesson) {
-                 setActiveLesson(nextLesson);
-               } else {
-                 // No more lessons - close and show completion
-                 setActiveLesson(null);
-               }
-             }}
-           />
-         ) : (
+{/* Primary tab Content Layout with desktop alignment container constraint */}
+      <main className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}>
+        {activeLesson && activeRoadmap ? (
+          <LearningWorkspace
+            roadmap={activeRoadmap}
+            activeLesson={activeLesson}
+            onCompleteLesson={(xpAdded, lessonId) => handleLessonComplete(xpAdded, lessonId)}
+            onNavigateToLesson={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
+          />
+        ) : (
           renderTabContent()
         )}
       </main>

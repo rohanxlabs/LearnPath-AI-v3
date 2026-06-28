@@ -889,25 +889,16 @@ app.post('/api/mentor-chat', aiLimiter, requireAuth, async (req, res) => {
     }
     messages.push({ role: 'user', content: sanitizeForPrompt(message, 500) });
 
-    const systemInstruction = `
-You are the LearnPath AI Mentor - a world-class university TA who excels at breaking down complex concepts into digestible, practical explanations.
+const systemInstruction = `
+You are the LearnPath AI Mentor - a world-class university TA who excels at breaking down complex concepts.
 
-Your expertise: AI/ML, Python, Neural Networks, LLMs, RAG pipelines, System Design.
+Response Structure:
+1. Start with clear heading
+2. Write 1-2 sentence plain English overview
+3. List 3-4 key points
+4. End with quick exercise, next step, and pro tip
 
-When responding to ANY question, ALWAYS follow this exact structure:
-
-1. Start with a clear ### heading summarizing the topic
-2. Write a 1-2 sentence plain English overview
-3. List 3-4 **Key Points** using bold bullets
-4. Add a **quick exercise** (2-3 minutes, actionable)
-5. End with **next step** and **pro tip**
-
-For code explanations:
-- Identify the core algorithm/pattern first
-- Explain each key line in simple terms
-- Suggest optimizations and "why" behind design
-
-Use friendly tone, avoid jargon, provide practical value.
+Use clean formatting without markdown symbols like ** or ##.
 `;
 
     const prompt = `${systemInstruction}\n\nUser question: ${message}\n\nPrevious messages:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}`;
@@ -1270,7 +1261,116 @@ Level ${attemptNumber || 1} is requested. Keep hints educational, not giving awa
   }
 });
 
-// 7.6 API: Validate Roadmap Progression
+// 8. API: Get roadmap for workspace
+app.get('/api/roadmaps/:roadmapId', requireAuth, async (req, res) => {
+  const { roadmapId } = req.params;
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    const roadmap = dbData?.roadmaps?.find((r: any) => r.id === roadmapId);
+    
+    if (!roadmap) {
+      return res.status(404).json({ error: 'Roadmap not found' });
+    }
+
+    // Add topic/section structure for workspace
+    const workspaceRoadmap = {
+      ...roadmap,
+      phases: roadmap.phases.map((phase: any) => ({
+        ...phase,
+        levels: phase.levels.map((level: any) => ({
+          ...level,
+          topics: level.lessons.map((lesson: any) => ({
+            id: lesson.id,
+            name: lesson.name,
+            type: lesson.type,
+            status: lesson.status,
+            xpReward: lesson.xpReward,
+            estimatedTime: 15
+          }))
+        }))
+      }))
+    };
+
+    return res.json({ roadmap: workspaceRoadmap });
+  } catch (error) {
+    console.error('Get roadmap error:', error);
+    return res.status(500).json({ error: 'Failed to load roadmap' });
+  }
+});
+
+// 8.1 API: Get topic content
+app.get('/api/topics/:topicId', requireAuth, async (req, res) => {
+  const { topicId } = req.params;
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    
+    // Find lesson in any roadmap
+    let lesson: any = null;
+    let phase: any = null;
+    let level: any = null;
+
+    for (const roadmap of dbData?.roadmaps || []) {
+      for (const p of roadmap.phases || []) {
+        for (const l of p.levels || []) {
+          const found = l.lessons?.find((les: any) => les.id === topicId);
+          if (found) {
+            lesson = found;
+            phase = p;
+            level = l;
+            break;
+          }
+        }
+        if (lesson) break;
+      }
+      if (lesson) break;
+    }
+
+    if (!lesson) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+
+    // Generate AI summary if not cached
+    let summary = lesson.summary;
+    if (!summary) {
+      summary = `### ${lesson.name}\n\n**Key Concepts:**\n- Core principles of ${lesson.name.toLowerCase()}\n- Practical applications and examples\n\n**Common Mistakes:**\n- Misunderstanding basic concepts\n- Forgetting syntax details`;
+    }
+
+    const topic = {
+      id: lesson.id,
+      name: lesson.name,
+      type: lesson.type,
+      phaseId: phase?.id,
+      levelId: level?.id,
+      status: lesson.status,
+      xpReward: lesson.xpReward,
+      content: lesson.content || '',
+      summary,
+      objectives: [
+        `Understand ${lesson.name.toLowerCase()} fundamentals`,
+        `Apply concepts in practical scenarios`,
+        `Complete exercises to reinforce learning`
+      ],
+      estimatedTime: lesson.xpReward || 15
+    };
+
+    return res.json({ topic });
+  } catch (error) {
+    console.error('Get topic error:', error);
+    return res.status(500).json({ error: 'Failed to load topic' });
+  }
+});
 app.post('/api/validate-progression', requireAuth, async (req, res) => {
   const { roadmap } = req.body;
 

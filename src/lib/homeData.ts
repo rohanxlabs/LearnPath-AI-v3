@@ -292,6 +292,15 @@ export function hasLearningActivity(profile: UserProfile, stats: RoadmapStats): 
   );
 }
 
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#+\s*/gm, '')
+    .replace(/\*\*\*(.*?)\*\*\*/g, '$1')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`(.*?)`/g, '$1');
+}
+
 export function estimateLessonDuration(lesson: Lesson): string {
   const minutes: Record<string, number> = {
     learn: 15,
