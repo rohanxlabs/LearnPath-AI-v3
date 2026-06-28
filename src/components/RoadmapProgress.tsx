@@ -5,11 +5,13 @@ import { Play } from 'lucide-react';
 interface RoadmapProgressProps {
   progress: number;
   recommendedLessonName?: string;
+  onContinue?: () => void;
 }
 
 export const RoadmapProgress: React.FC<RoadmapProgressProps> = ({ 
   progress, 
-  recommendedLessonName 
+  recommendedLessonName,
+  onContinue
 }) => {
   return (
     <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -34,9 +36,17 @@ export const RoadmapProgress: React.FC<RoadmapProgressProps> = ({
           <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
             <Play className="w-3.5 h-3.5 text-indigo-600 fill-indigo-600 ml-0.5" />
           </div>
-          <span className="text-xs text-slate-600">
+          <span className="text-xs text-slate-600 flex-1">
             <span className="font-bold text-slate-900">Continue Learning:</span> {recommendedLessonName}
           </span>
+          {onContinue && (
+            <button
+              onClick={onContinue}
+              className="px-3 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
+            >
+              Start
+            </button>
+          )}
         </div>
       )}
     </div>

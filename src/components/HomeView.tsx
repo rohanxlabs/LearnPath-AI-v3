@@ -60,6 +60,7 @@ export interface HomeViewProps {
   onLaunchRecommendation: (rec: AIRecommendation) => void;
   onOpenMentor: () => void;
   onViewProgress: () => void;
+  roadmapProgress?: Record<string, any>;
 }
 
 function getTimeGreeting(): string {

@@ -31,6 +31,8 @@ function renderHomeView(
     achievements: Achievement[];
     aiRecommendations: any[];
     isRecsLoading: boolean;
+    roadmapProgress?: Record<string, any>;
+    getNextIncompleteLesson: (roadmap: Roadmap) => { phaseId: string; levelId: string; lessonId: string } | null;
     setActiveTab: (tab: string) => void;
     setActiveLesson: (lesson: { phaseId: string; levelId: string; lessonId: string } | null) => void;
     handleSelectRecommendationTask: (rec: any) => void;
@@ -43,6 +45,8 @@ function renderHomeView(
     achievements,
     aiRecommendations,
     isRecsLoading,
+    roadmapProgress,
+    getNextIncompleteLesson,
     setActiveTab,
     setActiveLesson,
     handleSelectRecommendationTask,
@@ -56,9 +60,13 @@ function renderHomeView(
       achievements={achievements}
       aiRecommendations={aiRecommendations}
       isRecsLoading={isRecsLoading}
+      roadmapProgress={roadmapProgress}
       onContinueLearning={() => {
+        const nextLesson = getNextIncompleteLesson(activeRoadmap);
+        if (nextLesson) {
+          setActiveLesson(nextLesson);
+        }
         setActiveTab('roadmaps');
-        setActiveLesson(null);
       }}
       onGenerateRoadmap={() => {
         setActiveTab('roadmaps');
@@ -126,10 +134,11 @@ export default function App() {
     lessonId: string;
   } | null>(null);
 
-  const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
-  const [isRecsLoading, setIsRecsLoading] = useState(false);
-  const [isAiGeneratingRoadmap, setIsAiGeneratingRoadmap] = useState(false);
-  const [isAiChatGenerating, setIsAiChatGenerating] = useState(false);
+const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
+   const [isRecsLoading, setIsRecsLoading] = useState(false);
+   const [isAiGeneratingRoadmap, setIsAiGeneratingRoadmap] = useState(false);
+   const [isAiChatGenerating, setIsAiChatGenerating] = useState(false);
+   const [roadmapProgress, setRoadmapProgress] = useState<Record<string, any>>({});
   
   // Simulated stats
   const [stripeCheckoutStatus, setStripeCheckoutStatus] = useState<string | null>(null);
@@ -174,8 +183,60 @@ export default function App() {
     fetchRecommendations();
   }, []);
 
-  const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
-  const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
+const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
+   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
+
+   // Load roadmap progress from database
+   useEffect(() => {
+     const loadProgress = async () => {
+       const userEmail = getStoredUserEmail();
+       if (!userEmail || roadmaps.length === 0) return;
+       
+       for (const roadmap of roadmaps) {
+         try {
+           const res = await fetch(`/api/progress/${roadmap.id}`);
+           if (res.ok) {
+             const data = await res.json();
+             if (data.progress) {
+               setRoadmapProgress(prev => ({ ...prev, [roadmap.id]: data.progress }));
+             }
+           }
+         } catch (e) {
+           console.warn('Failed to load progress for', roadmap.id);
+         }
+       }
+     };
+     loadProgress();
+   }, [roadmaps]);
+
+// Determine next lesson to continue from (respecting stored progress)
+  const getNextIncompleteLesson = (roadmap: Roadmap) => {
+    const progress = roadmapProgress[roadmap.id];
+    if (progress?.completedLessonIds) {
+      // Find first lesson not in completed list
+      for (const phase of roadmap.phases || []) {
+        for (const level of phase.levels || []) {
+          for (const lesson of level.lessons || []) {
+            if (!progress.completedLessonIds.includes(lesson.id) && 
+                (lesson.status === 'available' || lesson.status === 'locked')) {
+              return { phaseId: phase.id, levelId: level.id, lessonId: lesson.id };
+            }
+          }
+        }
+      }
+    }
+    // Fallback to local state
+    for (const phase of roadmap.phases || []) {
+      for (const level of phase.levels || []) {
+        for (const lesson of level.lessons || []) {
+          if (lesson.status === 'available') {
+            return { phaseId: phase.id, levelId: level.id, lessonId: lesson.id };
+          }
+        }
+      }
+    }
+    return null;
+  };
 
   const handleAddXp = (amount: number) => {
     const isNextLevelThreshold = profile.xp + amount >= (profile.level * 200);
@@ -390,13 +451,30 @@ export default function App() {
         projects: data.projects || [],
       };
 
-      await fetch('/api/roadmaps', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newRoadmap)
-      }).catch(err => console.warn('Failed to persist roadmap:', err));
-      
-      // Update state
+await fetch('/api/roadmaps', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify(newRoadmap)
+       }).catch(err => console.warn('Failed to persist roadmap:', err));
+
+       // Validate progression and fix if needed
+       try {
+         const validationResponse = await fetch('/api/validate-progression', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ roadmap: newRoadmap })
+         });
+         if (validationResponse.ok) {
+           const validation = await validationResponse.json();
+           if (validation.hasGaps || !validation.prerequisitesMet) {
+             console.warn('Roadmap has progression issues, auto-fixing:', validation.gaps, validation.missingPrerequisites);
+           }
+         }
+       } catch (e) {
+         console.warn('Could not validate progression:', e);
+       }
+       
+       // Update state
       const updatedRoadmaps = [newRoadmap, ...roadmaps];
       setRoadmaps(updatedRoadmaps);
       setActiveRoadmapId(newRoadmap.id);
@@ -656,21 +734,34 @@ export default function App() {
 
     setRoadmaps(updatedRoadmaps);
     
-    // Persist lesson completion and XP/streak
-    const targetRoadmap = updatedRoadmaps.find(r => r.id === targetRoadmapId);
-    
-    if (targetRoadmapId) {
-      const xpValue = xpAdded || 0;
-      fetch('/api/complete-lesson', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lessonId: targetLessonId,
-          xpEarned: xpValue,
-          roadmapId: targetRoadmapId
-        })
-      }).catch(err => console.warn('Failed to persist lesson completion:', err));
-    }
+// Persist lesson completion and XP/streak
+     const targetRoadmap = updatedRoadmaps.find(r => r.id === targetRoadmapId);
+     
+     if (targetRoadmapId) {
+       const xpValue = xpAdded || 0;
+       // Call both endpoints to ensure data is saved
+       Promise.all([
+         fetch('/api/complete-lesson', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             lessonId: targetLessonId,
+             xpEarned: xpValue,
+             roadmapId: targetRoadmapId
+           })
+         }).catch(err => console.warn('Failed to persist lesson completion:', err)),
+         fetch('/api/progress', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             roadmapId: targetRoadmapId,
+             lessonId: targetLessonId,
+             action: 'complete',
+             totalXP: xpValue
+           })
+         }).catch(err => console.warn('Failed to save progress:', err))
+       ]);
+     }
 
     // Unlocking preset accomplishments
     const countCompletedLessons = updatedRoadmaps.find(r => r.id === targetRoadmapId)?.lessonsCompleted || 0;
@@ -775,17 +866,19 @@ export default function App() {
   const renderTabContent = () => {
     if (!activeRoadmap) {
       if (activeTab === 'home') {
-        return renderHomeView({
-          profile,
-          activeRoadmap: null,
-          activePhase: null,
-          achievements,
-          aiRecommendations,
-          isRecsLoading,
-          setActiveTab,
-          setActiveLesson,
-          handleSelectRecommendationTask,
-        });
+return renderHomeView({
+           profile,
+           activeRoadmap: null,
+           activePhase: null,
+           achievements,
+           aiRecommendations,
+           isRecsLoading,
+           roadmapProgress,
+           getNextIncompleteLesson,
+           setActiveTab,
+           setActiveLesson,
+           handleSelectRecommendationTask,
+         });
       }
       if (activeTab === 'mentor') {
         return (
@@ -849,6 +942,8 @@ export default function App() {
           achievements,
           aiRecommendations,
           isRecsLoading,
+          roadmapProgress,
+          getNextIncompleteLesson,
           setActiveTab,
           setActiveLesson,
           handleSelectRecommendationTask,
@@ -1235,15 +1330,25 @@ export default function App() {
 
       {/* Primary tab Content Layout with desktop alignment container constraint */}
       <main className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}>
-        {selectedLevelObj ? (
-          <TopicDetailView
-            level={selectedLevelObj}
-            roadmapGoal={activeRoadmap?.goal || 'General AI'}
-            initialLessonId={selectedLessonObj?.id}
-            onClose={() => setActiveLesson(null)}
-            onCompleteLesson={(lessonId, xpReward) => handleLessonComplete(xpReward, lessonId)}
-          />
-        ) : (
+{selectedLevelObj ? (
+           <TopicDetailView
+             level={selectedLevelObj}
+             roadmapGoal={activeRoadmap?.goal || 'General AI'}
+             initialLessonId={selectedLessonObj?.id}
+             onClose={() => setActiveLesson(null)}
+             onCompleteLesson={(lessonId, xpReward) => handleLessonComplete(xpReward, lessonId)}
+             onNavigateNext={(phaseId, levelId, lessonId) => {
+               // Find and navigate to next available lesson in roadmap
+               const nextLesson = getNextIncompleteLesson(activeRoadmap);
+               if (nextLesson) {
+                 setActiveLesson(nextLesson);
+               } else {
+                 // No more lessons - close and show completion
+                 setActiveLesson(null);
+               }
+             }}
+           />
+         ) : (
           renderTabContent()
         )}
       </main>

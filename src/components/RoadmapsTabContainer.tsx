@@ -18,10 +18,9 @@ interface RoadmapsTabContainerProps {
   onGenerateRoadmap: (params: any) => Promise<void>;
   isGenerating: boolean;
   profile: UserProfile;
+  onAiAction?: (actionType: string, phaseName?: string) => void;
   onLessonClick?: (phaseId: string, levelId: string, lessonId: string) => void;
-  onAiAction?: (actionType: string, phaseName: string) => void;
 }
-
 const generateMentorAnalysis = (roadmap: Roadmap, profile: UserProfile) => {
   const completedLessons = roadmap.phases
     .flatMap(p => p.levels)
@@ -247,6 +246,19 @@ export function RoadmapsTabContainer({
               .flatMap(l => l.lessons)
               .find(l => l.status === 'available')?.name
           }
+          onContinue={() => {
+            const availableLesson = selectedRoadmap.phases
+              .flatMap(p => p.levels)
+              .flatMap(l => l.lessons)
+              .find(l => l.status === 'available');
+            if (availableLesson && onLessonClick) {
+              const phase = selectedRoadmap.phases.find(p => p.levels.some(l => l.lessons.some(les => les.id === availableLesson.id)));
+              const level = phase?.levels.find(l => l.lessons.some(les => les.id === availableLesson.id));
+              if (phase && level) {
+                onLessonClick(phase.id, level.id, availableLesson.id);
+              }
+            }
+          }}
         />
         <XPCard
           xp={selectedRoadmap.totalXp}

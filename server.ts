@@ -312,10 +312,10 @@ const prompt = `
 Generate a learning roadmap for: "${sanitizeForPrompt(goal)}".
 Experience: "${sanitizeForPrompt(experienceLevel || 'Beginner')}", ${sanitizeForPrompt(weeklyHours || 5)} hrs/week, "${sanitizeForPrompt(preferredStyle || 'Hands-on')}" style.
 
-Return JSON with:
-{ "goal": "...", "phases": [{ "id": "ph-1", "name": "Foundations", "skillsCovered": ["skill"], "levels": [{ "id": "lvl-1", "name": "Basics", "lessons": [{ "id": "les-1", "name": "Intro", "type": "learn", "xpReward": 20, "status": "available", "content": "Markdown lesson (brief)" }, { "id": "les-2", "name": "Quiz", "type": "quiz", "xpReward": 50, "status": "locked", "content": "Quiz description", "quizQuestions": [{ "id": "q-1", "question": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "...", "misconceptionNotes": ["Why wrong"] }] }] }] }] }
+Return JSON with prerequisites in lessons:
+{ "goal": "...", "phases": [{ "id": "ph-1", "name": "Foundations", "skillsCovered": ["skill"], "levels": [{ "id": "lvl-1", "name": "Basics", "lessons": [{ "id": "les-1", "name": "Intro", "type": "learn", "xpReward": 20, "status": "available", "prerequisites": [], "content": "Brief markdown lesson" }, { "id": "les-2", "name": "Quiz", "type": "quiz", "xpReward": 50, "status": "locked", "prerequisites": ["les-1"], "content": "Quiz", "quizQuestions": [{ "id": "q-1", "question": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "...", "misconceptionNotes": ["Why wrong"] }] }] }] }] }
 
-Generate 2-3 phases, 2 levels per phase, 1 learn + 1 quiz per level.
+2-3 phases, 2 levels per phase, 1 learn + 1 quiz per level.
 `;
 
   try {
@@ -1219,6 +1219,121 @@ try {
   }
 });
 
+// 7.5 API: Progressive Hints Generator
+app.post('/api/generate-hints', aiLimiter, requireAuth, async (req, res) => {
+  const { lessonContent, lessonId, attemptNumber } = req.body;
+
+  if (!lessonContent) {
+    return res.status(400).json({ error: 'Lesson content is required' });
+  }
+
+  const prompt = `
+Generate scaffolded hints for this learning exercise: "${sanitizeForPrompt(lessonContent, 1000)}".
+
+Return JSON with progressive hint levels:
+{
+  "hints": [
+    { "level": 1, "type": "conceptual", "text": "High-level direction without code details" },
+    { "level": 2, "type": "syntax", "text": "Specific language features to use" },
+    { "level": 3, "type": "pattern", "text": "Code pattern suggestion" },
+    { "level": 4, "type": "partial", "text": "Partial solution with key pieces" }
+  ],
+  "hintCostXp": 10
+}
+
+Level ${attemptNumber || 1} is requested. Keep hints educational, not giving away answers.
+`;
+
+  try {
+    const response = await callOpenRouterChatCompletion(prompt, 0.5, true);
+    const parsed = cleanAndParseJSON(response, '{"hints":[],"hintCostXp":10}');
+    
+    if (!parsed.hints || !Array.isArray(parsed.hints)) {
+      parsed.hints = [
+        { level: 1, type: "conceptual", text: "Focus on the core concept being taught." },
+        { level: 2, type: "syntax", text: "Think about the key syntax patterns." },
+        { level: 3, type: "pattern", text: "Consider the example structure shown." },
+        { level: 4, type: "partial", text: "Review the solution steps." }
+      ];
+    }
+    return res.json(parsed);
+
+  } catch (error: any) {
+    console.error('Hints generation fallback:', error.message);
+    return res.json({
+      hints: [
+        { level: 1, type: "conceptual", text: "Focus on the core concept being taught." },
+        { level: 2, type: "syntax", text: "Think about the key syntax patterns." }
+      ],
+      hintCostXp: 10
+    });
+  }
+});
+
+// 7.6 API: Validate Roadmap Progression
+app.post('/api/validate-progression', requireAuth, async (req, res) => {
+  const { roadmap } = req.body;
+
+  if (!roadmap) {
+    return res.status(400).json({ error: 'Roadmap data is required' });
+  }
+
+  const validation = {
+    hasGaps: false,
+    gaps: [],
+    prerequisitesMet: true,
+    missingPrerequisites: [],
+    quizMatchesContent: true,
+    mismatchedQuizzes: []
+  };
+
+  if (roadmap && roadmap.phases) {
+    const allLessons: any[] = [];
+    for (const phase of roadmap.phases || []) {
+      for (const level of phase.levels || []) {
+        for (const lesson of level.lessons || []) {
+          allLessons.push({ ...lesson, phaseId: phase.id, levelId: level.id });
+        }
+      }
+    }
+
+    const completedBeforeAvailable = (lesson: any, idx: number) => 
+      allLessons.slice(0, idx).some((l, i) => 
+        allLessons[i].status === 'completed' && lesson.status === 'available'
+      );
+
+    const gaps: any[] = [];
+    const missingPrerequisites: string[] = [];
+
+    allLessons.forEach((lesson, idx) => {
+      if (lesson.status === 'locked' && completedBeforeAvailable(lesson, idx)) {
+        gaps.push({ lessonId: lesson.id, reason: 'Locked lesson after completed lessons' });
+      }
+      if (lesson.type === 'quiz' && lesson.status === 'available') {
+        const hasLearnBefore = allLessons.slice(0, idx).some(l => l.type === 'learn' && l.status === 'completed');
+        if (!hasLearnBefore) gaps.push({ lessonId: lesson.id, reason: 'Quiz unlocked without prior learning' });
+      }
+      if (lesson.prerequisites) {
+        lesson.prerequisites.forEach((prereq: string) => {
+          const prereqExists = allLessons.some(l => l.id === prereq);
+          const prereqCompleted = allLessons.some(l => l.id === prereq && l.status === 'completed');
+          if (!prereqExists) missingPrerequisites.push(`${lesson.id}: missing ${prereq}`);
+          else if (!prereqCompleted && lesson.status === 'available') {
+            missingPrerequisites.push(`${lesson.id}: ${prereq} not completed`);
+          }
+        });
+      }
+    });
+
+    validation.hasGaps = gaps.length > 0;
+    validation.gaps = gaps;
+    validation.prerequisitesMet = missingPrerequisites.length === 0;
+    validation.missingPrerequisites = missingPrerequisites;
+  }
+
+  return res.json(validation);
+});
+
 app.post('/api/update-roadmap', requireAuth, async (req, res) => {
   const { roadmapId, updates } = req.body;
   const userEmail = req.session.userEmail;
@@ -1539,6 +1654,36 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     dbData.profile.xp = newXP;
 
     const completionPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+    // Update roadmap progress tracking
+    if (roadmapId) {
+      const targetRoadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
+      if (targetRoadmap) {
+        targetRoadmap.lessonsCompleted = completedLessons;
+        targetRoadmap.progressPercent = completionPercent;
+        targetRoadmap.totalXp = dbData.xp || 0;
+        
+        // Track progress in dedicated progress object
+        if (!dbData.progress) dbData.progress = {};
+        if (!dbData.progress[roadmapId]) {
+          dbData.progress[roadmapId] = {
+            roadmapId,
+            startedAt: new Date().toISOString()
+          };
+        }
+        dbData.progress[roadmapId].completedLessonIds = dbData.progress[roadmapId].completedLessonIds || [];
+        if (!dbData.progress[roadmapId].completedLessonIds.includes(lessonId)) {
+          dbData.progress[roadmapId].completedLessonIds.push(lessonId);
+        }
+        dbData.progress[roadmapId].updatedAt = new Date().toISOString();
+        dbData.progress[roadmapId].totalXP = targetRoadmap.totalXp;
+        dbData.progress[roadmapId].progressPercentage = completionPercent;
+        
+        if (completionPercent >= 100) {
+          dbData.progress[roadmapId].completedAt = new Date().toISOString();
+        }
+      }
+    }
 
     await saveUserDB(userEmail, dbData);
 
@@ -1972,6 +2117,138 @@ function preparePWAAssets() {
     console.error('[PWA] Error cloning launcher icons in preparePWAAssets:', err);
   }
 }
+
+// 8. API: Track Lesson Progress
+app.post('/api/progress', aiLimiter, requireAuth, async (req, res) => {
+  const { roadmapId, lessonId, action, totalXP } = req.body;
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (!roadmapId || !lessonId) {
+    return res.status(400).json({ error: 'roadmapId and lessonId are required' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: true });
+    
+    // Initialize progress if not exists
+    if (!dbData.progress) {
+      dbData.progress = {};
+    }
+    
+    const roadmapProgressKey = roadmapId;
+    let progress = dbData.progress[roadmapProgressKey];
+    
+    if (!progress) {
+      // Find roadmap to calculate total lessons
+      const roadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
+      const totalLessons = roadmap?.phases?.reduce((acc: number, ph: any) => 
+        acc + (ph.levels?.reduce((lAcc: number, lvl: any) => 
+          lAcc + (lvl.lessons?.length || 0), 0) || 0), 0) || 0;
+      
+      progress = {
+        userId: userEmail,
+        roadmapId,
+        currentLessonId: null,
+        completedLessonIds: [],
+        totalXP: 0,
+        progressPercentage: 0,
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    // Handle actions
+    if (action === 'complete') {
+      if (!progress.completedLessonIds.includes(lessonId)) {
+        progress.completedLessonIds.push(lessonId);
+      }
+      progress.updatedAt = new Date().toISOString();
+    } else if (action === 'set-current') {
+      progress.currentLessonId = lessonId;
+      progress.updatedAt = new Date().toISOString();
+    }
+
+    // Calculate total XP from completed lessons
+    if (action === 'get') {
+      const roadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
+      const allLessons = roadmap?.phases?.flatMap((ph: any) => 
+        ph.levels?.flatMap((lvl: any) => lvl.lessons || []) || []) || [];
+      const xpEarned = allLessons
+        .filter((l: any) => progress.completedLessonIds.includes(l.id))
+        .reduce((sum: number, l: any) => sum + (l.xpReward || 0), 0);
+      progress.totalXP = xpEarned;
+    }
+
+    // Update XP if provided
+    if (totalXP !== undefined) {
+      progress.totalXP = totalXP;
+    }
+
+    // Calculate progress percentage
+    const roadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
+    const totalLessons = roadmap?.phases?.reduce((acc: number, ph: any) => 
+      acc + (ph.levels?.reduce((lAcc: number, lvl: any) => 
+        lAcc + (lvl.lessons?.length || 0), 0) || 0), 0) || 0;
+    progress.progressPercentage = totalLessons > 0 
+      ? Math.round((progress.completedLessonIds.length / totalLessons) * 100) 
+      : 0;
+
+    // Check if roadmap is completed
+    if (progress.completedLessonIds.length >= totalLessons && totalLessons > 0) {
+      progress.completedAt = progress.completedAt || new Date().toISOString();
+    }
+
+    // Update roadmap lesson statuses
+    if (action === 'complete' && roadmap) {
+      for (const phase of roadmap.phases || []) {
+        for (const level of phase.levels || []) {
+          for (const lesson of level.lessons || []) {
+            if (progress.completedLessonIds.includes(lesson.id)) {
+              lesson.status = 'completed';
+            } else if (lesson.id === lessonId && action === 'complete') {
+              // Unlock next lesson
+              const nextLesson = level.lessons?.find((l: any, idx: number) => 
+                idx > level.lessons?.indexOf(lesson) && l.status === 'locked');
+              if (nextLesson) nextLesson.status = 'available';
+            }
+          }
+        }
+      }
+      // Save roadmap updates
+      await saveUserDB(userEmail, dbData);
+    }
+
+    dbData.progress[roadmapProgressKey] = progress;
+    await saveUserDB(userEmail, dbData);
+
+    return res.json({ success: true, progress });
+  } catch (error: any) {
+    console.error('Progress tracking error:', error);
+    return res.status(500).json({ error: 'Failed to update progress' });
+  }
+});
+
+// 9. API: Get Progress
+app.get('/api/progress/:roadmapId', requireAuth, async (req, res) => {
+  const { roadmapId } = req.params;
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    const progress = dbData?.progress?.[roadmapId] || null;
+    return res.json({ progress });
+  } catch (error: any) {
+    console.error('Get progress error:', error);
+    return res.json({ progress: null });
+  }
+});
 
 // Ensure sw.js is served with Cache-Control headers so that clients detect service worker updates instantly
 app.get('/sw.js', (req, res, next) => {

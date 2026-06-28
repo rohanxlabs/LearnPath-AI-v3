@@ -6,18 +6,20 @@ import { CheckCircle2, Play, Circle } from 'lucide-react';
 type LessonDisplayStatus = 'completed' | 'current' | 'not-started';
 
 interface LessonItemProps {
-  lesson: Lesson;
-  displayStatus: LessonDisplayStatus;
-  onClick: () => void;
-  isRecommended?: boolean;
+   lesson: Lesson;
+   displayStatus: LessonDisplayStatus;
+   onClick: () => void;
+   isRecommended?: boolean;
+   onRecommendedClick?: () => void;
 }
 
 export const LessonItem: React.FC<LessonItemProps> = ({
-  lesson,
-  displayStatus,
-  onClick,
-  isRecommended,
-}) => {
+   lesson,
+   displayStatus,
+   onClick,
+   isRecommended,
+   onRecommendedClick,
+ }) => {
   const getIcon = () => {
     switch (displayStatus) {
       case 'completed':
@@ -57,11 +59,14 @@ export const LessonItem: React.FC<LessonItemProps> = ({
         {lesson.name}
       </span>
       
-      {isRecommended && (
-        <span className="flex-shrink-0 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full uppercase tracking-wide">
-          Continue Learning
-        </span>
-      )}
+{isRecommended && (
+       <button
+         onClick={onRecommendedClick || onClick}
+         className="flex-shrink-0 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full uppercase tracking-wide hover:bg-indigo-200 transition-colors cursor-pointer"
+       >
+         Continue Learning
+       </button>
+     )}
     </motion.button>
   );
 };

@@ -9,20 +9,22 @@ import { Level, Lesson, QuizQuestion } from '../types';
 import { XPBadge } from './Badges';
 
 interface TopicDetailViewProps {
-  level: Level;
-  roadmapGoal: string;
-  initialLessonId?: string;
-  onClose: () => void;
-  onCompleteLesson: (lessonId: string, xpReward: number) => void;
+   level: Level;
+   roadmapGoal: string;
+   initialLessonId?: string;
+   onClose: () => void;
+   onCompleteLesson: (lessonId: string, xpReward: number) => void;
+   onNavigateNext?: (phaseId: string, levelId: string, lessonId: string) => void;
 }
 
 export function TopicDetailView({ 
-  level, 
-  roadmapGoal, 
-  initialLessonId, 
-  onClose, 
-  onCompleteLesson 
-}: TopicDetailViewProps) {
+   level, 
+   roadmapGoal, 
+   initialLessonId, 
+   onClose, 
+   onCompleteLesson,
+   onNavigateNext
+ }: TopicDetailViewProps) {
   // Activity / lesson tab state
   const [activeLessonId, setActiveLessonId] = useState<string>(
     initialLessonId || (level.lessons[0]?.id || '')
@@ -52,8 +54,37 @@ export function TopicDetailView({
   const [codeIsVerifyingId, setCodeIsVerifyingId] = useState<string | null>(null);
   const [codeFeedbacks, setCodeFeedbacks] = useState<Record<string, any>>({});
 
-  // State for show Hints
-  const [showHintId, setShowHintId] = useState<string | null>(null);
+const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
+   const [hintData, setHintData] = useState<Record<string, Array<{level: number, type: string, text: string}>>>({});
+
+   const fetchHint = async (lessonId: string) => {
+     const currentLevel = hintLevel[lessonId] || 0;
+     setHintLevel(prev => ({ ...prev, [lessonId]: currentLevel + 1 }));
+     
+     try {
+       const res = await fetch('/api/generate-hints', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           lessonContent: activeLesson.content,
+           lessonId,
+           attemptNumber: currentLevel + 1
+         })
+       });
+       if (res.ok) {
+         const data = await res.json();
+         setHintData(prev => ({ ...prev, [lessonId]: data.hints || [] }));
+       }
+     } catch (e) {
+       setHintData(prev => ({ ...prev, [lessonId]: [
+         { level: 1, type: "conceptual", text: "Focus on the core concept." },
+         { level: 2, type: "syntax", text: "Check the key patterns used." }
+       ]}));
+     }
+   };
+
+   // States for show Hints
+   const [showHintId, setShowHintId] = useState<string | null>(null);
 
   // Sync state if level changes
   useEffect(() => {
@@ -555,23 +586,38 @@ export function TopicDetailView({
                             {activeLesson.codingExercise?.instructions}
                           </p>
 
-                          {/* Hints */}
-                          <div>
-                            <button
-                              onClick={() => {
-                                setShowHintId(showHintId === activeLesson.id ? null : activeLesson.id);
-                              }}
-                              className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-bold hover:text-amber-450 cursor-pointer"
-                            >
-                              <Lightbulb className="w-3.5 h-3.5" />
-                              <span>{showHintId === activeLesson.id ? 'Hide Logic Hint' : 'Reveal Hint'}</span>
-                            </button>
-                            {showHintId === activeLesson.id && (
-                              <div className="mt-2 p-3 bg-amber-500/5 rounded-lg border border-amber-500/20 text-[10px] md:text-xs text-amber-300 leading-relaxed font-mono whitespace-pre-wrap select-text">
-                                {activeLesson.codingExercise?.hint}
-                              </div>
-                            )}
-                          </div>
+{/* Hints */}
+                           <div>
+                             <button
+                               onClick={() => {
+                                 if (!hintData[activeLesson.id]) {
+                                   fetchHint(activeLesson.id);
+                                 }
+                                 setShowHintId(showHintId === activeLesson.id ? null : activeLesson.id);
+                               }}
+                               className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-bold hover:text-amber-450 cursor-pointer"
+                             >
+                               <Lightbulb className="w-3.5 h-3.5" />
+                               <span>{showHintId === activeLesson.id ? 'Hide Logic Hint' : `Reveal Hint (-${hintLevel[activeLesson.id] > 0 ? 10 : 0} XP)`}</span>
+                             </button>
+                             {showHintId === activeLesson.id && (
+                               <div className="mt-2 space-y-2">
+                                 {(hintData[activeLesson.id] || []).map((h: any, idx: number) => (
+                                   <div key={h.level} className={`p-3 rounded-lg border text-[10px] md:text-xs leading-relaxed ${
+                                     idx < (hintLevel[activeLesson.id] || 1) ? 'bg-amber-500/5 border-amber-500/20 text-amber-300 font-mono' : 'bg-zinc-800/50 border-white/5 text-zinc-500'
+                                   }`}>
+                                     <span className="font-bold uppercase text-[9px]">{h.type} hint:</span> {h.text}
+                                   </div>
+                                 ))}
+                                 <button
+                                   onClick={() => fetchHint(activeLesson.id)}
+                                   className="text-[9px] text-purple-400 hover:text-purple-300 mt-1"
+                                 >
+                                   Next hint level (-10 XP)
+                                 </button>
+                               </div>
+                             )}
+                           </div>
                         </div>
 
                         <div className="p-3 rounded-xl bg-white/[0.01] border border-white/5 flex items-center gap-2">
@@ -659,38 +705,52 @@ export function TopicDetailView({
                   )}
 
                   {/* 4. SECTIONS CONGRATS OVER COMPLETED */}
-                  {completedLessons.includes(activeLesson.id) && (
-                    <div className="p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left mt-4 animate-fade-in">
-                      <div className="flex flex-col sm:flex-row items-center gap-3">
-                        <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                          <Check className="w-5 h-5 stroke-[3.5px] animate-bounce" />
-                        </div>
-                        <div>
-                          <h4 className="font-display font-bold text-sm text-white">Segment Activity Mastered!</h4>
-                          <p className="text-[11px] text-zinc-400 mt-1">Excellent job! You claimed +{activeLesson.xpReward} XP. Toggle on the other tabs of this topic to finish compilation.</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        {completedCount === totalWeight ? (
-                          <span className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-500/10 border border-purple-500/25 text-purple-300 animate-pulse">
-                            🎓 Fully Cleared Topic!
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              // Move to next uncompleted lesson
-                              const nextUncom = localLessons.find(l => !completedLessons.includes(l.id));
-                              if (nextUncom) setActiveLessonId(nextUncom.id);
-                            }}
-                            className="bg-zinc-900 border border-white/10 hover:border-white/20 text-white cursor-pointer hover:bg-zinc-800 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-                          >
-                            Next Activity
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+{completedLessons.includes(activeLesson.id) && (
+                     <div className="p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left mt-4 animate-fade-in">
+                       <div className="flex flex-col sm:flex-row items-center gap-3">
+                         <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                           <Check className="w-5 h-5 stroke-[3.5px] animate-bounce" />
+                         </div>
+                         <div>
+                           <h4 className="font-display font-bold text-sm text-white">Segment Activity Mastered!</h4>
+                           <p className="text-[11px] text-zinc-400 mt-1">Excellent job! You claimed +{activeLesson.xpReward} XP.</p>
+                         </div>
+                       </div>
+                       
+                       <div className="flex gap-2">
+                         {completedCount === totalWeight ? (
+                           <span className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-500/10 border border-purple-500/25 text-purple-300 animate-pulse">
+                             🎓 Fully Cleared Topic!
+                           </span>
+                         ) : (
+                           <>
+                             <button
+                               onClick={() => {
+                                 const nextLessons = localLessons.filter(l => !completedLessons.includes(l.id));
+                                 if (nextLessons.length > 0) {
+                                   setActiveLessonId(nextLessons[0].id);
+                                 }
+                               }}
+                               className="bg-zinc-900 border border-white/10 hover:border-white/20 text-white cursor-pointer hover:bg-zinc-800 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+                             >
+                               Next Lesson
+                             </button>
+                             <button
+                               onClick={() => {
+                                 if (onNavigateNext && activeLesson) {
+                                   // Navigate to next lesson in roadmap
+                                   onNavigateNext('', level.id || '', '');
+                                 }
+                               }}
+                               className="bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 cursor-pointer hover:bg-indigo-500/20 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+                             >
+                               Continue Roadmap
+                             </button>
+                           </>
+                         )}
+                       </div>
+                     </div>
+                   )}
 
                 </motion.div>
               )}
