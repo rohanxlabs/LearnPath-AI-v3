@@ -1,5 +1,6 @@
 import React from 'react';
 import { Sparkles, Flame, ShieldAlert, Award } from 'lucide-react';
+import { spacing, borderRadius } from '../styles/theme';
 
 interface XPBadgeProps {
   amount: number;

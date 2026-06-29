@@ -43,7 +43,6 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
         const data = await res.json();
         setTopicData(data.topic);
       } else {
-        // Fallback: find lesson in roadmap prop
         let foundLesson: any = null;
         for (const phase of roadmap.phases) {
           for (const level of phase.levels) {
@@ -72,13 +71,12 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
 
   const getTopicStatus = (lesson: Lesson) => {
     if (lesson.status === 'completed') return 'completed';
-    return 'current'; // All lessons are available (no locks)
+    return 'current';
   };
 
   const handleTopicClick = (lesson: Lesson) => {
     setSelectedTopicId(lesson.id);
     
-    // Find phase and level IDs
     let foundPhaseId = '';
     let foundLevelId = '';
     
@@ -120,37 +118,67 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
 
   return (
     <div className="flex h-[calc(100vh-10rem)] bg-[#0A0A0A] rounded-3xl overflow-hidden border border-white/5">
-      {/* Left Sidebar - Roadmap Explorer */}
       <div className="w-80 border-r border-white/5 flex flex-col">
-        <div className="p-5 border-b border-white/5">
+        <motion.div 
+          className="p-5 border-b border-white/5"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
           <h3 className="font-display font-bold text-lg text-white">{roadmap.goal}</h3>
           <div className="flex items-center gap-2 mt-2">
             <Trophy className="w-4 h-4 text-purple-400" />
             <span className="text-xs text-zinc-400">{progressPercent}% Complete</span>
           </div>
-        </div>
+        </motion.div>
         
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {roadmap.phases.map((phase) => (
-            <div key={phase.id} className="space-y-1">
-              <div className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-purple-300">
+          {roadmap.phases.map((phase, phaseIdx) => (
+            <motion.div 
+              key={phase.id} 
+              className="space-y-1"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: phaseIdx * 0.08 }}
+            >
+              <motion.div 
+                className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-2 cursor-pointer hover:text-purple-200 transition-colors"
+                whileHover={{ x: 2 }}
+              >
+                <motion.span
+                  className="text-purple-400"
+                  animate={{ rotate: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  ▶
+                </motion.span>
                 {phase.name}
-              </div>
-              {phase.levels.map((level) => (
-                <div key={level.id} className="ml-2 space-y-1">
-                  <div className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400">
+              </motion.div>
+              {phase.levels.map((level, levelIdx) => (
+                <motion.div key={level.id} className="ml-2 space-y-1" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
+                  <motion.div 
+                    className="px-3 py-1.5 text-[10px] font-semibold text-zinc-400"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: 0.05 }}
+                  >
                     {level.name}
-                  </div>
-                  {(level.lessons || []).map((lesson) => {
+                  </motion.div>
+                  {(level.lessons || []).map((lesson, lessonIdx) => {
                     const status = getTopicStatus(lesson);
                     return (
-                      <button
+                      <motion.button
                         key={lesson.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 10 }}
+                        transition={{ duration: 0.25, delay: lessonIdx * 0.05 }}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           handleTopicClick(lesson);
                         }}
+                        whileHover={{ scale: 1.02, x: 2 }}
+                        whileTap={{ scale: 0.98 }}
                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left text-xs transition-all cursor-pointer ${
                           status === 'completed'
                             ? 'text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10'
@@ -158,25 +186,37 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                         }`}
                       >
                         {status === 'completed' ? (
-                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: 'spring', stiffness: 300 }}
+                          >
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          </motion.div>
                         ) : (
                           <Play className="w-4 h-4 shrink-0" />
                         )}
                         <span className="truncate flex-1">{lesson.name}</span>
                         {selectedTopicId === lesson.id && (
-                          <span className="text-purple-400 font-mono text-xs">ACTIVE</span>
+                          <motion.span 
+                            className="text-purple-400 font-mono text-xs"
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ type: 'spring', stiffness: 400 }}
+                          >
+                            ACTIVE
+                          </motion.span>
                         )}
-                      </button>
+                      </motion.button>
                     );
                   })}
-                </div>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
 
-      {/* Main Workspace */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="p-5 border-b border-white/5">
           <div className="flex items-center gap-2 text-xs text-zinc-400">
@@ -186,23 +226,49 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <AnimatePresence mode="wait">
           {loading ? (
-            <div className="space-y-4">
-              <div className="h-6 bg-white/5 rounded animate-pulse" />
-              <div className="h-4 bg-white/5 rounded animate-pulse w-3/4" />
-              <div className="h-4 bg-white/5 rounded animate-pulse" />
-            </div>
+            <motion.div 
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 overflow-y-auto p-6 space-y-4"
+            >
+              {[0, 1, 2].map((i) => (
+                <motion.div
+                  key={i}
+                  className="h-6 bg-white/5 rounded-xl shimmer"
+                  style={{ width: i === 0 ? '100%' : i === 1 ? '75%' : '90%' }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.1 }}
+                />
+              ))}
+            </motion.div>
           ) : topicData ? (
-            <>
+            <motion.div 
+              key={topicData.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="flex-1 overflow-y-auto p-6 space-y-6"
+            >
               <section>
                 <h2 className="font-display font-bold text-xl text-white mb-4">Learning Objectives</h2>
                 <ul className="space-y-2">
                   {(topicData.objectives || []).map((obj: string, i: number) => (
-                    <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
+                    <motion.li 
+                      key={i} 
+                      className="flex items-start gap-2 text-sm text-zinc-300"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.08 }}
+                    >
                       <Target className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
                       {obj}
-                    </li>
+                    </motion.li>
                   ))}
                 </ul>
               </section>
@@ -226,28 +292,25 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                 </div>
               </section>
 
-{topicData.type === 'coding' && (
-                 <section>
-                   <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
-                     <Code2 className="w-5 h-5 text-blue-400" />
-                     Coding Exercise
-                   </h2>
-                   <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
-                     <p className="text-zinc-300 mb-3">Practical coding exercise for this topic.</p>
-<button 
-                      onClick={() => {
-                        // Just mark as complete - coding exercise placeholder
-                        handleMarkComplete();
-                      }}
+              {topicData.type === 'coding' && (
+                <section>
+                  <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
+                    <Code2 className="w-5 h-5 text-blue-400" />
+                    Coding Exercise
+                  </h2>
+                  <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                    <p className="text-zinc-300 mb-3">Practical coding exercise for this topic.</p>
+                    <button 
+                      onClick={() => handleMarkComplete()}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-blue-500"
                     >
                       Mark Complete
                     </button>
-                   </div>
-                 </section>
-               )}
+                  </div>
+                </section>
+              )}
 
-{topicData.type === 'quiz' && !quizScore && (
+              {topicData.type === 'quiz' && !quizScore && (
                 <section>
                   <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-400" />
@@ -256,7 +319,6 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                   <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
                     <p className="text-zinc-300 mb-3">Test your knowledge with this quiz.</p>
                     
-                    {/* Inline quiz questions */}
                     <div className="space-y-3 mb-4">
                       {topicData.quizQuestions ? (
                         topicData.quizQuestions.map((q: any, idx: number) => (
@@ -301,7 +363,6 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                     
                     <button 
                       onClick={() => {
-                        // Calculate mock score
                         const totalQuestions = topicData.quizQuestions?.length || 1;
                         const correct = Object.keys(quizAnswers).length;
                         const score = correct >= totalQuestions / 2 ? totalQuestions : correct;
@@ -343,17 +404,18 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                   </button>
                 )}
               </div>
-            </>
+            </motion.div>
           ) : (
-            <div className="text-center py-12">
-              <BookOpen className="w-12 h-12 text-zinc-500 mx-auto mb-3" />
-              <p className="text-zinc-400">Select a topic from the sidebar to begin</p>
+            <div className="text-center py-12 flex-1 flex items-center justify-center">
+              <div>
+                <BookOpen className="w-12 h-12 text-zinc-500 mx-auto mb-3" />
+                <p className="text-zinc-400">Select a topic from the sidebar to begin</p>
+              </div>
             </div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
 
-      {/* Right Progress Panel */}
       <div className="w-72 border-l border-white/5 p-5 space-y-4">
         <div>
           <span className="text-[10px] font-bold uppercase text-zinc-400">Progress</span>
@@ -364,34 +426,36 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                 <span className="text-white font-mono">{progressPercent}%</span>
               </div>
               <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-purple-500 to-blue-500 transition-all"
-                  style={{ width: `${progressPercent}%` }}
+                <motion.div 
+                  className="h-full bg-gradient-to-r from-purple-500 to-blue-500"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPercent}%` }}
+                  transition={{ duration: 0.7, ease: 'easeOut' }}
                 />
               </div>
             </div>
           </div>
         </div>
 
-{topicData && (
-           <>
-             <div className="pt-3 border-t border-white/5 space-y-3">
-               <div>
-                 <span className="text-[10px] text-zinc-400">Current Topic</span>
-                 <p className="text-sm font-semibold text-white">{topicData.name}</p>
-               </div>
-               <div className="flex items-center gap-2 text-[10px]">
-                 <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                 <span className="text-zinc-300">+{topicData.xpReward} XP</span>
-               </div>
-             </div>
+        {topicData && (
+          <>
+            <div className="pt-3 border-t border-white/5 space-y-3">
+              <div>
+                <span className="text-[10px] text-zinc-400">Current Topic</span>
+                <p className="text-sm font-semibold text-white">{topicData.name}</p>
+              </div>
+              <div className="flex items-center gap-2 text-[10px]">
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-zinc-300">+{topicData.xpReward} XP</span>
+              </div>
+            </div>
 
-             <div className="pt-3 border-t border-white/5 space-y-3">
-               <span className="text-[10px] font-bold uppercase text-zinc-400">Completed Topics</span>
-               <p className="text-xs text-white font-mono">{allTopics.filter(t => t.status === 'completed').length}/{allTopics.length}</p>
-             </div>
-           </>
-         )}
+            <div className="pt-3 border-t border-white/5 space-y-3">
+              <span className="text-[10px] font-bold uppercase text-zinc-400">Completed Topics</span>
+              <p className="text-xs text-white font-mono">{allTopics.filter(t => t.status === 'completed').length}/{allTopics.length}</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

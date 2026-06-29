@@ -1,4 +1,5 @@
 import React from 'react';
+import { buttonStyles } from '../styles/theme';
 
 const difficultyLevels = ['all', 'beginner', 'intermediate', 'advanced'];
 

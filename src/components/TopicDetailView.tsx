@@ -303,13 +303,15 @@ const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
               </div>
             </div>
 
-            {/* Linear representation */}
-            <div className="w-full bg-white/5 h-1.5 rounded-full mt-4 overflow-hidden border border-white/5">
-              <div 
-                className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-500" 
-                style={{ width: `${topicProgressPct}%` }} 
-              />
-            </div>
+{/* Linear representation */}
+             <div className="w-full bg-white/5 h-1.5 rounded-full mt-4 overflow-hidden border border-white/5">
+               <motion.div 
+                 className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
+                 initial={{ width: 0 }}
+                 animate={{ width: `${topicProgressPct}%` }}
+                 transition={{ duration: 0.7, ease: 'easeOut' }}
+               />
+             </div>
           </div>
 
           {/* AI-Generated Overview panel */}
@@ -448,18 +450,31 @@ const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
 
                       <div className="pt-6 border-t border-white/5 flex justify-end">
                         {completedLessons.includes(activeLesson.id) ? (
-                          <div className="inline-flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-xl text-xs font-bold">
+                          <motion.div 
+                            className="inline-flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-xl text-xs font-bold"
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ type: 'spring', stiffness: 350 }}
+                          >
                             <CheckCircle2 className="w-4 h-4" />
                             <span>Chapter Study Complete! (+{activeLesson.xpReward} XP claimed)</span>
-                          </div>
+                          </motion.div>
                         ) : (
-                          <button
+                          <motion.button
                             onClick={() => handleMarkLessonDone(activeLesson.id, activeLesson.xpReward)}
-                            className="inline-flex items-center gap-2 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 rounded-xl shadow-md cursor-pointer transition-all active:scale-98"
+                            className="inline-flex items-center gap-2 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 rounded-xl shadow-md cursor-pointer transition-all overflow-hidden relative"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                           >
                             <CheckCircle2 className="w-4 h-4" />
                             <span>Mark Chapter Complete</span>
-                          </button>
+                            <motion.span
+                              className="absolute inset-0 bg-white/20 rounded-xl"
+                              initial={{ scale: 0, opacity: 0 }}
+                              whileTap={{ scale: 2, opacity: 0 }}
+                              transition={{ duration: 0.5 }}
+                            />
+                          </motion.button>
                         )}
                       </div>
                     </div>
@@ -704,53 +719,102 @@ const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
                     </div>
                   )}
 
-                  {/* 4. SECTIONS CONGRATS OVER COMPLETED */}
+{/* 4. SECTIONS CONGRATS OVER COMPLETED */}
 {completedLessons.includes(activeLesson.id) && (
-                     <div className="p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left mt-4 animate-fade-in">
-                       <div className="flex flex-col sm:flex-row items-center gap-3">
-                         <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
-                           <Check className="w-5 h-5 stroke-[3.5px] animate-bounce" />
-                         </div>
-                         <div>
-                           <h4 className="font-display font-bold text-sm text-white">Segment Activity Mastered!</h4>
-                           <p className="text-[11px] text-zinc-400 mt-1">Excellent job! You claimed +{activeLesson.xpReward} XP.</p>
-                         </div>
-                       </div>
-                       
-                       <div className="flex gap-2">
-                         {completedCount === totalWeight ? (
-                           <span className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-500/10 border border-purple-500/25 text-purple-300 animate-pulse">
-                             🎓 Fully Cleared Topic!
-                           </span>
-                         ) : (
-                           <>
-                             <button
-                               onClick={() => {
-                                 const nextLessons = localLessons.filter(l => !completedLessons.includes(l.id));
-                                 if (nextLessons.length > 0) {
-                                   setActiveLessonId(nextLessons[0].id);
-                                 }
-                               }}
-                               className="bg-zinc-900 border border-white/10 hover:border-white/20 text-white cursor-pointer hover:bg-zinc-800 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-                             >
-                               Next Lesson
-                             </button>
-                             <button
-                               onClick={() => {
-                                 if (onNavigateNext && activeLesson) {
-                                   // Navigate to next lesson in roadmap
-                                   onNavigateNext('', level.id || '', '');
-                                 }
-                               }}
-                               className="bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 cursor-pointer hover:bg-indigo-500/20 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-                             >
-                               Continue Roadmap
-                             </button>
-                           </>
-                         )}
-                       </div>
-                     </div>
-                   )}
+                      <motion.div 
+                        className="p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/20 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left mt-4 relative overflow-hidden"
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      >
+                        {/* Confetti particles */}
+                        <div className="absolute inset-0 pointer-events-none">
+                          {[...Array(12)].map((_, i) => (
+                            <motion.div
+                              key={i}
+                              className="absolute w-2 h-3 bg-gradient-to-r from-purple-400 to-blue-400 rounded-full"
+                              initial={{ 
+                                top: '50%', 
+                                left: `${Math.random() * 100}%`,
+                                opacity: 0,
+                                scale: 0
+                              }}
+                              animate={{ 
+                                top: '-20%',
+                                opacity: [0, 1, 0],
+                                scale: [0, 1, 0.5],
+                                rotate: [0, 180, 360]
+                              }}
+                              transition={{ 
+                                duration: 1.2,
+                                delay: i * 0.05,
+                                ease: 'easeOut'
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-center gap-3">
+                          <motion.div 
+                            className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center"
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+                          >
+                            <Check className="w-5 h-5 stroke-[3.5px]" />
+                          </motion.div>
+                          <div>
+                            <motion.h4 
+                              className="font-display font-bold text-sm text-white"
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.1 }}
+                            >
+                              Segment Activity Mastered!
+                            </motion.h4>
+                            <motion.p 
+                              className="text-[11px] text-zinc-400 mt-1"
+                              initial={{ opacity: 0, y: 5 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.15 }}
+                            >
+                              Excellent job! You claimed +{activeLesson.xpReward} XP.
+                            </motion.p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          {completedCount === totalWeight ? (
+                            <span className="px-4 py-2 rounded-xl text-xs font-bold bg-purple-500/10 border border-purple-500/25 text-purple-300">
+                              🎓 Fully Cleared Topic!
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => {
+                                  const nextLessons = localLessons.filter(l => !completedLessons.includes(l.id));
+                                  if (nextLessons.length > 0) {
+                                    setActiveLessonId(nextLessons[0].id);
+                                  }
+                                }}
+                                className="bg-zinc-900 border border-white/10 hover:border-white/20 text-white cursor-pointer hover:bg-zinc-800 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+                              >
+                                Next Lesson
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (onNavigateNext && activeLesson) {
+                                    onNavigateNext('', level.id || '', '');
+                                  }
+                                }}
+                                className="bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 cursor-pointer hover:bg-indigo-500/20 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+                              >
+                                Continue Roadmap
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
 
                 </motion.div>
               )}

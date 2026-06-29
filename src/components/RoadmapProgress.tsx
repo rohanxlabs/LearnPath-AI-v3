@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Play } from 'lucide-react';
+import { buttonStyles } from '../styles/theme';
 
 interface RoadmapProgressProps {
   progress: number;
@@ -39,14 +40,14 @@ export const RoadmapProgress: React.FC<RoadmapProgressProps> = ({
           <span className="text-xs text-slate-600 flex-1">
             <span className="font-bold text-slate-900">Continue Learning:</span> {recommendedLessonName}
           </span>
-          {onContinue && (
-            <button
-              onClick={onContinue}
-              className="px-3 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
-            >
-              Start
-            </button>
-          )}
+{onContinue && (
+              <button
+                onClick={onContinue}
+                className={`px-3 py-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer ${buttonStyles.ghost}`}
+              >
+                Start
+              </button>
+            )}
         </div>
       )}
     </div>

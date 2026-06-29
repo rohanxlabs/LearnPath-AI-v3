@@ -2,6 +2,7 @@ import React from 'react';
 import { Play, Sparkles, Trophy, Award, Clock, BookOpen, Flame, Bell, Trash2, Calendar, CheckCircle2, ChevronRight, BrainCircuit, BarChart } from 'lucide-react';
 import { UserProfile, SystemNotification, Achievement, Phase } from '../types';
 import { XPBadge, StreakBadge } from './Badges';
+import { buttonStyles, glassCardClass } from '../styles/theme';
 
 interface ProgressCardProps {
   progressPercent: number;
@@ -30,13 +31,13 @@ export function ProgressCard({ progressPercent, currentPhaseName, totalXp, onCon
             <span>Overall Score: {totalXp} XP</span>
           </p>
           <div className="mt-5">
-            <button
-              onClick={onContinue}
-              className="inline-flex items-center gap-2 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_15px_rgba(168,85,247,0.4)]"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Continue Learning</span>
-            </button>
+<button
+               onClick={onContinue}
+               className={`inline-flex items-center gap-2 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_15px_rgba(168,85,247,0.4)]`}
+             >
+               <Play className="w-3.5 h-3.5 fill-current" />
+               <span>Continue Learning</span>
+             </button>
           </div>
         </div>
 
@@ -227,14 +228,14 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
         <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest font-mono">
           +{achievement.xpReward} XP REWARD
         </span>
-        {isUnlocked && onShare && (
-          <button
-            onClick={onShare}
-            className="text-[10px] font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer"
-          >
-            Share Milestone
-          </button>
-        )}
+{isUnlocked && onShare && (
+           <button
+             onClick={onShare}
+             className={`text-[10px] font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer ${buttonStyles.ghost}`}
+           >
+             Share Milestone
+           </button>
+         )}
       </div>
     </div>
   );
@@ -367,13 +368,13 @@ export function AIRecommendationCard({ recommendation, onLaunch }: AIRecommendat
         <span className="text-[10px] font-semibold text-zinc-400 font-mono capitalize">
           Category: {recommendation.category}
         </span>
-        <button
-          onClick={() => onLaunch(recommendation)}
-          className="inline-flex items-center gap-1 hover:gap-1.5 text-xs text-purple-400 font-bold hover:text-purple-300 transition-all cursor-pointer"
-        >
-          <span>Instigate Tasks</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
+<button
+           onClick={() => onLaunch(recommendation)}
+           className={`inline-flex items-center gap-1 hover:gap-1.5 text-xs text-purple-400 font-bold hover:text-purple-300 transition-all cursor-pointer ${buttonStyles.ghost}`}
+         >
+           <span>Instigate Tasks</span>
+           <ChevronRight className="w-3.5 h-3.5" />
+         </button>
       </div>
     </div>
   );

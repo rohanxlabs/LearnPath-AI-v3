@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Roadmap, CuratedResource } from '../types';
 import { getRecommendationsForRoadmap } from '../lib/recommendations';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { buttonStyles, glassCardClass } from '../styles/theme';
 
 interface ResourcesTabProps {
   roadmap: Roadmap;
@@ -99,7 +100,7 @@ const Header = ({ total, goal }: { total: number, goal: string }) => (
 );
 
 const FilterControls = ({ searchTerm, setSearchTerm, filterType, setFilterType, filterStatus, setFilterStatus }) => (
-  <div className="p-4 bg-white/5 rounded-2xl border border-white/10 shadow-lg space-y-4">
+  <div className={`p-4 ${glassCardClass()} space-y-4`}>
     <div className="relative">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
       <input 

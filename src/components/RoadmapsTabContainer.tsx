@@ -8,6 +8,7 @@ import { RoadmapProgress } from './RoadmapProgress';
 import { RoadmapTimeline } from './RoadmapTimeline';
 import { XPCard } from './XPCard';
 import { MilestonesCard } from './MilestonesCard';
+import { buttonStyles, glassCardClass } from '../styles/theme';
 
 interface RoadmapsTabContainerProps {
   roadmaps: Roadmap[];
@@ -122,7 +123,7 @@ export function RoadmapsTabContainer({
         {/* Generate New Button */}
         <button
           onClick={() => setShowGenerator(!showGenerator)}
-          className="w-full py-4 px-6 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:brightness-110 transition-all flex items-center justify-center gap-2"
+          className={`w-full py-4 px-6 rounded-xl font-bold text-sm ${buttonStyles.primary} flex items-center justify-center gap-2`}
         >
           <Sparkles className="w-5 h-5" />
           <span>{showGenerator ? 'Close Generator' : 'Generate New Roadmap'}</span>
@@ -193,16 +194,16 @@ export function RoadmapsTabContainer({
               </div>
             </div>
 
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={isGenerating || !goal.trim()}
-                className="w-full py-3 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:brightness-110 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>{isGenerating ? 'Generating...' : 'Create My Roadmap'}</span>
-              </button>
-            </div>
+<div className="pt-2">
+          <button
+            type="submit"
+            disabled={isGenerating || !goal.trim()}
+            className={`w-full py-3 rounded-lg text-sm font-bold ${buttonStyles.primary} flex items-center justify-center gap-2 disabled:opacity-50 transition-all`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{isGenerating ? 'Generating...' : 'Create My Roadmap'}</span>
+          </button>
+        </div>
           </form>
         )}
 

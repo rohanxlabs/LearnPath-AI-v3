@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import React from 'react';
 import { Sparkles, PlusCircle, GraduationCap } from 'lucide-react';
 import { Roadmap, UserProfile } from '../types';
 import { RoadmapHero } from './RoadmapHero';
 import RoadmapTree from './RoadmapTree';
 import { AIMentorAnalysis } from './AIMentorAnalysis';
+import { buttonStyles } from '../styles/theme';
 
 interface SkillNode {
   name: string;
@@ -187,10 +189,10 @@ export function RoadmapOverview({
         </>
       )}
 
-      <div className="w-full">
+<div className="w-full">
         <button
           onClick={() => setShowGenerator(!showGenerator)}
-          className="w-full py-4 px-6 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-purple-500 to-blue-600 hover:brightness-110 transition-all flex items-center justify-center gap-2"
+          className={`w-full py-4 px-6 rounded-xl font-bold text-sm ${buttonStyles.primary} flex items-center justify-center gap-2`}
         >
           <Sparkles className="w-5 h-5" />
           <span>{showGenerator ? 'Close Generator' : 'Generate New Roadmap'}</span>
@@ -262,11 +264,11 @@ export function RoadmapOverview({
             </div>
           </div>
 
-          <div className="pt-2">
+<div className="pt-2">
             <button
               type="submit"
               disabled={isGenerating || !goal.trim()}
-              className="w-full py-3 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-purple-500 to-blue-600 hover:brightness-110 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              className={`w-full py-3 rounded-lg text-sm font-bold ${buttonStyles.primary} flex items-center justify-center gap-2 disabled:opacity-50 transition-all`}
             >
               <Sparkles className="w-4 h-4" />
               <span>{isGenerating ? 'Generating...' : 'Create My Roadmap'}</span>
