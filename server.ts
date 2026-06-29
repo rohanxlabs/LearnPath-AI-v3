@@ -2008,57 +2008,86 @@ function getDefaultUserDB(): UserDB {
         lastAttemptedAt: 'Never'
       }
     ],
-    projects: [
-      {
-        id: 'proj-1',
-        title: 'Custom AI Prompt Template Builder & Proxy',
-        difficulty: 'beginner',
-        description: 'Build an editor to style and optimize customizable system prompts, validating them using strict safety filters.',
-        techStack: ['React', 'Tailwind', 'localStorage', 'lucide-react'],
-        features: ['Dynamic variable injection', 'Precompiled templates library', 'One-click markdown export'],
-        progress: 100,
-        githubUrl: 'https://github.com/learnpath/prompt-builder'
-      },
-      {
-        id: 'proj-2',
-        title: 'Interactive NumPy Tensor Calculator',
-        difficulty: 'beginner',
-        description: 'A visual calculator demonstrating dot products, matrix multiplications, transpose operations, and scalar broadcasting rules.',
-        techStack: ['React', 'NumPy Web Assembly', 'Tailwind CSS'],
-        features: ['Interactive matrix grid inputs', 'Staggered computation steps visualization', 'Dimension validation warnings'],
-        progress: 30,
-        githubUrl: 'https://github.com/learnpath/tensor-calc'
-      },
-      {
-        id: 'proj-3',
-        title: 'Document PDF Ingestion Engine & Summarizer',
-        difficulty: 'intermediate',
-        description: 'A robust web utility that parses text from uploaded PDF chapters, generates chunk-based summaries, and builds high-speed search filters.',
-        techStack: ['Express', 'React', 'PDF-Parse', 'Gemini Core'],
-        features: ['Recursive token splitting', 'Auto-generated context tags map', 'Search with text highlight markers'],
-        progress: 0
-      },
-      {
-        id: 'proj-4',
-        title: 'Local Git Commit Enhancer & Interactive Explainer',
-        difficulty: 'intermediate',
-        description: 'Integrate dynamic git hooks to read git diff files, draft informative commit messages matching core conventions, and explain semantic changes.',
-        techStack: ['Node.js CLI', 'Simple Git API', 'Gemini LLMs'],
-        features: ['Automatic Conventional Commits formatting', 'Performance impact flag review', 'Security-sensitive files monitor'],
-        progress: 0
-      },
-      {
-        id: 'proj-5',
-        title: 'Autonomous AI Debugging Sandbox & Runner',
-        difficulty: 'advanced',
-        description: 'Create a secured, encapsulated browser coding playground that runs exercises, analyzes error logs, and requests corrective instructions from Gemini.',
-        techStack: ['React', 'WebContainers', 'Xterm.js', 'LLM Agents'],
-        features: ['Real-time terminal execution logs', 'Automated code diagnostics tool', 'Staggered auto-repair loops'],
-        progress: 0
-      }
-    ]
-  };
-}
+projects: [
+       {
+         id: 'proj-1',
+         title: 'Custom AI Prompt Template Builder & Proxy',
+         difficulty: 'beginner',
+         description: 'Build an editor to style and optimize customizable system prompts, validating them using strict safety filters.',
+         techStack: ['React', 'Tailwind', 'localStorage', 'lucide-react'],
+         features: ['Dynamic variable injection', 'Precompiled templates library', 'One-click markdown export'],
+         progress: 100,
+         githubUrl: 'https://github.com/learnpath/prompt-builder'
+       },
+       {
+         id: 'proj-2',
+         title: 'Interactive NumPy Tensor Calculator',
+         difficulty: 'beginner',
+         description: 'A visual calculator demonstrating dot products, matrix multiplications, transpose operations, and scalar broadcasting rules.',
+         techStack: ['React', 'NumPy Web Assembly', 'Tailwind CSS'],
+         features: ['Interactive matrix grid inputs', 'Staggered computation steps visualization', 'Dimension validation warnings'],
+         progress: 30,
+         githubUrl: 'https://github.com/learnpath/tensor-calc'
+       },
+       {
+         id: 'proj-3',
+         title: 'Document PDF Ingestion Engine & Summarizer',
+         difficulty: 'intermediate',
+         description: 'A robust web utility that parses text from uploaded PDF chapters, generates chunk-based summaries, and builds high-speed search filters.',
+         techStack: ['Express', 'React', 'PDF-Parse', 'Gemini Core'],
+         features: ['Recursive token splitting', 'Auto-generated context tags map', 'Search with text highlight markers'],
+         progress: 0
+       },
+       {
+         id: 'proj-4',
+         title: 'Local Git Commit Enhancer & Interactive Explainer',
+         difficulty: 'intermediate',
+         description: 'Integrate dynamic git hooks to read git diff files, draft informative commit messages matching core conventions, and explain semantic changes.',
+         techStack: ['Node.js CLI', 'Simple Git API', 'Gemini LLMs'],
+         features: ['Automatic Conventional Commits formatting', 'Performance impact flag review', 'Security-sensitive files monitor'],
+         progress: 0
+       },
+       {
+         id: 'proj-5',
+         title: 'Autonomous AI Debugging Sandbox & Runner',
+         difficulty: 'advanced',
+         description: 'Create a secured, encapsulated browser coding playground that runs exercises, analyzes error logs, and requests corrective instructions from Gemini.',
+         techStack: ['React', 'WebContainers', 'Xterm.js', 'LLM Agents'],
+         features: ['Real-time terminal execution logs', 'Automated code diagnostics tool', 'Staggered auto-repair loops'],
+         progress: 0
+       }
+     ],
+     achievements: [
+       {
+         id: 'ach-1',
+         name: 'First Steps',
+         description: 'Complete your first lesson to begin your learning journey.',
+         icon: '🎯',
+         unlocked: false,
+         category: 'python',
+         xpReward: 50
+       },
+       {
+         id: 'ach-2',
+         name: 'Quiz Master',
+         description: 'Score 100% on any quiz to demonstrate mastery.',
+         icon: '🧠',
+         unlocked: false,
+         category: 'prompt',
+         xpReward: 75
+       },
+       {
+         id: 'ach-3',
+         name: 'Roadmap Builder',
+         description: 'Generate your first AI-powered learning roadmap.',
+         icon: '🗺️',
+         unlocked: false,
+         category: 'agent',
+         xpReward: 100
+       }
+     ]
+   };
+ }
 
 async function loadUserDB(userEmail: string, options: { createIfMissing?: boolean } = {}): Promise<UserDB | null> {
   await ensureUsersTable();

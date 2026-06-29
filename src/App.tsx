@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sparkles, Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, CheckCircle, ArrowLeft, BookOpen, Brain, Code, BarChart } from 'lucide-react';
 import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, ChatMessage } from './types';
 import { usePWA } from './lib/usePWA';
@@ -22,8 +22,9 @@ import { AIInsightsTab } from './components/AIInsightsTab';
 import { RoadmapHero } from './components/RoadmapHero';
 import { AIMentorAnalysis } from './components/AIMentorAnalysis';
 import { createEmptyProfile, DEFAULT_SETTINGS } from './userData';
-
-const USER_EMAIL_STORAGE_KEY = 'userEmail';
+import { SplashScreen } from './components/SplashScreen';
+import { LandingPage } from './components/LandingPage';
+import { OnboardingPage } from './components/OnboardingPage';
 
 export function renderHomeView(
    props: {
@@ -106,15 +107,17 @@ export default function App() {
       }, 4000);
       return () => clearTimeout(timer);
     }
-  }, [pwa.isOnline, wasOffline]);
+}, [pwa.isOnline, wasOffline]);
 
-  // Authentication states
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+const USER_EMAIL_STORAGE_KEY = 'userEmail';
+
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Primary State Managers loaded from localStore
   const [profile, setProfile] = useState<UserProfile>(() => createEmptyProfile());
@@ -137,21 +140,27 @@ export default function App() {
     lessonId: string;
   } | null>(null);
 
-const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
-   const [isRecsLoading, setIsRecsLoading] = useState(false);
-   const [isAiGeneratingRoadmap, setIsAiGeneratingRoadmap] = useState(false);
-   const [isAiChatGenerating, setIsAiChatGenerating] = useState(false);
-   const [roadmapProgress, setRoadmapProgress] = useState<Record<string, any>>({});
+  const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
+  const [isRecsLoading, setIsRecsLoading] = useState(false);
+  const [isAiGeneratingRoadmap, setIsAiGeneratingRoadmap] = useState(false);
+  const [isAiChatGenerating, setIsAiChatGenerating] = useState(false);
+  const [roadmapProgress, setRoadmapProgress] = useState<Record<string, any>>({});
   
   // Simulated stats
   const [stripeCheckoutStatus, setStripeCheckoutStatus] = useState<string | null>(null);
   const [apiCallsCounter, setApiCallsCounter] = useState(0);
 
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   useEffect(() => {
     const verifySession = async () => {
       const savedEmail = localStorage.getItem(USER_EMAIL_STORAGE_KEY);
       const email = savedEmail?.trim().toLowerCase();
-      if (!email) return;
+      if (!email) {
+        setIsLoadingAuth(false);
+        return;
+      }
 
       try {
         const response = await fetch('/api/session');
@@ -175,6 +184,8 @@ const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
       } catch {
         localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
         setIsAuthenticated(false);
+      } finally {
+        setIsLoadingAuth(false);
       }
     };
 
@@ -184,44 +195,44 @@ const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
   // Load recommendations on mount
   useEffect(() => {
     fetchRecommendations();
-  }, []);
+}, []);
 
-const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
-   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
+  const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
+  const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
 
-// Load roadmap progress from database (parallelized)
-    useEffect(() => {
-      const loadProgress = async () => {
-        const userEmail = getStoredUserEmail();
-        if (!userEmail || roadmaps.length === 0) return;
-        
-        // Fetch all progress in parallel instead of sequentially
-        const progressPromises = roadmaps.map(async (roadmap) => {
-          try {
-            const res = await fetch(`/api/progress/${roadmap.id}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data.progress) {
-                return { id: roadmap.id, progress: data.progress };
-              }
+  // Load roadmap progress from database (parallelized)
+  useEffect(() => {
+    const loadProgress = async () => {
+      const userEmail = getStoredUserEmail();
+      if (!userEmail || roadmaps.length === 0) return;
+      
+      // Fetch all progress in parallel instead of sequentially
+      const progressPromises = roadmaps.map(async (roadmap) => {
+        try {
+          const res = await fetch(`/api/progress/${roadmap.id}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.progress) {
+              return { id: roadmap.id, progress: data.progress };
             }
-          } catch (e) {
-            console.warn('Failed to load progress for', roadmap.id);
           }
-          return null;
-        });
-        
-        const results = await Promise.all(progressPromises);
-        const updates: Record<string, any> = {};
-        results.forEach(result => {
-          if (result) {
-            updates[result.id] = result.progress;
-          }
-        });
-        setRoadmapProgress(prev => ({ ...prev, ...updates }));
-      };
-      loadProgress();
-    }, [roadmaps]);
+        } catch (e) {
+          console.warn('Failed to load progress for', roadmap.id);
+        }
+        return null;
+      });
+      
+      const results = await Promise.all(progressPromises);
+      const updates: Record<string, any> = {};
+      results.forEach(result => {
+        if (result) {
+          updates[result.id] = result.progress;
+        }
+      });
+      setRoadmapProgress(prev => ({ ...prev, ...updates }));
+    };
+    loadProgress();
+  }, [roadmaps]);
 
 // Determine next lesson to continue from (respecting stored progress)
   const getNextIncompleteLesson = (roadmap: Roadmap) => {
@@ -271,46 +282,51 @@ const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources'
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  // Sync roadmaps with Database per user
-  useEffect(() => {
-    async function syncRoadmapsFromDatabase() {
-      if (!isAuthenticated) return;
-      const email = profile.email;
-      if (!email) return;
-      localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
+// Sync roadmaps with Database per user
+   useEffect(() => {
+     async function syncRoadmapsFromDatabase() {
+       if (!isAuthenticated) return;
+       const email = profile.email;
+       if (!email) return;
+       localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
 
-      try {
-        const response = await fetch('/api/roadmaps');
-        if (response.ok) {
-          const data = await response.json();
-          
-          const uniqueList: Roadmap[] = [];
-          const seen = new Set<string>();
-          data.forEach((r: Roadmap) => {
-            if (r && r.id && !seen.has(r.id)) {
-              seen.add(r.id);
-              uniqueList.push(r);
-            }
-          });
+       try {
+         const response = await fetch('/api/roadmaps');
+         if (response.ok) {
+           const data = await response.json();
+           
+           const uniqueList: Roadmap[] = [];
+           const seen = new Set<string>();
+           data.forEach((r: Roadmap) => {
+             if (r && r.id && !seen.has(r.id)) {
+               seen.add(r.id);
+               uniqueList.push(r);
+             }
+           });
 
-          setRoadmaps(uniqueList);
-          const hasRoadmap = uniqueList.some(r => r.id === activeRoadmapId);
-          if (!hasRoadmap && uniqueList[0]) {
-            setActiveRoadmapId(uniqueList[0].id);
-          } else if (uniqueList.length === 0) {
-            setActiveRoadmapId('');
-            setSelectedRoadmapId(null);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to sync roadmaps from database:', err);
-      }
-    }
+           setRoadmaps(uniqueList);
+           const hasRoadmap = uniqueList.some(r => r.id === activeRoadmapId);
+           if (!hasRoadmap && uniqueList[0]) {
+             setActiveRoadmapId(uniqueList[0].id);
+           } else if (uniqueList.length === 0) {
+             setActiveRoadmapId('');
+             setSelectedRoadmapId(null);
+           }
+         }
+       } catch (err) {
+         console.error('Failed to sync roadmaps from database:', err);
+       }
+     }
 
-    if (isAuthenticated && profile.email) {
-      syncRoadmapsFromDatabase();
-    }
-  }, [profile.email, isAuthenticated]);
+     if (isAuthenticated && profile.email) {
+       syncRoadmapsFromDatabase();
+       const storedRedirect = localStorage.getItem('redirectAfterLogin');
+       if (storedRedirect) {
+         setActiveTab(storedRedirect.replace('/', '') || 'home');
+         localStorage.removeItem('redirectAfterLogin');
+       }
+     }
+   }, [profile.email, isAuthenticated]);
 
   const getStoredUserEmail = () => localStorage.getItem(USER_EMAIL_STORAGE_KEY);
 
@@ -353,17 +369,20 @@ const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources'
     setAuthError('');
 
     const email = authEmail.trim().toLowerCase();
-    if (!email || !authPassword) {
+    const password = authPassword;
+    const mode = authMode;
+    
+    if (!email || !password) {
       setAuthError('Email and password are required.');
       return;
     }
 
     setIsAuthenticating(true);
     try {
-      const response = await fetch(authMode === 'login' ? '/api/login' : '/api/register', {
+      const response = await fetch(mode === 'login' ? '/api/login' : '/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: authPassword })
+        body: JSON.stringify({ email, password })
       });
 
       const data = await response.json().catch(() => ({}));
@@ -382,6 +401,22 @@ const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources'
       setNotifications([]);
       setChats([]);
       setIsAuthenticated(true);
+      
+      if (showAuthModal) {
+        setShowAuthModal(false);
+        setAuthEmail('');
+        setAuthPassword('');
+      }
+      
+      if (mode === 'signup') {
+        const storedRedirect = localStorage.getItem('redirectAfterLogin');
+        if (storedRedirect) {
+          setActiveTab(storedRedirect.replace('/', '') || 'home');
+          localStorage.removeItem('redirectAfterLogin');
+        } else {
+          setActiveTab('home');
+        }
+      }
     } catch (err) {
       console.error(err);
       setAuthError('Authentication failed. Please try again.');
@@ -398,6 +433,7 @@ const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources'
     }
 
     localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
+    localStorage.removeItem('redirectAfterLogin');
 
     setIsAuthenticated(false);
     setAuthEmail('');
@@ -423,6 +459,7 @@ const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources'
     setApiCallsCounter(0);
     setRoadmapDetailTab('roadmap');
     setSelectedRoadmapId(null);
+    setShowAuthModal(false);
   };
 
   // Custom AI Roadmap Generation Trigger
@@ -1158,83 +1195,105 @@ return renderHomeView({
   };
 
 
-  // Clean authentication screens visualizer
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
-        <div className="w-full max-w-sm rounded-[24px] bg-[#111111] border border-white/10 p-6 shadow-2xl space-y-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
-          
-          <div className="text-center flex flex-col items-center">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5">
-              <Sparkles className="w-5 h-5 text-white animate-pulse" />
-            </div>
-            <h2 className="font-display font-extrabold text-xl tracking-tight mt-3">
-              LearnPath <span className="text-purple-400">AI</span>
-            </h2>
-            <p className="text-xs text-zinc-400 mt-1">Premium Full-Stack AI Learning Platform</p>
+// Render authentication UI (used within modal or standalone)
+  const renderAuthUI = () => (
+    <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
+      <div className="w-full max-w-sm rounded-[24px] bg-[#111111] border border-white/10 p-6 shadow-2xl space-y-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
+        
+        <div className="text-center flex flex-col items-center">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5">
+            <Sparkles className="w-5 h-5 text-white animate-pulse" />
+          </div>
+          <h2 className="font-display font-extrabold text-xl tracking-tight mt-3">
+            LearnPath <span className="text-purple-400">AI</span>
+          </h2>
+          <p className="text-xs text-zinc-400 mt-1">Premium Full-Stack AI Learning Platform</p>
+        </div>
+
+        {authError && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">
+            {authError}
+          </div>
+        )}
+
+        <form onSubmit={handleAuthenticate} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Registry Email</label>
+            <input
+              type="email"
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+              placeholder="bobby.fisher@learnpath.ai"
+              className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
+              required
+            />
           </div>
 
-          {authError && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">
-              {authError}
+          <div className="space-y-1.5 font-sans">
+            <div className="flex justify-between items-center bg-transparent text-[10px]">
+              <label className="block uppercase font-bold text-zinc-400 font-mono">Security Password</label>
+              <button type="button" className="text-zinc-500 hover:text-white cursor-pointer select-text">Forgot Credentials?</button>
             </div>
-          )}
-
-          <form onSubmit={handleAuthenticate} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Registry Email</label>
-              <input
-                type="email"
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                placeholder="bobby.fisher@learnpath.ai"
-                className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5 font-sans">
-              <div className="flex justify-between items-center bg-transparent text-[10px]">
-                <label className="block uppercase font-bold text-zinc-400 font-mono">Security Password</label>
-                <button type="button" className="text-zinc-500 hover:text-white cursor-pointer select-text">Forgot Credentials?</button>
-              </div>
-              <input
-                type="password"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isAuthenticating}
-              className="w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isAuthenticating ? 'Processing...' : authMode === 'login' ? 'Confirm Sign In' : 'Create Free Account'}
-            </button>
-          </form>
-
-          <div className="text-center pt-2 space-y-3.5 border-t border-white/5 pb-1.5">
-            <button
-              onClick={() => {
-                setAuthMode(authMode === 'login' ? 'signup' : 'login');
-                setAuthError('');
-              }}
-              className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
-            >
-              {authMode === 'login' ? "Don't have an account? Sign Up" : "Already registered? Sign In"}
-            </button>
-
-            <p className="text-[10px] text-zinc-500 leading-relaxed">
-              Your data is loaded by email and saved only to your user profile.
-            </p>
+            <input
+              type="password"
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
+              required
+            />
           </div>
+
+          <button
+            type="submit"
+            disabled={isAuthenticating}
+            className="w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isAuthenticating ? 'Processing...' : authMode === 'login' ? 'Confirm Sign In' : 'Create Free Account'}
+          </button>
+        </form>
+
+        <div className="text-center pt-2 space-y-3.5 border-t border-white/5 pb-1.5">
+          <button
+            onClick={() => {
+              setAuthMode(authMode === 'login' ? 'signup' : 'login');
+              setAuthError('');
+            }}
+            className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          >
+            {authMode === 'login' ? "Don't have an account? Sign Up" : "Already registered? Sign In"}
+          </button>
+
+          <p className="text-[10px] text-zinc-500 leading-relaxed">
+            Your data is loaded by email and saved only to your user profile.
+          </p>
         </div>
       </div>
+    </div>
+  );
+
+// Render the app based on auth state
+  if (isLoadingAuth) {
+    return <SplashScreen />;
+  }
+
+  // If not authenticated, show landing page
+  if (!isAuthenticated) {
+    if (showAuthModal) {
+      return renderAuthUI();
+    }
+    return (
+      <LandingPage
+        onGetStarted={() => {
+          setAuthMode('signup');
+          setShowAuthModal(true);
+        }}
+        onSignIn={() => {
+          setAuthMode('login');
+          setShowAuthModal(true);
+        }}
+      />
     );
   }
 
