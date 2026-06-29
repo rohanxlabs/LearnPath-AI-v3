@@ -7,8 +7,8 @@ const ASSETS_TO_CACHE = [
   '/offline.html',
   '/manifest.json',
   '/icon.svg',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/icon-192.jpg',
+  '/icon-512.jpg',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap'
 ];
 

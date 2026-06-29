@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { ArrowLeft, Play, Sparkles, CheckCircle2, AlertTriangle, Lightbulb, HelpCircle, Code2, PlayCircle, Eye, RefreshCw } from 'lucide-react';
 import { Lesson, QuizQuestion } from '../types';
 import { XPBadge } from './Badges';
+import { BookOpeningAnimation } from './BookOpeningAnimation';
+import { AnimatePresence, motion } from 'motion/react';
 
 interface LessonPlayViewProps {
   lesson: Lesson;
@@ -10,7 +12,7 @@ interface LessonPlayViewProps {
 }
 
 export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewProps) {
-  // Common states
+  const [showBookOpen, setShowBookOpen] = useState(true);
   const [hasCompleted, setHasCompleted] = useState(false);
   const [showHint, setShowHint] = useState(false);
 
@@ -334,64 +336,82 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
   };
 
   return (
-    <div className="space-y-6">
-      {/* Immersive Header panel */}
-      <div className="flex items-center justify-between p-4 bg-[#111111] border border-white/5 rounded-2xl shadow-md">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onClose}
-            className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-white/5 transition-colors cursor-pointer"
-            aria-label="Back to Tree path"
-            id="btn-play-close"
-          >
-            <ArrowLeft className="w-4 h-4 text-zinc-300" />
-          </button>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-bold uppercase text-zinc-500 font-mono tracking-wider">{lesson.type} module</span>
-              <XPBadge amount={lesson.xpReward} size="sm" />
-            </div>
-            <h3 className="font-display font-semibold text-sm md:text-base text-white mt-0.5 truncate max-w-xs sm:max-w-md">
-              {lesson.name}
-            </h3>
-          </div>
-        </div>
-
-        <button
-          onClick={onClose}
-          className="text-xs font-semibold text-zinc-400 hover:text-white cursor-pointer px-3.5 py-1.5 rounded-xl border border-white/5 hover:border-white/10 hover:bg-white/5 transition-all"
-        >
-          Exit Practice
-        </button>
-      </div>
-
-      {/* Primary viewport content */}
-      <div className="bg-[#111111]/45 border border-white/5 rounded-3xl p-6 shadow-inner">
-        {renderActiveChapter()}
-      </div>
-
-      {/* Verification completed congrats overlay */}
-      {hasCompleted && (
-        <div className="p-5 rounded-2xl bg-gradient-to-tr from-emerald-950/20 to-teal-900/10 border border-emerald-500/20 shadow-[0_4px_30px_rgba(16,185,129,0.15)] flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
-          <div className="flex items-center flex-col sm:flex-row gap-3">
-            <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center animate-pulse">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="font-display font-bold text-base text-white">Syllabus Checkpoint Mastered!</h4>
-              <p className="text-xs text-zinc-450 dark:text-zinc-405 light:text-slate-550 mt-0.5">Epic parameters verified successfully. Click to unlock adjacent modules and claim your XP rewards!</p>
-            </div>
-          </div>
-
-          <button
-            onClick={handleFinishLesson}
-            className="px-5 py-2.5 shrink-0 font-bold text-xs text-white bg-gradient-to-r from-emerald-600 to-teal-550 hover:from-emerald-500 hover:to-teal-500 animate-pulse-glow rounded-lg transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.3)]"
-            id="btn-claim-rewards"
-          >
-            Claim rewards & Unlock Tree
-          </button>
-        </div>
+    <AnimatePresence>
+      {showBookOpen && (
+        <BookOpeningAnimation 
+          key="book-open"
+          lessonTitle={lesson.name}
+          onComplete={() => setShowBookOpen(false)} 
+        />
       )}
-    </div>
+      
+      {!showBookOpen && (
+        <motion.div 
+          key="lesson-content"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="space-y-6"
+        >
+          {/* Immersive Header panel */}
+          <div className="flex items-center justify-between p-4 bg-[#111111] border border-white/5 rounded-2xl shadow-md">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-white/5 transition-colors cursor-pointer"
+                aria-label="Back to Tree path"
+                id="btn-play-close"
+              >
+                <ArrowLeft className="w-4 h-4 text-zinc-300" />
+              </button>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-bold uppercase text-zinc-500 font-mono tracking-wider">{lesson.type} module</span>
+                  <XPBadge amount={lesson.xpReward} size="sm" />
+                </div>
+                <h3 className="font-display font-semibold text-sm md:text-base text-white mt-0.5 truncate max-w-xs sm:max-w-md">
+                  {lesson.name}
+                </h3>
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="text-xs font-semibold text-zinc-400 hover:text-white cursor-pointer px-3.5 py-1.5 rounded-xl border border-white/5 hover:border-white/10 hover:bg-white/5 transition-all"
+            >
+              Exit Practice
+            </button>
+          </div>
+
+          {/* Primary viewport content */}
+          <div className="bg-[#111111]/45 border border-white/5 rounded-3xl p-6 shadow-inner">
+            {renderActiveChapter()}
+          </div>
+
+          {/* Verification completed congrats overlay */}
+          {hasCompleted && (
+            <div className="p-5 rounded-2xl bg-gradient-to-tr from-emerald-950/20 to-teal-900/10 border border-emerald-500/20 shadow-[0_4px_30px_rgba(16,185,129,0.15)] flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+              <div className="flex items-center flex-col sm:flex-row gap-3">
+                <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center animate-pulse">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-base text-white">Syllabus Checkpoint Mastered!</h4>
+                  <p className="text-xs text-zinc-450 dark:text-zinc-405 light:text-slate-550 mt-0.5">Epic parameters verified successfully. Click to unlock adjacent modules and claim your XP rewards!</p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleFinishLesson}
+                className="px-5 py-2.5 shrink-0 font-bold text-xs text-white bg-gradient-to-r from-emerald-600 to-teal-550 hover:from-emerald-500 hover:to-teal-500 animate-pulse-glow rounded-lg transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                id="btn-claim-rewards"
+              >
+                Claim rewards & Unlock Tree
+              </button>
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Code2 } from 'lucide-react';
 import { ProjectTrack, Roadmap } from '../types';
 import ProjectCard from './ProjectCard';
@@ -66,27 +66,6 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
     if (!prevProj) return;
 
     const prevProgress = prevProj.progress || 0;
-    const isRoadmapProject = (roadmap.projects || []).some((p: any) => p.id === id);
-
-    if (isRoadmapProject) {
-      const updatedProjects = projects.map(p => (p.id === id ? { ...p, progress: newProgress } : p));
-      setProjects(updatedProjects);
-      if (newProgress === 100 && prevProgress < 100) onAddXp(50);
-      try {
-        await fetch('/api/update-roadmap', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            roadmapId: roadmap.id,
-            updates: { projects: updatedProjects }
-          })
-        });
-      } catch (e) {
-        console.warn('[ProjectsTab] Could not persist project progress:', e);
-      }
-      return;
-    }
-
     const updatedProjects = projects.map(p => (p.id === id ? { ...p, progress: newProgress } : p));
     setProjects(updatedProjects);
     if (newProgress === 100 && prevProgress < 100) onAddXp(50);

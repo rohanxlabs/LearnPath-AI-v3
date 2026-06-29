@@ -179,3 +179,53 @@ export const cx = (...classes: (string | undefined | false)[]) =>
 // Theme class builder for glass cards
 export const glassCardClass = (variant: keyof typeof glassCardStyles = 'base') => 
   glassCardStyles[variant] || glassCardStyles.base;
+
+// Motion Animation Tokens
+export const motionTokens = {
+  fast: 150,
+  normal: 300,
+  slow: 500,
+  page: 700,
+  modal: 400,
+} as const;
+
+export const springPresets = {
+  default: { type: "spring" as const, stiffness: 400, damping: 30 },
+  bouncy: { type: "spring" as const, stiffness: 500, damping: 20 },
+  gentle: { type: "spring" as const, stiffness: 300, damping: 30 },
+  snappy: { type: "spring" as const, stiffness: 600, damping: 25 },
+} as const;
+
+export const animationVariants = {
+  fadeIn: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
+  },
+  slideInRight: {
+    initial: { x: "100%" },
+    animate: { x: 0 },
+    exit: { x: "-100%" },
+  },
+  slideInUp: {
+    initial: { y: 20, opacity: 0 },
+    animate: { y: 0, opacity: 1 },
+    exit: { y: -20, opacity: 0 },
+  },
+  scaleIn: {
+    initial: { scale: 0.95, opacity: 0 },
+    animate: { scale: 1, opacity: 1 },
+    exit: { scale: 0.95, opacity: 0 },
+  },
+  staggerChildren: {
+    animate: {
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+    child: {
+      initial: { opacity: 0, y: 10 },
+      animate: { opacity: 1, y: 0 },
+    },
+  },
+} as const;
