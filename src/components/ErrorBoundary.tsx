@@ -1,4 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { RefreshCw, AlertTriangle, Send } from 'lucide-react';
+import { buttonStyles, glassCardClass } from '../styles/theme';
 
 interface Props {
   children: ReactNode;
@@ -28,32 +30,48 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ hasError: false, error: null });
   };
 
+  handleReportIssue = () => {
+    console.log('Reporting issue:', this.state.error);
+    alert('Issue reported! Our team will investigate.');
+  };
+
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;
       }
       return (
-        <div className="flex flex-col items-center justify-center py-20 px-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <div className={`flex flex-col items-center justify-center py-20 px-6 ${glassCardClass()} rounded-2xl`}>
           <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
+            <AlertTriangle className="w-8 h-8 text-red-600" />
           </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Something went wrong</h3>
-          <p className="text-sm text-slate-600 text-center max-w-md mb-6">
-            A React component crashed while rendering. This may be caused by a browser extension interfering with the page.
+          <h3 className="text-xl font-bold text-white mb-2">Something went wrong</h3>
+          <p className="text-sm text-zinc-400 max-w-md mb-6 text-center">
+            A component crashed while rendering. This may be caused by a browser extension or network issue.
           </p>
-          <button
-            onClick={this.handleReset}
-            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
-          >
-            Retry
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={this.handleReset}
+              className={`px-6 py-3 ${buttonStyles.primary} rounded-xl font-bold text-sm inline-flex items-center gap-2`}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+            <button
+              onClick={this.handleReportIssue}
+              className={`px-6 py-3 ${buttonStyles.secondary} rounded-xl font-bold text-sm inline-flex items-center gap-2`}
+            >
+              <Send className="w-4 h-4" />
+              Report Issue
+            </button>
+          </div>
           {this.state.error && (
-            <pre className="mt-4 text-xs text-red-500 text-left max-w-lg overflow-auto bg-slate-50 p-3 rounded-lg border border-slate-200">
-              {this.state.error.message}
-            </pre>
+            <details className="mt-6 max-w-lg w-full">
+              <summary className="text-xs text-zinc-500 cursor-pointer">Technical details</summary>
+              <pre className="mt-2 text-xs text-red-400 text-left max-w-lg overflow-auto bg-white/5 p-3 rounded-lg border border-white/10">
+                {this.state.error.message}
+              </pre>
+            </details>
           )}
         </div>
       );

@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Code2 } from 'lucide-react';
 import { ProjectTrack, Roadmap } from '../types';
 import ProjectCard from './ProjectCard';
 import ProjectFilters from './ProjectFilters';
+import { SkeletonCard, LoadingSpinner } from './Skeleton';
+import { EmptyState } from './EmptyState';
 
 interface ProjectsTabProps {
   roadmap: Roadmap;
@@ -123,9 +126,17 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
       </header>
 
       {loading ? (
-        <div className="flex justify-center items-center py-20">
-          <div className="w-8 h-8 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <SkeletonCard key={i} className="h-48" />
+          ))}
         </div>
+      ) : filteredProjects.length === 0 ? (
+        <EmptyState
+          icon={<Code2 className="w-10 h-10 text-zinc-500" />}
+          title="No Projects Yet"
+          description="Projects will appear here as you progress through your roadmap. Each completed module unlocks hands-on project opportunities."
+        />
       ) : (
         <motion.div layout className="space-y-4">
           <AnimatePresence>

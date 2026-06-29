@@ -5,6 +5,8 @@ import { Roadmap, CuratedResource } from '../types';
 import { getRecommendationsForRoadmap } from '../lib/recommendations';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { buttonStyles, glassCardClass } from '../styles/theme';
+import { LoadingSpinner, SkeletonCard } from './Skeleton';
+import { EmptyState } from './EmptyState';
 
 interface ResourcesTabProps {
   roadmap: Roadmap;
@@ -79,7 +81,13 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
         filterStatus={filterStatus}
         setFilterStatus={setFilterStatus}
       />
-      {loading ? <LoadingSpinner /> : <ResourceGrid resources={filteredResources} completedIds={completedIds} savedIds={savedIds} onToggleCompleted={toggleCompleted} onToggleSaved={toggleSaved} />}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : <ResourceGrid resources={filteredResources} completedIds={completedIds} savedIds={savedIds} onToggleCompleted={toggleCompleted} onToggleSaved={toggleSaved} />}
     </div>
   );
 }
@@ -136,18 +144,25 @@ const FilterControls = ({ searchTerm, setSearchTerm, filterType, setFilterType, 
   </div>
 );
 
-const ResourceGrid = ({ resources, completedIds, savedIds, onToggleCompleted, onToggleSaved }) => (
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-    {resources.map(res => (
-      <ResourceCard key={res.id} resource={res} isCompleted={completedIds.includes(res.id)} isSaved={savedIds.includes(res.id)} onToggleCompleted={onToggleCompleted} onToggleSaved={onToggleSaved} />
-    ))}
-    {resources.length === 0 && (
-      <div className="md:col-span-2 lg:col-span-3 text-center py-12 bg-white/5 rounded-2xl border border-white/10">
-        <p className="text-zinc-400">No resources match your current filters.</p>
-      </div>
-    )}
-  </div>
-);
+const ResourceGrid = ({ resources, completedIds, savedIds, onToggleCompleted, onToggleSaved }) => {
+  if (resources.length === 0) {
+    return (
+      <EmptyState
+        icon={<BookOpen className="w-10 h-10 text-zinc-500" />}
+        title="No Resources Match Your Filters"
+        description="Try adjusting your search or filter criteria to find relevant learning materials."
+      />
+    );
+  }
+  
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {resources.map(res => (
+        <ResourceCard key={res.id} resource={res} isCompleted={completedIds.includes(res.id)} isSaved={savedIds.includes(res.id)} onToggleCompleted={onToggleCompleted} onToggleSaved={onToggleSaved} />
+      ))}
+    </div>
+  );
+};
 
 const ResourceCard = ({ resource, isCompleted, isSaved, onToggleCompleted, onToggleSaved }) => {
   const getResourceIcon = (type: string) => {
@@ -202,10 +217,3 @@ const ResourceCard = ({ resource, isCompleted, isSaved, onToggleCompleted, onTog
     </motion.div>
   );
 };
-
-const LoadingSpinner = () => (
-  <div className="py-24 flex flex-col items-center justify-center gap-4 bg-white/5 rounded-2xl border border-white/10">
-    <div className="w-10 h-10 rounded-full border-4 border-blue-400 border-t-transparent animate-spin" />
-    <p className="text-zinc-400">Loading Learning Assets...</p>
-  </div>
-);

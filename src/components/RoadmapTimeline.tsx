@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Roadmap, Level, Phase } from '../types';
 import { ModuleCard } from './ModuleCard';
+import { glassCardClass } from '../styles/theme';
 
 type ModuleDisplayStatus = 'completed' | 'in-progress' | 'not-started';
 
@@ -60,12 +61,12 @@ export const RoadmapTimeline: React.FC<{
   
   if (modules.length === 0) {
     return (
-      <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <p className="text-slate-500 font-medium">No learning path generated yet.</p>
+      <div className={`p-12 text-center space-y-4 ${glassCardClass()}`}>
+        <p className="text-zinc-400 font-medium">No learning path generated yet.</p>
         {onRegenerate && (
           <button
             onClick={onRegenerate}
-            className="px-6 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:brightness-110 transition-all"
+            className="px-6 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:brightness-110 transition-all cursor-pointer"
           >
             Regenerate Roadmap
           </button>

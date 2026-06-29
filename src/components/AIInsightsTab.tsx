@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { BarChart, BrainCircuit, Calendar, Check, Eye, GitBranch, Lightbulb, LineChart, Radar, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Roadmap, UserProfile } from '../types';
@@ -7,6 +7,7 @@ import { generateInsightsData } from '../lib/insights';
 import { LearningVelocityChart } from './charts/LearningVelocityChart';
 import { WeeklyReportChart } from './charts/WeeklyReportChart';
 import { SkillRadarChart } from './charts/SkillRadarChart';
+import { SkeletonStatGrid, LoadingSpinner, SkeletonChart } from './Skeleton';
 
 // Placeholder components for charts - we will create these next
 const PlaceholderChart = ({ name }: { name: string }) => (
@@ -22,7 +23,14 @@ interface AIInsightsTabProps {
 
 export function AIInsightsTab({ roadmap, profile }: AIInsightsTabProps) {
   // NOTE: The data generation will eventually come from a backend API call
+  const [isLoading, setIsLoading] = useState(true);
   const insightsData = useMemo(() => generateInsightsData(roadmap, profile), [roadmap, profile]);
+
+  useEffect(() => {
+    // Simulate loading delay for better UX
+    const timer = setTimeout(() => setIsLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, [roadmap, profile]);
 
   const StatCard = ({ icon, title, value, change }: { icon: React.ReactNode, title: string, value: string, change?: string }) => (
     <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col justify-between">
@@ -36,6 +44,24 @@ export function AIInsightsTab({ roadmap, profile }: AIInsightsTabProps) {
       </div>
     </div>
   );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <SkeletonStatGrid count={4} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <LoadingSpinner label="Loading learning velocity..." />
+            <LoadingSpinner label="Loading weekly activity..." />
+          </div>
+          <div className="space-y-6">
+            <LoadingSpinner label="Loading skill mastery..." />
+            <LoadingSpinner label="Loading AI insights..." />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
