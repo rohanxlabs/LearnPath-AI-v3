@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Level, Lesson } from '../types';
-import { ChevronDown, BookOpen, CheckCircle2, Circle, Play } from 'lucide-react';
+import { ChevronDown, BookOpen, CheckCircle2, Circle, Play, Lock } from 'lucide-react';
 import { LessonItem } from './LessonItem';
+import { easeInOut } from 'motion';
 
 type ModuleDisplayStatus = 'completed' | 'in-progress' | 'not-started';
 
@@ -55,6 +56,17 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
             Not Started
           </span>
         );
+    }
+  };
+
+  const getBookSpineStyle = () => {
+    switch (moduleStatus) {
+      case 'completed':
+        return 'from-emerald-600 to-teal-700';
+      case 'in-progress':
+        return 'from-indigo-600 to-purple-700';
+      default:
+        return 'from-slate-700 to-slate-800';
     }
   };
   

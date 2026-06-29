@@ -13,6 +13,7 @@ import { MentorChatView } from './components/MentorChatView';
 import { AnalyticsView, ProfileView } from './components/TabsScreen';
 import { LessonPlayView } from './components/LessonPlayView';
 import { TopicDetailView } from './components/TopicDetailView';
+import { AchievementCelebration } from './components/AchievementCelebration';
 import { motion } from 'motion/react';
 import { ResourcesTab } from './components/ResourcesTab';
 import { QuizTab } from './components/QuizTab';
@@ -123,6 +124,7 @@ export default function App() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [chats, setChats] = useState<ChatMessage[]>([]);
+  const [unlockedAchievement, setUnlockedAchievement] = useState<Achievement | null>(null);
 
   // Active view controller tabs
   const [activeTab, setActiveTab] = useState<string>('home'); // home | roadmaps | mentor | progress | profile | achievements | notifications
@@ -767,7 +769,6 @@ await fetch('/api/roadmaps', {
     // Unlocking preset accomplishments
     const countCompletedLessons = updatedRoadmaps.find(r => r.id === targetRoadmapId)?.lessonsCompleted || 0;
     if (countCompletedLessons === 5 || countCompletedLessons === 15 || countCompletedLessons === 25) {
-      // Find locks and unlock them
       setAchievements(prev => {
         const lockedIdx = prev.findIndex(a => !a.unlocked);
         if (lockedIdx !== -1) {
@@ -778,7 +779,6 @@ await fetch('/api/roadmaps', {
             unlockedAt: new Date().toISOString()
           };
           
-          // Dispatch unlock alert
           const achNotif: SystemNotification = {
             id: `notif-ach-${Date.now()}`,
             title: `Achievement Unlocked: ${cpy[lockedIdx].name} 🏆`,
@@ -789,7 +789,9 @@ await fetch('/api/roadmaps', {
           };
           setNotifications(prevNotifs => [achNotif, ...prevNotifs]);
           
-          // Grant achievement XP
+          // Show achievement celebration
+          setUnlockedAchievement(cpy[lockedIdx]);
+          
           setProfile(p => ({ ...p, xp: p.xp + cpy[lockedIdx].xpReward }));
           return cpy;
         }
@@ -1391,6 +1393,14 @@ return renderHomeView({
           setActiveLesson(null);
         }}
       />
+
+      {/* Achievement Celebration Overlay */}
+      {unlockedAchievement && (
+        <AchievementCelebration
+          achievement={unlockedAchievement}
+          onDone={() => setUnlockedAchievement(null)}
+        />
+      )}
     </div>
   );
 }
