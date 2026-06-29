@@ -4,6 +4,8 @@ import remarkGfm from 'remark-gfm';
 import { Send, Sparkles, MessageSquare, Bot, HelpCircle, Code2, BookOpen, Lightbulb, Mic, MicOff, Paperclip, CheckCircle, Search, Terminal, AlertTriangle } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { XPBadge } from './Badges';
+import { motion } from 'motion/react';
+import { easeInOut } from 'motion';
 
 interface MentorChatViewProps {
   chats: ChatMessage[];
@@ -66,9 +68,13 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
       {/* Upper info panel */}
       <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-zinc-950/25 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-650 text-white flex items-center justify-center shadow-[0_4px_12px_rgba(168,85,247,0.35)]">
-            <Bot className="w-4.5 h-4.5 animate-pulse" />
-          </div>
+          <motion.div 
+            className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-650 text-white flex items-center justify-center shadow-[0_4px_12px_rgba(168,85,247,0.35)]"
+            animate={{ scale: [1, 1.05, 1] }}
+            transition={{ duration: 3, repeat: Infinity, ease: easeInOut }}
+          >
+            <Bot className="w-4.5 h-4.5" />
+          </motion.div>
           <div>
             <h4 className="font-semibold text-xs text-white flex items-center gap-1.5">
               <span>LearnPath AI Mentor</span>
@@ -161,9 +167,7 @@ pre({ children }) {
               <Bot className="w-4.5 h-4.5 animate-spin" />
             </div>
             <div className="p-4 rounded-2xl glass-card glass-card-purple border border-purple-500/10 flex items-center gap-1 text-zinc-400">
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+              <FloatingParticles />
               <span className="text-[10px] text-zinc-400 font-medium ml-2 animate-pulse">Formulating AI feedback...</span>
             </div>
           </div>
@@ -272,3 +276,27 @@ pre({ children }) {
     </div>
   );
 }
+
+// Floating thinking particles component
+const FloatingParticles: React.FC = () => {
+  return (
+    <div className="flex items-center gap-1">
+      {[0, 1, 2].map((i) => (
+        <motion.div
+          key={i}
+          className="w-1.5 h-1.5 rounded-full bg-purple-400"
+          animate={{ 
+            y: [-3, -8, -3], 
+            opacity: [0.4, 1, 0.4] 
+          }}
+          transition={{ 
+            duration: 1.2, 
+            repeat: Infinity, 
+            delay: i * 0.2,
+            ease: easeInOut 
+          }}
+        />
+      ))}
+    </div>
+  );
+};

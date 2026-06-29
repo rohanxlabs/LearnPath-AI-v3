@@ -3,7 +3,9 @@ import { ArrowLeft, Play, Sparkles, CheckCircle2, AlertTriangle, Lightbulb, Help
 import { Lesson, QuizQuestion } from '../types';
 import { XPBadge } from './Badges';
 import { BookOpeningAnimation } from './BookOpeningAnimation';
+import { ConfettiParticles } from './ConfettiParticles';
 import { AnimatePresence, motion } from 'motion/react';
+import { easeInOut } from 'motion';
 
 interface LessonPlayViewProps {
   lesson: Lesson;
@@ -141,16 +143,31 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                         }
                       }
 
+                      const wrongAnswerShake = submittedQuiz && isSelected && !isCorrect ? {
+                        x: [-2, 2, -2, 2, 0],
+                        transition: { duration: 0.4 }
+                      } : {};
+
                       return (
-                        <button
+                        <motion.button
                           key={opt}
                           disabled={submittedQuiz}
                           onClick={() => setQuizAnswers({ ...quizAnswers, [q.id]: oidx })}
                           className={`px-3.5 py-3 rounded-lg border text-xs text-left transition-all duration-150 flex items-center justify-between ${optionStyle} cursor-pointer`}
+                          whileTap={isSelected ? undefined : { scale: 0.98 }}
+                          animate={wrongAnswerShake}
                         >
                           <span>{opt}</span>
-                          {submittedQuiz && isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
-                        </button>
+                          {submittedQuiz && isCorrect && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ duration: 0.3, ease: easeInOut }}
+                            >
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                            </motion.div>
+                          )}
+                        </motion.button>
                       );
                     })}
                   </div>
@@ -274,7 +291,15 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
               {/* Console logs */}
               {codeFeedback && (
-                <div className="p-4 rounded-xl bg-[#0A0A0A] border border-white/5 font-mono text-[11px] leading-relaxed space-y-2 select-text selection:bg-purple-500/20 max-h-[160px] overflow-y-auto">
+                <motion.div 
+                  className="p-4 rounded-xl bg-[#0A0A0A] border border-white/5 font-mono text-[11px] leading-relaxed space-y-2 select-text selection:bg-purple-500/20 max-h-[160px] overflow-y-auto relative"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  transition={{ duration: 0.3, ease: easeInOut }}
+                >
+                  {codeFeedback.passed && (
+                    <ConfettiParticles count={15} />
+                  )}
                   <div className="flex items-center justify-between border-b border-white/5 pb-1.5 mb-1 bg-transparent">
                     <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
                       <Code2 className="w-3.5 h-3.5 text-purple-400" /> Compiler Log Diagnostic
@@ -291,13 +316,17 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                       <p className="text-[10px] text-zinc-500 mt-1"><strong className="text-purple-300 font-semibold">Walkthrough analysis:</strong> {codeFeedback.explanation}</p>
                     </div>
                   ) : (
-                    <div className="text-red-400 bg-transparent">
+                    <motion.div 
+                      className="text-red-400 bg-transparent"
+                      animate={{ x: [-2, 2, -2, 2, 0] }}
+                      transition={{ duration: 0.4, ease: easeInOut }}
+                    >
                       <p className="font-bold">Error Traceback (most recent call last):</p>
                       <p className="text-zinc-350">{codeFeedback.suggestions}</p>
                       <p className="text-[10px] text-zinc-500 mt-1.5 font-sans whitespace-pre-wrap">{codeFeedback.explanation}</p>
-                    </div>
+                    </motion.div>
                   )}
-                </div>
+                </motion.div>
               )}
             </div>
           </div>
