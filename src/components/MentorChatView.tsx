@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Send, Sparkles, MessageSquare, Bot, HelpCircle, Code2, BookOpen, Lightbulb, Mic, MicOff, Paperclip, CheckCircle, Search, Terminal, AlertTriangle } from 'lucide-react';
@@ -6,6 +6,77 @@ import { ChatMessage } from '../types';
 import { XPBadge } from './Badges';
 import { motion } from 'motion/react';
 import { easeInOut } from 'motion';
+
+// Memoized message component to prevent unnecessary re-renders
+const ChatMessageItem = memo(({ ch, isGenerating }: { ch: ChatMessage; isGenerating: boolean }) => {
+  const isAI = ch.sender === 'assistant';
+  const timestamp = new Date(ch.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <div
+      className={`flex gap-3 max-w-full sm:max-w-[85%] ${isAI ? 'mr-auto' : 'ml-auto flex-row-reverse'}`}
+    >
+      <div className={`p-1.5 h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+          isAI
+            ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+            : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+        }`}>
+        {isAI ? <Bot className="w-4.5 h-4.5" /> : <Terminal className="w-4.5 h-4.5" />}
+      </div>
+
+      <div className="space-y-1">
+        <div className={`p-4 rounded-2xl text-xs select-text leading-relaxed break-words ${
+            isAI
+              ? 'glass-card glass-card-purple border-purple-500/10 text-zinc-100 shadow-sm'
+              : 'glass-card glass-card-blue border-blue-500/15 text-white font-medium shadow-md'
+          }`}>
+          {isAI ? (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                pre({ children }) {
+                  const codeElement = React.Children.toArray(children).find(React.isValidElement) as React.ReactElement<{ className?: string }> | null;
+                  const match = /language-(\w+)/.exec(codeElement?.props.className || '');
+                  return (
+                    <div className="my-3 max-w-full rounded-lg overflow-hidden border border-zinc-700">
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-700 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                        <span>{match ? match[1] : 'code'} example</span>
+                        <span className="text-[9px] bg-zinc-800 px-1 py-0.5 rounded">Code Walkthrough</span>
+                      </div>
+                      <pre className="p-3 bg-zinc-950 overflow-x-auto whitespace-pre-wrap text-zinc-300 text-[11px]">
+                        {children}
+                      </pre>
+                    </div>
+                  );
+                },
+                code({ className, children, ...props }) {
+                  return <code className={className} {...props}>{children}</code>;
+                },
+                h1: ({ node, ...props }) => <h1 className="font-display font-bold text-xl text-purple-300 mt-3 mb-2" {...props} />,
+                h2: ({ node, ...props }) => <h2 className="font-display font-bold text-lg text-purple-400 mt-3 mb-1.5" {...props} />,
+                h3: ({ node, ...props }) => <h3 className="font-display font-semibold text-base text-purple-300 mt-3 mb-1" {...props} />,
+                h4: ({ node, ...props }) => <h4 className="font-display font-semibold text-sm text-purple-300 mt-3 mb-1" {...props} />,
+                p: ({ node, ...props }) => <p className="mt-1.5 text-zinc-320 leading-relaxed" {...props} />,
+                ul: ({ node, ...props }) => <ul className="list-disc ml-4 mt-2 mb-2 text-zinc-300" {...props} />,
+                ol: ({ node, ...props }) => <ol className="list-decimal ml-4 mt-2 mb-2 text-zinc-300" {...props} />,
+                li: ({ node, ...props }) => <li className="mt-1" {...props} />,
+                strong: ({ node, ...props }) => <strong className="text-white font-bold" {...props} />,
+                em: ({ node, ...props }) => <em className="text-zinc-200 italic" {...props} />
+              }}
+            >
+              {ch.text}
+            </ReactMarkdown>
+          ) : (
+            ch.text
+          )}
+        </div>
+        <span className={`block text-[8px] text-zinc-500 font-mono px-2 ${isAI ? 'text-left' : 'text-right'}`}>
+          {timestamp}
+        </span>
+      </div>
+    </div>
+  );
+});
 
 interface MentorChatViewProps {
   chats: ChatMessage[];
@@ -18,36 +89,36 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
   const [inputText, setInputText] = useState('');
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
-  
+   
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chats, isGenerating]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
     onSendMessage(inputText);
     setInputText('');
     setAttachmentName(null);
-  };
+  }, [inputText, onSendMessage]);
 
-  const handleSuggestedPrompt = (prompt: string) => {
+  const handleSuggestedPrompt = useCallback((prompt: string) => {
     onSendMessage(prompt);
-  };
+  }, [onSendMessage]);
 
-  const toggleVoice = () => {
+  const toggleVoice = useCallback(() => {
     setIsVoiceActive(!isVoiceActive);
     if (!isVoiceActive) {
       // Simulate speech detection
       setInputText("Hey AI Mentor, can you give me a code example of how to build a simple neural network layer?");
     }
-  };
+  }, [isVoiceActive]);
 
-  const handleFileMockUpload = () => {
+  const handleFileMockUpload = useCallback(() => {
     setAttachmentName("numpy_matrix_ops.py");
-  };
+  }, []);
 
   const suggestedPrompts = [
     { text: "Explain NumPy Vector Broadcast", icon: Code2 },
@@ -91,74 +162,9 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
 
       {/* Message space panel */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
-        {chats.map((ch) => {
-          const isAI = ch.sender === 'assistant';
-          return (
-            <div
-              key={ch.id}
-              className={`flex gap-3 max-w-full sm:max-w-[85%] ${isAI ? 'mr-auto' : 'ml-auto flex-row-reverse'}`}
-            >
-              <div className={`p-1.5 h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 border ${
-                isAI
-                  ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                  : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-              }`}>
-                {isAI ? <Bot className="w-4.5 h-4.5" /> : <Terminal className="w-4.5 h-4.5" />}
-              </div>
-
-              <div className="space-y-1">
-                <div className={`p-4 rounded-2xl text-xs select-text leading-relaxed break-words ${
-                  isAI
-                    ? 'glass-card glass-card-purple border-purple-500/10 text-zinc-100 shadow-sm'
-                    : 'glass-card glass-card-blue border-blue-500/15 text-white font-medium shadow-md'
-                }`}>
-                  {isAI ? (
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-pre({ children }) {
-                           const codeElement = React.Children.toArray(children).find(React.isValidElement) as React.ReactElement<{ className?: string }> | null;
-                           const match = /language-(\w+)/.exec(codeElement?.props.className || '');
-                           return (
-                             <div className="my-3 max-w-full rounded-lg overflow-hidden border border-zinc-700">
-                               <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-700 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                                 <span>{match ? match[1] : 'code'} example</span>
-                                 <span className="text-[9px] bg-zinc-800 px-1 py-0.5 rounded">Code Walkthrough</span>
-                               </div>
-                               <pre className="p-3 bg-zinc-950 overflow-x-auto whitespace-pre-wrap text-zinc-300 text-[11px]">
-                                 {children}
-                               </pre>
-                             </div>
-                           );
-                         },
-                        code({ className, children, ...props }) {
-                          return <code className={className} {...props}>{children}</code>;
-                        },
-                        h1: ({ node, ...props }) => <h1 className="font-display font-bold text-xl text-purple-300 mt-3 mb-2" {...props} />,
-                        h2: ({ node, ...props }) => <h2 className="font-display font-bold text-lg text-purple-400 mt-3 mb-1.5" {...props} />,
-                        h3: ({ node, ...props }) => <h3 className="font-display font-semibold text-base text-purple-300 mt-3 mb-1" {...props} />,
-                        h4: ({ node, ...props }) => <h4 className="font-display font-semibold text-sm text-purple-300 mt-3 mb-1" {...props} />,
-                        p: ({ node, ...props }) => <p className="mt-1.5 text-zinc-320 leading-relaxed" {...props} />,
-                        ul: ({ node, ...props }) => <ul className="list-disc ml-4 mt-2 mb-2 text-zinc-300" {...props} />,
-                        ol: ({ node, ...props }) => <ol className="list-decimal ml-4 mt-2 mb-2 text-zinc-300" {...props} />,
-                        li: ({ node, ...props }) => <li className="mt-1" {...props} />,
-                        strong: ({ node, ...props }) => <strong className="text-white font-bold" {...props} />,
-                        em: ({ node, ...props }) => <em className="text-zinc-200 italic" {...props} />
-                      }}
-                    >
-                      {ch.text}
-                    </ReactMarkdown>
-                  ) : (
-                    ch.text
-                  )}
-                </div>
-                <span className={`block text-[8px] text-zinc-500 font-mono px-2 ${isAI ? 'text-left' : 'text-right'}`}>
-                  {new Date(ch.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            </div>
-          );
-        })}
+        {chats.map((ch) => (
+          <ChatMessageItem key={ch.id} ch={ch} isGenerating={isGenerating} />
+        ))}
 
         {/* Streaming / typing load state indicator */}
         {isGenerating && (

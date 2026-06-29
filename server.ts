@@ -8,6 +8,14 @@ import path from 'path';
 import { exec } from 'child_process';
 import { platform } from 'os';
 import { createServer as createViteServer } from 'vite';
+
+// In-memory cache for AI recommendations (5 minute TTL)
+type RecCacheEntry = {
+  data: any;
+  timestamp: number;
+};
+const recCache: Map<string, RecCacheEntry> = new Map();
+const REC_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 
@@ -308,7 +316,7 @@ app.post('/api/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Goal is required' });
   }
 
-const prompt = `
+const roadmapSystemPrompt = `
 Generate a learning roadmap for: "${sanitizeForPrompt(goal)}".
 Experience: "${sanitizeForPrompt(experienceLevel || 'Beginner')}", ${sanitizeForPrompt(weeklyHours || 5)} hrs/week, "${sanitizeForPrompt(preferredStyle || 'Hands-on')}" style.
 
@@ -318,13 +326,7 @@ Return JSON with prerequisites in lessons:
 2-3 phases, 2 levels per phase, 1 learn + 1 quiz per level.
 `;
 
-  try {
-     const roadmapResponse = await callOpenRouterChatCompletion(prompt, 0.7, true);
-     const parsedData = cleanAndParseJSON(roadmapResponse, '{}');
-
-    const phases = parsedData.phases || [];
-    if (phases.length > 0) {
-const resourcesProjectsPrompt = `
+    const resourcesProjectsPrompt = `
 Generate resources and projects for roadmap goal: "${sanitizeForPrompt(goal, 100)}".
 
 Return JSON: { "resources": [{ "id": "r1", "phaseId": "...", "title": "...", "type": "article|video|course|paper", "provider": "...", "url": "https://...", "description": "..." }], "projects": [{ "id": "p1", "title": "...", "difficulty": "beginner|intermediate|advanced", "description": "...", "techStack": ["..."], "features": ["..."], "progress": 0 }] }
@@ -332,20 +334,44 @@ Return JSON: { "resources": [{ "id": "r1", "phaseId": "...", "title": "...", "ty
 Generate exactly 3 resources and 2 projects. Keep descriptions under 25 words.
 `;
 
+try {
+       // Parallelize API calls for better performance - run both requests simultaneously
+       const roadmapPromise = callOpenRouterChatCompletion(roadmapSystemPrompt, 0.7, true);
+       const rpPromise = callOpenRouterChatCompletion(resourcesProjectsPrompt, 0.7, true);
+       
+       let roadmapResponse: string;
+       let rpResponse: string | undefined;
+       let roadmapError: Error | null = null;
+       
        try {
-         const rpResponse = await callOpenRouterChatCompletion(resourcesProjectsPrompt, 0.7, true);
+         roadmapResponse = await roadmapPromise;
+       } catch (e) {
+         roadmapError = e as Error;
+       }
+       
+       try {
+         rpResponse = await rpPromise;
+       } catch (rpErr) {
+         console.warn('[AI-Fallback] Could not generate resources/projects, using defaults');
+       }
+
+       if (roadmapError) {
+         throw roadmapError; // Fall through to outer catch for fallback roadmap
+       }
+
+       const parsedData = cleanAndParseJSON(roadmapResponse, '{}');
+       
+       if (rpResponse) {
          const rpData = cleanAndParseJSON(rpResponse, '{}');
          parsedData.resources = rpData.resources || [];
          parsedData.projects = rpData.projects || [];
-         console.log(`[AI-Generated] Resources: ${rpData.resources?.length || 0}, Projects: ${rpData.projects?.length || 0}`);
-       } catch (rpError: any) {
-         console.error('[AI-Fallback] Could not generate resources/projects, leaving empty:', rpError.message || rpError);
+       } else {
          parsedData.resources = [];
          parsedData.projects = [];
        }
-     }
+       console.log(`[AI-Generated] Resources: ${parsedData.resources.length}, Projects: ${parsedData.projects.length}`);
 
-    return res.json(parsedData);
+       return res.json(parsedData);
 
   } catch (error: any) {
     let readableError = error.message || String(error);
@@ -1014,6 +1040,14 @@ try {
 // 5. API: AI Adaptive Recommendations
 app.post('/api/ai-recommendations', aiLimiter, requireAuth, async (req, res) => {
   const { currentXp, level, streak, activeGoal } = req.body;
+  const userEmail = req.session.userEmail;
+
+  // Check cache first (valid for 5 minutes)
+  const cacheKey = `${userEmail}:${activeGoal || ''}`;
+  const cached = recCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < REC_CACHE_TTL) {
+    return res.json(cached.data);
+  }
 
   const prompt = `
 Generate 3 highly personalized study recommendations for a user of LearnPath AI with:
@@ -1036,48 +1070,52 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 `;
 
 try {
-     const response = await callOpenRouterChatCompletion(prompt, 0.8, true);
-     const parsed = cleanAndParseJSON(response, '[]');
-     return res.json(parsed);
+      const response = await callOpenRouterChatCompletion(prompt, 0.8, true);
+      const parsed = cleanAndParseJSON(response, '[]');
+      // Cache successful response
+      recCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
+      return res.json(parsed);
 
-  } catch (error: any) {
-    let readableError = error.message || String(error);
-    try {
-      const parsedError = JSON.parse(error.message);
-      if (parsedError?.error?.message) {
-        readableError = parsedError.error.message;
-      }
-    } catch (_) {}
-    console.error('OpenRouter recommendations fallback:', readableError);
-    
-    return res.json([
-      {
-        id: 'rec-numpy',
-        title: 'Complete: NumPy Index Exercises',
-        description: 'Level up your Python status by completing vector slice operations. Practice handling dimensions with multi-dimensional matrices.',
-        xpReward: 75,
-        category: 'coding',
-        difficulty: 'Medium'
-      },
-      {
-        id: 'rec-quiz',
-        title: 'Quiz: Neural Forward Propagation',
-        description: 'Prove your Foundations awareness! Complete the 4-question checkpoint of linear boundaries.',
-        xpReward: 50,
-        category: 'quiz',
-        difficulty: 'Easy'
-      },
-      {
-        id: 'rec-mentor',
-        title: 'Ask AI Mentor about MCP Specs',
-        description: 'Explore Model Context Protocol schemas by asking our AI tutor. Learn how apps dynamically secure real-time DB contexts.',
-        xpReward: 30,
-        category: 'mentor',
-        difficulty: 'Hard'
-      }
-    ]);
-  }
-});
+   } catch (error: any) {
+     let readableError = error.message || String(error);
+     try {
+       const parsedError = JSON.parse(error.message);
+       if (parsedError?.error?.message) {
+         readableError = parsedError.error.message;
+       }
+     } catch (_) {}
+     console.error('OpenRouter recommendations fallback:', readableError);
+     const fallback = [
+       {
+         id: 'rec-numpy',
+         title: 'Complete: NumPy Index Exercises',
+         description: 'Level up your Python status by completing vector slice operations. Practice handling dimensions with multi-dimensional matrices.',
+         xpReward: 75,
+         category: 'coding',
+         difficulty: 'Medium'
+       },
+       {
+         id: 'rec-quiz',
+         title: 'Quiz: Neural Forward Propagation',
+         description: 'Prove your Foundations awareness! Complete the 4-question checkpoint of linear boundaries.',
+         xpReward: 50,
+         category: 'quiz',
+         difficulty: 'Easy'
+       },
+       {
+         id: 'rec-mentor',
+         title: 'Ask AI Mentor about MCP Specs',
+         description: 'Explore Model Context Protocol schemas by asking our AI tutor. Learn how apps dynamically secure real-time DB contexts.',
+         xpReward: 30,
+         category: 'mentor',
+         difficulty: 'Hard'
+       }
+     ];
+     // Cache fallback response too
+     recCache.set(cacheKey, { data: fallback, timestamp: Date.now() });
+     return res.json(fallback);
+   }
+   });
 
 // 6. API: Dynamic Quiz Generator
 app.post('/api/generate-quiz', aiLimiter, requireAuth, async (req, res) => {

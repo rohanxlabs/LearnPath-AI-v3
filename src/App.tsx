@@ -189,28 +189,39 @@ const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
 const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
    const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
 
-   // Load roadmap progress from database
-   useEffect(() => {
-     const loadProgress = async () => {
-       const userEmail = getStoredUserEmail();
-       if (!userEmail || roadmaps.length === 0) return;
-       
-       for (const roadmap of roadmaps) {
-         try {
-           const res = await fetch(`/api/progress/${roadmap.id}`);
-           if (res.ok) {
-             const data = await res.json();
-             if (data.progress) {
-               setRoadmapProgress(prev => ({ ...prev, [roadmap.id]: data.progress }));
-             }
-           }
-         } catch (e) {
-           console.warn('Failed to load progress for', roadmap.id);
-         }
-       }
-     };
-     loadProgress();
-   }, [roadmaps]);
+// Load roadmap progress from database (parallelized)
+    useEffect(() => {
+      const loadProgress = async () => {
+        const userEmail = getStoredUserEmail();
+        if (!userEmail || roadmaps.length === 0) return;
+        
+        // Fetch all progress in parallel instead of sequentially
+        const progressPromises = roadmaps.map(async (roadmap) => {
+          try {
+            const res = await fetch(`/api/progress/${roadmap.id}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.progress) {
+                return { id: roadmap.id, progress: data.progress };
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to load progress for', roadmap.id);
+          }
+          return null;
+        });
+        
+        const results = await Promise.all(progressPromises);
+        const updates: Record<string, any> = {};
+        results.forEach(result => {
+          if (result) {
+            updates[result.id] = result.progress;
+          }
+        });
+        setRoadmapProgress(prev => ({ ...prev, ...updates }));
+      };
+      loadProgress();
+    }, [roadmaps]);
 
 // Determine next lesson to continue from (respecting stored progress)
   const getNextIncompleteLesson = (roadmap: Roadmap) => {
@@ -737,34 +748,19 @@ await fetch('/api/roadmaps', {
 
     setRoadmaps(updatedRoadmaps);
     
-// Persist lesson completion and XP/streak
-     const targetRoadmap = updatedRoadmaps.find(r => r.id === targetRoadmapId);
-     
-     if (targetRoadmapId) {
-       const xpValue = xpAdded || 0;
-       // Call both endpoints to ensure data is saved
-       Promise.all([
-         fetch('/api/complete-lesson', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-             lessonId: targetLessonId,
-             xpEarned: xpValue,
-             roadmapId: targetRoadmapId
-           })
-         }).catch(err => console.warn('Failed to persist lesson completion:', err)),
-         fetch('/api/progress', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-             roadmapId: targetRoadmapId,
-             lessonId: targetLessonId,
-             action: 'complete',
-             totalXP: xpValue
-           })
-         }).catch(err => console.warn('Failed to save progress:', err))
-       ]);
-     }
+// Persist lesson completion (single endpoint handles both operations)
+      if (targetRoadmapId) {
+        const xpValue = xpAdded || 0;
+        fetch('/api/complete-lesson', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lessonId: targetLessonId,
+            xpEarned: xpValue,
+            roadmapId: targetRoadmapId
+          })
+        }).catch(err => console.warn('Failed to complete lesson:', err));
+      }
 
     // Unlocking preset accomplishments
     const countCompletedLessons = updatedRoadmaps.find(r => r.id === targetRoadmapId)?.lessonsCompleted || 0;
