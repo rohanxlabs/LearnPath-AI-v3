@@ -445,7 +445,7 @@ export function HomeView({
                       {nextLesson.lesson.name}
                     </p>
                     <p className="text-[10px] text-zinc-400 mt-0.5">
-                      {nextLesson.lesson.type.replace('_', ' ')} · +{nextLesson.lesson.xpReward} XP
+                      {nextLesson.lesson.type?.replace('_', ' ') || 'Lesson'} · +{nextLesson.lesson.xpReward || 0} XP
                     </p>
                   </div>
                 )}

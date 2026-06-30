@@ -231,7 +231,7 @@ export function deriveTodaysTasks(roadmap: Roadmap | null): Omit<TodayTask, 'act
     tasks.push({
       id: `task-lesson-${current.lesson.id}`,
       title: `Finish ${current.lesson.name}`,
-      description: `Complete this ${current.lesson.type.replace('_', ' ')} in ${current.level.name}.`,
+      description: `Complete this ${current.lesson.type?.replace('_', ' ') || 'lesson'} in ${current.level.name}.`,
       completed: false,
       phaseId: current.phase.id,
       levelId: current.level.id,
