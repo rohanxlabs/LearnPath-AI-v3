@@ -197,7 +197,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               <div className="p-5 rounded-2xl border border-white/5 bg-[#0A0A0A] flex flex-col items-center text-center space-y-2">
                 <span className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Quiz Results Summary</span>
                 <p className="text-xl font-bold font-display text-white">
-                  Scored: <span className="text-purple-400">{quizScore} / {lesson.quizQuestions?.length}</span> Correct
+                  Scored: <span className="text-purple-400">{quizScore} / {lesson.quizQuestions?.length || 0}</span> Correct
                 </p>
                 {quizScore < (lesson.quizQuestions?.length || 0) && (
                   <button
