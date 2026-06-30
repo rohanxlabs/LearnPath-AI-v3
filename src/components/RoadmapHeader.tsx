@@ -11,8 +11,8 @@ interface RoadmapHeaderProps {
 export const RoadmapHeader: React.FC<RoadmapHeaderProps> = ({ roadmap, onBack }) => {
   const { goal, experienceLevel, totalXp, lessonsCompleted, phases } = roadmap;
   
-  const totalLessons = phases.reduce(
-    (acc, p) => acc + p.levels.reduce((a, l) => a + l.lessons.length, 0),
+  const totalLessons = (phases || []).reduce(
+    (acc, p) => acc + (p.levels || []).reduce((a, l) => a + (l.lessons?.length || 0), 0),
     0
   );
   

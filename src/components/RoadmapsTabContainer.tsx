@@ -23,14 +23,14 @@ interface RoadmapsTabContainerProps {
   onLessonClick?: (phaseId: string, levelId: string, lessonId: string) => void;
 }
 const generateMentorAnalysis = (roadmap: Roadmap, profile: UserProfile) => {
-  const completedLessons = roadmap.phases
-    .flatMap(p => p.levels)
-    .flatMap(l => l.lessons)
+  const completedLessons = (roadmap.phases || [])
+    .flatMap(p => p.levels || [])
+    .flatMap(l => l.lessons || [])
     .filter(lesson => lesson.status === 'completed').length;
 
-  const totalLessons = roadmap.phases
-    .flatMap(p => p.levels)
-    .flatMap(l => l.lessons).length;
+  const totalLessons = (roadmap.phases || [])
+    .flatMap(p => p.levels || [])
+    .flatMap(l => l.lessons || []).length;
 
   const completionPercentage = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
 
