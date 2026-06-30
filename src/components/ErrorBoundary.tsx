@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary] Caught render error:', error, errorInfo);
+    console.error('[ErrorBoundary] Caught render error:', error.message, errorInfo.componentStack);
   }
 
   handleReset = () => {
@@ -69,7 +69,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <details className="mt-6 max-w-lg w-full">
               <summary className="text-xs text-zinc-500 cursor-pointer">Technical details</summary>
               <pre className="mt-2 text-xs text-red-400 text-left max-w-lg overflow-auto bg-white/5 p-3 rounded-lg border border-white/10">
-                {this.state.error.message}
+                {`Error: ${this.state.error.message}\n\nStack:\n${this.state.error.stack || 'N/A'}`}
               </pre>
             </details>
           )}
