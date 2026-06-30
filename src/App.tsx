@@ -769,8 +769,8 @@ await fetch('/api/roadmaps', {
       });
 
       // Calculate new cumulative roadmap progress
-      const totalPhs = updatedPhases.length;
-      const donePhsPercent = updatedPhases.reduce((acc, p) => acc + p.progress, 0) / totalPhs;
+      const totalPhs = (updatedPhases || []).length;
+      const donePhsPercent = totalPhs > 0 ? (updatedPhases || []).reduce((acc, p) => acc + (p.progress || 0), 0) / totalPhs : 0;
       const overallProg = Math.round(donePhsPercent);
 
       return {
