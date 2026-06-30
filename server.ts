@@ -20,6 +20,7 @@ import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = 3000;
 
 const sql = neon(process.env.DATABASE_URL!);
