@@ -412,8 +412,8 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
       <AnimatePresence mode="wait">
         <motion.div key={currentIdx} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-6">
           <h3 className="font-bold text-xl text-white">{currentQ.question}</h3>
-          <div className="space-y-3">
-            {currentQ.options.map((opt, oIdx) => {
+<div className="space-y-3">
+             {(currentQ.options || []).map((opt, oIdx) => {
               const isSelected = selectedOpt === oIdx;
               const isCorrect = oIdx === currentQ.correctIndex;
               let stateClass = 'border-white/10 bg-white/5 hover:bg-white/10';

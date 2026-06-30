@@ -27,7 +27,7 @@ export function TopicDetailView({
  }: TopicDetailViewProps) {
   // Activity / lesson tab state
   const [activeLessonId, setActiveLessonId] = useState<string>(
-    initialLessonId || (level.lessons[0]?.id || '')
+    initialLessonId || (level.lessons?.[0]?.id || '')
   );
 
   // AI-Generated Overview state
@@ -39,9 +39,9 @@ export function TopicDetailView({
   const [loadingOverview, setLoadingOverview] = useState<boolean>(true);
 
   // Local state tracking to update progress and interactive states responsively
-  const [localLessons, setLocalLessons] = useState<Lesson[]>(level.lessons);
+  const [localLessons, setLocalLessons] = useState<Lesson[]>(level.lessons || []);
   const [completedLessons, setCompletedLessons] = useState<string[]>(
-    level.lessons.filter(l => l.status === 'completed').map(l => l.id)
+    (level.lessons || []).filter(l => l.status === 'completed').map(l => l.id)
   );
 
   // States for Quiz type lessons
@@ -88,11 +88,11 @@ const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
 
   // Sync state if level changes
   useEffect(() => {
-    setLocalLessons(level.lessons);
-    setCompletedLessons(level.lessons.filter(l => l.status === 'completed').map(l => l.id));
+    setLocalLessons(level.lessons || []);
+    setCompletedLessons((level.lessons || []).filter(l => l.status === 'completed').map(l => l.id));
     if (initialLessonId) {
       setActiveLessonId(initialLessonId);
-    } else if (level.lessons[0]) {
+    } else if (level.lessons?.[0]) {
       setActiveLessonId(level.lessons[0].id);
     }
   }, [level.id, initialLessonId]);
@@ -183,7 +183,7 @@ const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
     setQuizScores(prev => ({ ...prev, [les.id]: score }));
     setSubmittedQuizIds(prev => ({ ...prev, [les.id]: true }));
 
-    if (score === les.quizQuestions.length) {
+    if (score === (les.quizQuestions?.length || 0)) {
       handleMarkLessonDone(les.id, les.xpReward);
     }
   };
@@ -498,8 +498,8 @@ const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
                                 {q.question}
                               </h5>
 
-                              <div className="grid grid-cols-1 gap-2">
-                                {q.options.map((opt, oidx) => {
+<div className="grid grid-cols-1 gap-2">
+                                 {(q.options || []).map((opt, oidx) => {
                                   const isSelected = activeAnswer === oidx || (completedLessons.includes(activeLesson.id) && q.correctIndex === oidx);
                                   const isCorrect = q.correctIndex === oidx;
                                   
@@ -565,9 +565,9 @@ const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
                         <div className="p-5 rounded-2xl border border-white/5 bg-[#0A0A0A] flex flex-col items-center text-center space-y-2">
                           <span className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Quiz Results Summary</span>
                           <p className="text-lg md:text-xl font-bold font-display text-white">
-                            Scored: <span className="text-emerald-450">
-                              {completedLessons.includes(activeLesson.id) ? (activeLesson.quizQuestions?.length || 0) : quizScores[activeLesson.id] || 0} / {activeLesson.quizQuestions?.length}
-                            </span> Correct
+Scored: <span className="text-emerald-450">
+                               {completedLessons.includes(activeLesson.id) ? (activeLesson.quizQuestions?.length || 0) : quizScores[activeLesson.id] || 0} / {activeLesson.quizQuestions?.length || 0}
+                             </span> Correct
                           </p>
                           
                           {(!completedLessons.includes(activeLesson.id) || (quizScores[activeLesson.id] !== undefined && quizScores[activeLesson.id] < (activeLesson.quizQuestions?.length || 0))) && (

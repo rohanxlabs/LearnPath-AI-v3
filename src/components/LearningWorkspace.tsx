@@ -324,8 +324,8 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                         topicData.quizQuestions.map((q: any, idx: number) => (
                           <div key={q.id} className="p-3 bg-white/5 rounded-lg">
                             <p className="text-sm text-zinc-200 mb-2">{idx + 1}. {q.question}</p>
-                            <div className="space-y-1">
-                              {q.options.map((opt: string, optIdx: number) => (
+<div className="space-y-1">
+                               {(q.options || []).map((opt: string, optIdx: number) => (
                                 <label key={optIdx} className="flex items-center gap-2 text-xs cursor-pointer">
                                   <input
                                     type="radio"

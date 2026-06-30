@@ -40,7 +40,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
     setQuizScore(score);
     setSubmittedQuiz(true);
 
-    if (score === lesson.quizQuestions.length) {
+    if (score === (lesson.quizQuestions?.length || 0)) {
       setHasCompleted(true);
     }
   };
@@ -124,8 +124,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                     {q.question}
                   </h4>
 
-                  <div className="grid grid-cols-1 gap-2">
-                    {q.options.map((opt, oidx) => {
+<div className="grid grid-cols-1 gap-2">
+                     {(q.options || []).map((opt, oidx) => {
                       const isSelected = quizAnswers[q.id] === oidx;
                       const isCorrect = q.correctIndex === oidx;
                       
