@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Roadmap } from '../types';
 import { ArrowLeft } from 'lucide-react';
+import { typography, cx } from '../styles/theme';
 
 interface RoadmapHeaderProps {
   roadmap: Roadmap;
@@ -39,7 +40,7 @@ export const RoadmapHeader: React.FC<RoadmapHeaderProps> = ({ roadmap, onBack })
           </motion.button>
         )}
         
-        <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">
+        <h1 className="text-[32px] md:text-4xl font-extrabold text-white tracking-tight leading-tight">
           {goal}
         </h1>
         

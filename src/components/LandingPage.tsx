@@ -59,7 +59,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-lg">
             <Sparkles className="w-10 h-10 text-white" />
           </div>
-          <h1 className="font-display font-extrabold text-4xl md:text-5xl text-white mb-4">
+          <h1 className="font-display font-extrabold text-[40px] md:text-5xl text-white mb-4">
             LearnPath <span className="text-purple-400">AI</span>
           </h1>
           <p className="text-lg text-zinc-400 max-w-2xl mx-auto">

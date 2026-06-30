@@ -37,7 +37,7 @@ export function MobileHeader({
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
             <Sparkles className="w-4 h-4 text-white animate-pulse" />
           </div>
-          <span className="font-display font-bold text-lg tracking-tight text-slate-900 dark:text-white">
+          <span className="font-display text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
             LearnPath <span className="text-purple-600 dark:text-purple-400 font-extrabold">AI</span>
           </span>
         </div>
@@ -112,7 +112,7 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-500/15 to-blue-500/15 border border-purple-500/25 rounded-2xl -z-10 animate-[pulse_3s_infinite]" />
               )}
               <IconComponent className={`w-4.5 h-4.5 mb-1 ${isActive ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400 dark:drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'stroke-[2px]'}`} />
-              <span className="text-[10px] tracking-wide font-medium">{tab.label}</span>
+              <span className="text-xs tracking-wide font-medium">{tab.label}</span>
             </button>
           );
         })}
@@ -167,7 +167,7 @@ export function SideDrawer({
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <span className="font-display font-bold text-lg tracking-tight text-zinc-900 dark:text-white">
+            <span className="font-display text-lg font-semibold tracking-tight text-zinc-900 dark:text-white">
               LearnPath <span className="text-purple-600 dark:text-purple-400">AI</span>
             </span>
           </div>
