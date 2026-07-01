@@ -117,21 +117,22 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
     : 0;
 
   return (
-    <div className="flex h-[calc(100vh-10rem)] bg-[#0A0A0A] rounded-3xl overflow-hidden border border-white/5">
-      <div className="w-80 border-r border-white/5 flex flex-col">
+    <div className="flex flex-col lg:flex-row min-h-[calc(100vh-10rem)] bg-[#0A0A0A] rounded-3xl overflow-hidden border border-white/5 pb-20 lg:pb-0">
+      {/* Left sidebar: Course info + lesson navigation - order 3 on mobile */}
+      <div className="w-full lg:w-80 border-b lg:border-b-0 lg:border-r border-white/5 flex flex-col order-3 lg:order-1">
         <motion.div 
-          className="p-5 border-b border-white/5"
+          className="p-4 lg:p-5 border-b border-white/5"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <h3 className="font-display font-bold text-lg text-white">{roadmap.goal}</h3>
+          <h3 className="font-display font-bold text-lg text-white break-words">{roadmap.goal}</h3>
           <div className="flex items-center gap-2 mt-2">
             <Trophy className="w-4 h-4 text-purple-400" />
             <span className="text-xs text-zinc-400">{progressPercent}% Complete</span>
           </div>
         </motion.div>
         
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        <div className="flex-1 overflow-y-auto p-3 lg:p-3 space-y-2">
           {roadmap.phases.map((phase, phaseIdx) => (
             <motion.div 
               key={phase.id} 
@@ -217,12 +218,13 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-5 border-b border-white/5">
+      {/* Center: Learning content - order 4 on mobile */}
+      <div className="w-full lg:flex-1 flex flex-col overflow-hidden order-4 lg:order-2">
+        <div className="p-4 lg:p-5 border-b border-white/5">
           <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <span>{roadmap.goal}</span>
-            <ChevronRight className="w-3 h-3" />
-            {topicData && <span className="text-white">{topicData.name}</span>}
+            <span className="truncate">{roadmap.goal}</span>
+            <ChevronRight className="w-3 h-3 shrink-0" />
+            {topicData && <span className="text-white truncate">{topicData.name}</span>}
           </div>
         </div>
 
@@ -233,7 +235,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-1 overflow-y-auto p-6 space-y-4"
+              className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4"
             >
               {[0, 1, 2].map((i) => (
                 <motion.div
@@ -253,7 +255,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="flex-1 overflow-y-auto p-6 space-y-6"
+              className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6"
             >
               <section>
                 <h2 className="font-display font-bold text-xl text-white mb-4">Learning Objectives</h2>
@@ -416,7 +418,8 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
         </AnimatePresence>
       </div>
 
-      <div className="w-72 border-l border-white/5 p-5 space-y-4">
+      {/* Right sidebar: Progress - order 2 on mobile */}
+      <div className="w-full lg:w-72 border-b lg:border-b-0 lg:border-l border-white/5 p-4 lg:p-5 space-y-4 order-2 lg:order-3">
         <div>
           <span className="text-[10px] font-bold uppercase text-zinc-400">Progress</span>
           <div className="mt-2 space-y-3">
