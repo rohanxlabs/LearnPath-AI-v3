@@ -92,15 +92,16 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-zinc-950/85 border-t border-zinc-200 dark:border-white/5 pb-safe shadow-[0_-10px_35px_rgba(0,0,0,0.05)] dark:shadow-[0_-15px_35px_rgba(0,0,0,0.6)] backdrop-blur-lg transition-all duration-300">
-      <div className="flex justify-around items-center h-16 max-w-xl mx-auto px-4">
+      <div className="grid grid-cols-5 items-center h-16 max-w-xl mx-auto px-2">
         {tabs.map((tab) => {
           const IconComponent = tab.icon;
           const isActive = activeTab === tab.id;
+          const displayLabel = tab.id === 'mentor' ? 'Mentor' : tab.label;
           return (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`relative flex flex-col items-center justify-center py-1 px-3.5 rounded-2xl transition-all duration-300 cursor-pointer ${
+              className={`relative flex flex-col items-center justify-center flex-1 min-w-0 py-1 px-1 sm:px-3.5 rounded-2xl transition-all duration-300 cursor-pointer ${
                 isActive
                   ? 'text-zinc-900 dark:text-white font-bold scale-102'
                   : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -109,10 +110,10 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
             >
               {/* Active gradient pill background highlight */}
               {isActive && (
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/15 to-blue-500/15 border border-purple-500/25 rounded-2xl -z-10 animate-[pulse_3s_infinite]" />
+                <div className="absolute inset-x-1 sm:inset-0 bg-gradient-to-r from-purple-500/15 to-blue-500/15 border border-purple-500/25 rounded-xl sm:rounded-2xl -z-10 animate-[pulse_3s_infinite]" />
               )}
-              <IconComponent className={`w-4.5 h-4.5 mb-1 ${isActive ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400 dark:drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'stroke-[2px]'}`} />
-              <span className="text-xs tracking-wide font-medium">{tab.label}</span>
+              <IconComponent className={`w-4.5 h-4.5 mb-0.5 ${isActive ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400 dark:drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'stroke-[2px]'}`} />
+              <span className="text-[10px] sm:text-xs tracking-wide font-medium whitespace-nowrap truncate w-full text-center">{displayLabel}</span>
             </button>
           );
         })}
