@@ -21,10 +21,43 @@ import { ProjectsTab } from './components/ProjectsTab';
 import { AIInsightsTab } from './components/AIInsightsTab';
 import { RoadmapHero } from './components/RoadmapHero';
 import { AIMentorAnalysis } from './components/AIMentorAnalysis';
-import { createEmptyProfile, DEFAULT_SETTINGS } from './userData';
 import { SplashScreen } from './components/SplashScreen';
 import { LandingPage } from './components/LandingPage';
 import { OnboardingPage } from './components/OnboardingPage';
+
+const DEFAULT_AVATAR =
+  'data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" rx="64" fill="%238b5cf6"/%3E%3Ccircle cx="64" cy="48" r="22" fill="white" opacity=".9"/%3E%3Cpath d="M28 112c7-22 20-33 36-33s29 11 36 33" fill="white" opacity=".9"/%3E%3C/svg%3E';
+
+const DEFAULT_SETTINGS: UserSettings = {
+  theme: 'system',
+  notificationsEnabled: true,
+  emailNotifications: true,
+  pushNotifications: false,
+  privacyPublicProfile: false,
+};
+
+function createEmptyProfile(email = '', name = ''): UserProfile {
+  const normalizedEmail = email.trim().toLowerCase();
+  const displayName =
+    name.trim() ||
+    normalizedEmail.split('@')[0]?.replace(/[._-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase()) ||
+    'Learner';
+
+  return {
+    id: normalizedEmail ? `user-${normalizedEmail}` : 'user-pending',
+    name: displayName,
+    email: normalizedEmail,
+    avatar: DEFAULT_AVATAR,
+    xp: 0,
+    level: 1,
+    streak: 0,
+    isPro: false,
+    roadmapsCompleted: 0,
+    hoursStudied: 0,
+    aiSessionsCount: 0,
+    createdAt: new Date().toISOString(),
+  };
+}
 
 export function renderHomeView(
    props: {
@@ -109,7 +142,7 @@ export default function App() {
     }
 }, [pwa.isOnline, wasOffline]);
 
-const USER_EMAIL_STORAGE_KEY = 'userEmail';
+  const [redirectAfterLogin, setRedirectAfterLogin] = useState<string | null>(null);
 
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -155,18 +188,12 @@ const USER_EMAIL_STORAGE_KEY = 'userEmail';
 
   useEffect(() => {
     const verifySession = async () => {
-      const savedEmail = localStorage.getItem(USER_EMAIL_STORAGE_KEY);
-      const email = savedEmail?.trim().toLowerCase();
-      if (!email) {
-        setIsLoadingAuth(false);
-        return;
-      }
-
       try {
         const response = await fetch('/api/session');
         if (!response.ok) throw new Error('Session invalid');
         const data = await response.json();
-        if (data.authenticated && data.email === email) {
+        if (data.authenticated && data.email) {
+          const email = data.email;
           const name = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
           setProfile(prev => ({ ...createEmptyProfile(email, name), name, avatar: prev.avatar }));
           setSettings(DEFAULT_SETTINGS);
@@ -175,14 +202,36 @@ const USER_EMAIL_STORAGE_KEY = 'userEmail';
           setAchievements([]);
           setNotifications([]);
           setChats([]);
-          localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
           setActiveTab('home');
           setIsAuthenticated(true);
+
+          try {
+            const profileRes = await fetch('/api/user-profile');
+            if (profileRes.ok) {
+              const profileData = await profileRes.json();
+              if (profileData.profile && Object.keys(profileData.profile).length > 0) {
+                setProfile(prev => ({ ...prev, ...profileData.profile }));
+              }
+              if (profileData.settings && Object.keys(profileData.settings).length > 0) {
+                setSettings(prev => ({ ...prev, ...profileData.settings }));
+              }
+              if (profileData.achievements && Array.isArray(profileData.achievements)) {
+                setAchievements(profileData.achievements);
+              }
+              if (profileData.notifications && Array.isArray(profileData.notifications)) {
+                setNotifications(profileData.notifications);
+              }
+              if (profileData.chats && Array.isArray(profileData.chats)) {
+                setChats(profileData.chats);
+              }
+            }
+          } catch (profileErr) {
+            console.warn('Failed to load user profile from database:', profileErr);
+          }
         } else {
-          throw new Error('Session mismatch');
+          setIsAuthenticated(false);
         }
       } catch {
-        localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
         setIsAuthenticated(false);
       } finally {
         setIsLoadingAuth(false);
@@ -195,7 +244,33 @@ const USER_EMAIL_STORAGE_KEY = 'userEmail';
   // Load recommendations on mount
   useEffect(() => {
     fetchRecommendations();
-}, []);
+  }, []);
+
+  const saveUserProfileToServer = async () => {
+    if (!isAuthenticated || !profile.email) return;
+    try {
+      await fetch('/api/user-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile,
+          settings,
+          achievements,
+          notifications,
+          chats
+        })
+      });
+    } catch (err) {
+      console.warn('Failed to save user profile:', err);
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      saveUserProfileToServer();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [profile, settings, achievements, notifications, chats, isAuthenticated]);
 
   const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
@@ -283,14 +358,13 @@ const USER_EMAIL_STORAGE_KEY = 'userEmail';
   };
 
 // Sync roadmaps with Database per user
-   useEffect(() => {
-     async function syncRoadmapsFromDatabase() {
-       if (!isAuthenticated) return;
-       const email = profile.email;
-       if (!email) return;
-       localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
+    useEffect(() => {
+      async function syncRoadmapsFromDatabase() {
+        if (!isAuthenticated) return;
+        const email = profile.email;
+        if (!email) return;
 
-       try {
+        try {
          const response = await fetch('/api/roadmaps');
          if (response.ok) {
            const data = await response.json();
@@ -318,17 +392,16 @@ const USER_EMAIL_STORAGE_KEY = 'userEmail';
        }
      }
 
-     if (isAuthenticated && profile.email) {
-       syncRoadmapsFromDatabase();
-       const storedRedirect = localStorage.getItem('redirectAfterLogin');
-       if (storedRedirect) {
-         setActiveTab(storedRedirect.replace('/', '') || 'home');
-         localStorage.removeItem('redirectAfterLogin');
-       }
-     }
+      if (isAuthenticated && profile.email) {
+        syncRoadmapsFromDatabase();
+        if (redirectAfterLogin) {
+          setActiveTab(redirectAfterLogin.replace('/', '') || 'home');
+          setRedirectAfterLogin(null);
+        }
+      }
    }, [profile.email, isAuthenticated]);
 
-  const getStoredUserEmail = () => localStorage.getItem(USER_EMAIL_STORAGE_KEY);
+  const getStoredUserEmail = () => profile.email;
 
   // Fetch from Express recommendations API
   const fetchRecommendations = async () => {
@@ -391,7 +464,6 @@ const USER_EMAIL_STORAGE_KEY = 'userEmail';
         return;
       }
 
-      localStorage.setItem(USER_EMAIL_STORAGE_KEY, data.email || email);
       const name = (data.email || email).split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       setProfile(prev => ({ ...createEmptyProfile(data.email || email, name), name, avatar: prev.avatar }));
       setSettings(DEFAULT_SETTINGS);
@@ -409,10 +481,9 @@ const USER_EMAIL_STORAGE_KEY = 'userEmail';
       }
       
       if (mode === 'signup') {
-        const storedRedirect = localStorage.getItem('redirectAfterLogin');
-        if (storedRedirect) {
-          setActiveTab(storedRedirect.replace('/', '') || 'home');
-          localStorage.removeItem('redirectAfterLogin');
+        if (redirectAfterLogin) {
+          setActiveTab(redirectAfterLogin.replace('/', '') || 'home');
+          setRedirectAfterLogin(null);
         } else {
           setActiveTab('home');
         }
@@ -431,9 +502,6 @@ const USER_EMAIL_STORAGE_KEY = 'userEmail';
     } catch {
       // Continue with local cleanup even if network fails
     }
-
-    localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
-    localStorage.removeItem('redirectAfterLogin');
 
     setIsAuthenticated(false);
     setAuthEmail('');

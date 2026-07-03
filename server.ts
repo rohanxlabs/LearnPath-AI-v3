@@ -311,15 +311,20 @@ app.get('/api/session', (req, res) => {
 
 // 2. API: Generate Roadmaps
 app.post('/api/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
-  const { goal, experienceLevel, weeklyHours, preferredStyle } = req.body;
+  const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;
 
   if (!goal) {
     return res.status(400).json({ error: 'Goal is required' });
   }
 
+// University-specific system prompt for syllabus tailoring
+const universityContext = college && branch && year 
+  ? `\nUser is a ${sanitizeForPrompt(year)} student at ${sanitizeForPrompt(college)} studying ${sanitizeForPrompt(branch)}. Tailor all content to their university's syllabus, especially AKTU curriculum if applicable.`
+  : '';
+
 const roadmapSystemPrompt = `
 Generate a learning roadmap for: "${sanitizeForPrompt(goal)}".
-Experience: "${sanitizeForPrompt(experienceLevel || 'Beginner')}", ${sanitizeForPrompt(weeklyHours || 5)} hrs/week, "${sanitizeForPrompt(preferredStyle || 'Hands-on')}" style.
+Experience: "${sanitizeForPrompt(experienceLevel || 'Beginner')}", ${sanitizeForPrompt(weeklyHours || 5)} hrs/week, "${sanitizeForPrompt(preferredStyle || 'Hands-on')}" style.${universityContext}
 
 Return JSON with prerequisites in lessons:
 { "goal": "...", "phases": [{ "id": "ph-1", "name": "Foundations", "skillsCovered": ["skill"], "levels": [{ "id": "lvl-1", "name": "Basics", "lessons": [{ "id": "les-1", "name": "Intro", "type": "learn", "xpReward": 20, "status": "available", "prerequisites": [], "content": "Brief markdown lesson" }, { "id": "les-2", "name": "Quiz", "type": "quiz", "xpReward": 50, "status": "locked", "prerequisites": ["les-1"], "content": "Quiz", "quizQuestions": [{ "id": "q-1", "question": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "...", "misconceptionNotes": ["Why wrong"] }] }] }] }] }
@@ -1732,6 +1737,103 @@ app.get('/api/user-stats', requireAuth, async (req, res) => {
   }
 });
 
+// 10c. API: Get user resource states (completed/saved resource IDs)
+app.get('/api/user-resource-states', requireAuth, async (req, res) => {
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    const states = dbData?.progress?.resource_states || { completedIds: [], savedIds: [] };
+    return res.json(states);
+  } catch (error) {
+    console.error('Get resource states error:', error);
+    return res.json({ completedIds: [], savedIds: [] });
+  }
+});
+
+app.post('/api/user-resource-states', requireAuth, async (req, res) => {
+  const userEmail = req.session.userEmail;
+  const { completedIds, savedIds } = req.body;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: true });
+    if (!dbData.progress) dbData.progress = {};
+    dbData.progress.resource_states = {
+      completedIds: Array.isArray(completedIds) ? completedIds : [],
+      savedIds: Array.isArray(savedIds) ? savedIds : []
+    };
+    await saveUserDB(userEmail, dbData);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Save resource states error:', error);
+    return res.status(500).json({ error: 'Failed to save resource states' });
+  }
+});
+
+// 10d. API: Get user profile data from Neon
+app.get('/api/user-profile', requireAuth, async (req, res) => {
+  const userEmail = req.session.userEmail;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    const progress = dbData?.progress || {};
+    return res.json({
+      profile: progress.profile || {},
+      settings: progress.settings || {},
+      achievements: progress.achievements || [],
+      notifications: progress.notifications || [],
+      chats: progress.chats || []
+    });
+  } catch (error) {
+    console.error('Get user profile error:', error);
+    return res.json({
+      profile: {},
+      settings: {},
+      achievements: [],
+      notifications: [],
+      chats: []
+    });
+  }
+});
+
+app.put('/api/user-profile', requireAuth, async (req, res) => {
+  const userEmail = req.session.userEmail;
+  const { profile, settings, achievements, notifications, chats } = req.body;
+
+  if (!userEmail) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: true });
+    if (!dbData.progress) dbData.progress = {};
+    
+    if (profile) dbData.progress.profile = profile;
+    if (settings) dbData.progress.settings = settings;
+    if (achievements) dbData.progress.achievements = Array.isArray(achievements) ? achievements : [];
+    if (notifications) dbData.progress.notifications = Array.isArray(notifications) ? notifications : [];
+    if (chats) dbData.progress.chats = Array.isArray(chats) ? chats : [];
+    
+    await saveUserDB(userEmail, dbData);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Update user profile error:', error);
+    return res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
 // 11. API: Complete a lesson
 app.post('/api/complete-lesson', requireAuth, async (req, res) => {
   const { lessonId, xpEarned, xpReward, roadmapId } = req.body;
@@ -2163,7 +2265,7 @@ async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
     const currentRoadmap = result[0]?.roadmap || {};
     const currentProgress = result[0]?.progress || {};
 
-    const { passwordHash, roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats } = dbData;
+    const { passwordHash, roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats, resource_states } = dbData;
 
     const newRoadmapData = {
       roadmaps: roadmaps || currentRoadmap.roadmaps || [],
@@ -2177,7 +2279,8 @@ async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
       settings: settings || currentProgress.settings || {},
       achievements: achievements || currentProgress.achievements || [],
       notifications: notifications || currentProgress.notifications || [],
-      chats: chats || currentProgress.chats || []
+      chats: chats || currentProgress.chats || [],
+      resource_states: resource_states || currentProgress.resource_states || { completedIds: [], savedIds: [] }
     };
 
     const xp = (profile as any)?.xp ?? (currentProgress.profile as any)?.xp ?? 0;

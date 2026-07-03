@@ -13,3 +13,25 @@ dev-server.err.log
 .vite/
 .kilo/
 .agent/
+
+# IDE / editor artifacts
+.vscode/
+.idea/
+*.swp
+*~
+*#
+
+# OS artifacts
+Thumbs.db
+Desktop.ini
+
+# Local env overrides
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+
+# Temp directories
+tmp/
+temp/

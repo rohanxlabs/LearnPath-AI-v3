@@ -3,7 +3,6 @@ import { BookOpen, Video, FileText, Bookmark, ExternalLink, CheckCircle, Search,
 import { motion } from 'motion/react';
 import { Roadmap, CuratedResource } from '../types';
 import { getRecommendationsForRoadmap } from '../lib/recommendations';
-import { useLocalStorage } from '../hooks/useLocalStorage';
 import { buttonStyles, glassCardClass } from '../styles/theme';
 import { LoadingSpinner, SkeletonCard } from './Skeleton';
 import { EmptyState } from './EmptyState';
@@ -18,9 +17,8 @@ type FilterStatus = 'all' | 'completed' | 'unread' | 'saved';
 export function ResourcesTab({ roadmap }: ResourcesTabProps) {
   const [resources, setResources] = useState<CuratedResource[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  
-  const [completedIds, setCompletedIds] = useLocalStorage<string[]>('completedResources', []);
-  const [savedIds, setSavedIds] = useLocalStorage<string[]>('savedResources', []);
+  const [completedIds, setCompletedIds] = useState<string[]>([]);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
 
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
@@ -45,16 +43,44 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
     loadResources();
   }, [roadmap.id, roadmap]);
 
+  useEffect(() => {
+    async function loadStates() {
+      try {
+        const res = await fetch('/api/user-resource-states');
+        if (res.ok) {
+          const data = await res.json();
+          setCompletedIds(data.completedIds || []);
+          setSavedIds(data.savedIds || []);
+        }
+      } catch (err) {
+        console.error('Failed to load resource states:', err);
+      }
+    }
+    loadStates();
+  }, []);
+
+  const persistStates = async (newCompletedIds: string[], newSavedIds: string[]) => {
+    try {
+      await fetch('/api/user-resource-states', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completedIds: newCompletedIds, savedIds: newSavedIds })
+      });
+    } catch (err) {
+      console.error('Failed to persist resource states:', err);
+    }
+  };
+
   const toggleCompleted = (id: string) => {
-    setCompletedIds(prev => 
-      prev.includes(id) ? prev.filter(rId => rId !== id) : [...prev, id]
-    );
+    const newCompleted = completedIds.includes(id) ? completedIds.filter(rId => rId !== id) : [...completedIds, id];
+    setCompletedIds(newCompleted);
+    persistStates(newCompleted, savedIds);
   };
 
   const toggleSaved = (id: string) => {
-    setSavedIds(prev => 
-      prev.includes(id) ? prev.filter(rId => rId !== id) : [...prev, id]
-    );
+    const newSaved = savedIds.includes(id) ? savedIds.filter(rId => rId !== id) : [...savedIds, id];
+    setSavedIds(newSaved);
+    persistStates(completedIds, newSaved);
   };
 
   const filteredResources = useMemo(() => {

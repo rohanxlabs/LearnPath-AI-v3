@@ -54,9 +54,9 @@ const transformRoadmapToSkillTree = (roadmap: Roadmap): SkillNode | null => {
   if (!roadmap || !roadmap.phases) return null;
 
   const findCurrentNode = (phases: any[]) => {
-    for (const phase of phases) {
-      for (const level of phase.levels) {
-        for (const lesson of level.lessons) {
+    for (const phase of phases || []) {
+      for (const level of (phase.levels || [])) {
+        for (const lesson of (level.lessons || [])) {
           if (lesson.status === 'current') {
             return { phase: phase.name, level: level.name, lesson: lesson.name };
           }
@@ -70,18 +70,17 @@ const transformRoadmapToSkillTree = (roadmap: Roadmap): SkillNode | null => {
 
   return {
     name: roadmap.goal,
-    status: 'current', // The root is always considered current/in-progress
-    children: roadmap.phases.map(phase => ({
+    status: 'current',
+    children: (roadmap.phases || []).map(phase => ({
       name: phase.name,
-      status: phase.levels.every(l => l.lessons.every(le => le.status === 'completed')) ? 'completed' : 'current',
-      children: phase.levels.map(level => ({
+      status: (phase.levels || []).every(l => (l.lessons || []).every(le => le.status === 'completed')) ? 'completed' : 'current',
+      children: (phase.levels || []).map(level => ({
         name: level.name,
-        status: level.lessons.every(le => le.status === 'completed') ? 'completed' : 'current',
-        children: level.lessons.map(lesson => {
+        status: (level.lessons || []).every(le => le.status === 'completed') ? 'completed' : 'current',
+        children: (level.lessons || []).map(lesson => {
           let status: SkillNode['status'] = lesson.status === 'completed' ? 'completed' : 'locked';
           
           if (status !== 'completed') {
-             // Logic to determine if a lesson is 'available'
              if (currentNode) {
                const isCurrentPhase = phase.name === currentNode.phase;
                const isCurrentLevel = level.name === currentNode.level;
@@ -91,8 +90,7 @@ const transformRoadmapToSkillTree = (roadmap: Roadmap): SkillNode | null => {
                  status = 'locked';
                }
              } else {
-                // If no current lesson, the first non-completed is available
-                const firstLesson = roadmap.phases[0]?.levels[0]?.lessons[0];
+                const firstLesson = roadmap.phases?.[0]?.levels?.[0]?.lessons?.[0];
                 if(lesson.name === firstLesson?.name) {
                     status = 'available';
                 } else {

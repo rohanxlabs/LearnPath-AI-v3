@@ -243,18 +243,18 @@ export function RoadmapsTabContainer({
           progress={selectedRoadmap.progressPercent}
           recommendedLessonName={
             selectedRoadmap.phases
-              .flatMap(p => p.levels)
-              .flatMap(l => l.lessons)
+              .flatMap(p => p.levels || [])
+              .flatMap(l => l.lessons || [])
               .find(l => l.status === 'available')?.name
           }
           onContinue={() => {
             const availableLesson = selectedRoadmap.phases
-              .flatMap(p => p.levels)
-              .flatMap(l => l.lessons)
+              .flatMap(p => p.levels || [])
+              .flatMap(l => l.lessons || [])
               .find(l => l.status === 'available');
             if (availableLesson && onLessonClick) {
-              const phase = selectedRoadmap.phases.find(p => p.levels.some(l => l.lessons.some(les => les.id === availableLesson.id)));
-              const level = phase?.levels.find(l => l.lessons.some(les => les.id === availableLesson.id));
+              const phase = selectedRoadmap.phases.find(p => (p.levels || []).some(l => (l.lessons || []).some(les => les.id === availableLesson.id)));
+              const level = phase?.levels.find(l => (l.lessons || []).some(les => les.id === availableLesson.id));
               if (phase && level) {
                 onLessonClick(phase.id, level.id, availableLesson.id);
               }

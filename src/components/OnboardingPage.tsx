@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, Target, Clock, BookOpen, CheckCircle } from 'lucide-react';
+import { Sparkles, Target, Clock, BookOpen, Brain } from 'lucide-react';
 
 interface OnboardingPageProps {
   onComplete: (preferences: OnboardingPreferences) => void;
@@ -11,10 +11,16 @@ export interface OnboardingPreferences {
   experienceLevel: string;
   weeklyHours: number;
   learningStyle: string;
+  college: string;
+  branch: string;
+  year: string;
 }
 
 const experienceLevels = ['Beginner', 'Intermediate', 'Advanced'];
 const learningStyles = ['Visual', 'Hands-on', 'Theoretical'];
+const colleges = ['Sharda University', 'Galgotias University', 'AKTU Universities (Other)', 'Other Private University', 'Other State University'];
+const branches = ['Computer Science Engineering (CSE)', 'Information Technology (IT)', 'Electronics & Communication (ECE)', 'Mechanical Engineering', 'Civil Engineering', 'Other'];
+const years = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
 export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onComplete }) => {
   const [step, setStep] = useState(1);
@@ -23,10 +29,13 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onComplete }) =>
     experienceLevel: 'Beginner',
     weeklyHours: 5,
     learningStyle: 'Visual',
+    college: 'Galgotias University',
+    branch: 'Computer Science Engineering (CSE)',
+    year: '2nd Year',
   });
 
   const handleNext = () => {
-    if (step < 3) {
+    if (step < 4) {
       setStep(step + 1);
     } else {
       onComplete(preferences);
@@ -46,9 +55,14 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onComplete }) =>
       icon: Target,
     },
     {
+      title: 'Tell us about your college',
+      description: 'We\'ll tailor content to your university\'s syllabus.',
+      icon: BookOpen,
+    },
+    {
       title: 'What\'s your experience level?',
       description: 'This helps us customize the difficulty and pace.',
-      icon: BookOpen,
+      icon: Brain,
     },
     {
       title: 'How much time can you dedicate?',
@@ -77,7 +91,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onComplete }) =>
               <p className="text-xs text-zinc-400">{currentStep.description}</p>
             </div>
           </div>
-          <div className="text-xs text-zinc-500">{step}/3</div>
+          <div className="text-xs text-zinc-500">{step}/4</div>
         </div>
 
         <div className="space-y-6">
@@ -95,7 +109,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onComplete }) =>
                 value={preferences.learningGoal}
                 onChange={(e) => setPreferences({ ...preferences, learningGoal: e.target.value })}
                 placeholder="e.g., Full Stack Web Development"
-                className="w-full px-4 py-3 bg-[#0A0A0A] border border-white/5 rounded-xl text-sm text-white focus:outline-hidden focus:border-purple-500"
+                className="w-full px-4 py-3 bg-[#0A0A0A] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-purple-500"
               />
               <p className="text-xs text-zinc-500 mt-2">
                 Be specific for better recommendations. Try "React with TypeScript" or "Python for Data Science".
@@ -104,6 +118,66 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onComplete }) =>
           )}
 
           {step === 2 && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono mb-2">
+                  Your College
+                </label>
+                <select
+                  value={preferences.college}
+                  onChange={(e) => setPreferences({ ...preferences, college: e.target.value })}
+                  className="w-full px-4 py-3 bg-[#0A0A0A] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-purple-500"
+                >
+                  {colleges.map((college) => (
+                    <option key={college} value={college}>{college}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono mb-2">
+                  Your Branch
+                </label>
+                <select
+                  value={preferences.branch}
+                  onChange={(e) => setPreferences({ ...preferences, branch: e.target.value })}
+                  className="w-full px-4 py-3 bg-[#0A0A0A] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-purple-500"
+                >
+                  {branches.map((branch) => (
+                    <option key={branch} value={branch}>{branch}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono mb-2">
+                  Current Year
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {years.map((year) => (
+                    <button
+                      key={year}
+                      onClick={() => setPreferences({ ...preferences, year: year })}
+                      className={`py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                        preferences.year === year
+                          ? 'bg-gradient-to-br from-purple-500 to-blue-600 text-white'
+                          : 'bg-[#0A0A0A] text-zinc-400 border border-white/5 hover:text-white'
+                      }`}
+                    >
+                      {year}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {step === 3 && (
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -154,7 +228,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onComplete }) =>
             </motion.div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -197,7 +271,7 @@ export const OnboardingPage: React.FC<OnboardingPageProps> = ({ onComplete }) =>
             disabled={step === 1 && !preferences.learningGoal}
             className="flex-1 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {step < 3 ? 'Next' : 'Create My Roadmap'}
+            {step < 4 ? 'Next' : 'Create My Roadmap'}
           </motion.button>
         </div>
       </motion.div>
