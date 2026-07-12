@@ -429,51 +429,6 @@ body {
   border: 1px solid rgba(148, 163, 184, 0.3) !important;
 }
 
-/* Light theme overrides for Glassmorphism */
-.light [class*="glass-card"] {
-  background: rgba(255, 255, 255, 0.75) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  border: 1px solid rgba(15, 23, 42, 0.08) !important;
-  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.04) !important;
-  color: #0F172A !important;
-}
-
-.light .glass-card-purple {
-  background: linear-gradient(135deg, rgba(168, 85, 247, 0.06), rgba(255, 255, 255, 0.8)) !important;
-  border: 1px solid rgba(168, 85, 247, 0.15) !important;
-}
-
-.light .glass-card-blue {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(255, 255, 255, 0.8)) !important;
-  border: 1px solid rgba(59, 130, 246, 0.15) !important;
-}
-
-.light .glass-card-orange {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(255, 255, 255, 0.8)) !important;
-  border: 1px solid rgba(245, 158, 11, 0.15) !important;
-}
-
-.light .glass-card-orange-red {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.06), rgba(255, 255, 255, 0.8)) !important;
-  border: 1px solid rgba(239, 68, 68, 0.15) !important;
-}
-
-.light .glass-card-teal {
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.06), rgba(255, 255, 255, 0.8)) !important;
-  border: 1px solid rgba(20, 184, 166, 0.15) !important;
-}
-
-.light .glass-card-emerald {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(255, 255, 255, 0.8)) !important;
-  border: 1px solid rgba(16, 185, 129, 0.15) !important;
-}
-
-.light .glass-card-rose {
-  background: linear-gradient(135deg, rgba(244, 63, 94, 0.06), rgba(255, 255, 255, 0.8)) !important;
-  border: 1px solid rgba(244, 63, 94, 0.15) !important;
-}
-
 /* Final light-theme guardrails for utilities that are hard-coded in components. */
 .light,
 .light * {
@@ -498,9 +453,9 @@ body {
   background: rgba(255, 255, 255, 0.72) !important;
   backdrop-filter: blur(18px) saturate(150%) !important;
   -webkit-backdrop-filter: blur(18px) saturate(150%) !important;
-  border-color: rgba(148, 163, 184, 0.28) !important;
+  border-color: rgba(100, 116, 139, 0.4) !important;
   box-shadow:
-    0 22px 50px rgba(15, 23, 42, 0.08),
+    0 22px 50px rgba(15, 23, 42, 0.12),
     0 1px 0 rgba(255, 255, 255, 0.85) inset !important;
   color: #0f172a !important;
 }
@@ -768,8 +723,8 @@ body {
 }
 
 .light .home-view .home-nested-glass {
-  background: rgba(255, 255, 255, 0.55) !important;
-  border-color: rgba(148, 163, 184, 0.22) !important;
+  background: rgba(255, 255, 255, 0.65) !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
 }
 
 .home-view .home-skeleton {
