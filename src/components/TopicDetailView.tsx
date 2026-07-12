@@ -296,7 +296,7 @@ const [hintLevel, setHintLevel] = useState<Record<string, number>>({});
               </div>
 
               <div>
-                <span className="text-2xl font-extrabold text-white font-display block leading-none">
+                <span className="text-xl sm:text-2xl font-extrabold text-white font-display block leading-none">
                   {completedCount} / {totalWeight}
                 </span>
                 <span className="text-[10px] text-zinc-500 mt-1 block">Syllabus segments unlocked & passed</span>

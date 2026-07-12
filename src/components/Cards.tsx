@@ -140,7 +140,7 @@ export function StatsCard({ stats }: StatsCardProps) {
               </div>
             </div>
             <div className="mt-4">
-              <span className="text-2xl font-bold text-white font-display">
+              <span className="text-xl sm:text-2xl font-bold text-white font-display">
                 {item.value}
               </span>
               <span className="block text-[10px] text-zinc-400 mt-1 truncate">

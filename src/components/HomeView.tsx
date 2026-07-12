@@ -288,7 +288,7 @@ export function HomeView({
             <span className="text-xs font-semibold text-purple-300 uppercase tracking-widest font-mono">
               {getTimeGreeting()}, {firstName}
             </span>
-            <h1 className="font-display text-[28px] sm:text-3xl font-bold text-white mt-1 leading-tight">
+            <h1 className="font-display text-xl sm:text-3xl font-bold text-white mt-1 leading-tight">
               Continue your learning journey
             </h1>
 
@@ -384,7 +384,7 @@ export function HomeView({
                     <Icon className="w-4 h-4" />
                   </div>
                 </div>
-                <p className="font-display text-2xl font-bold text-white mt-3">{card.value}</p>
+                <p className="font-display text-xl sm:text-2xl font-bold text-white mt-3">{card.value}</p>
                 <p className="text-[10px] text-zinc-400 mt-1 truncate">{card.sub}</p>
               </GlassCard>
             );

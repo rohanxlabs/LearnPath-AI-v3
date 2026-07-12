@@ -96,7 +96,7 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-bold text-white">Portfolio Builder</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Portfolio Builder</h2>
           <p className="text-sm text-zinc-400 max-w-2xl">
             Transform theory into tangible skills. Build real-world applications, track your progress, and assemble a professional portfolio to showcase your expertise.
           </p>

@@ -18,7 +18,7 @@ export const RoadmapProgress: React.FC<RoadmapProgressProps> = ({
     <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold text-slate-700 uppercase tracking-wider">Progress</span>
-        <span className="text-3xl font-extrabold text-slate-900">{progress}%</span>
+        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">{progress}%</span>
       </div>
       
       <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">

@@ -28,7 +28,7 @@ export const XPCard: React.FC<XPCardProps> = ({ xp, level, levelName }) => {
       
       <div className="space-y-2">
         <div className="flex items-baseline gap-1">
-          <span className="text-3xl font-extrabold text-slate-900">{xp}</span>
+          <span className="text-2xl sm:text-3xl font-extrabold text-slate-900">{xp}</span>
           <span className="text-sm font-medium text-slate-500">/ {nextLevelXp} XP</span>
         </div>
         

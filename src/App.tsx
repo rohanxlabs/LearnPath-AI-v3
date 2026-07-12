@@ -1069,7 +1069,7 @@ return renderHomeView({
                 <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
                   <BookOpen className="w-10 h-10 text-indigo-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
                 <p className="text-sm text-slate-600 text-center max-w-md mb-6">
                   Choose a roadmap from your list to access curated learning resources tailored to your learning path.
                 </p>
@@ -1088,7 +1088,7 @@ return renderHomeView({
                 <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
                   <Brain className="w-10 h-10 text-indigo-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
                 <p className="text-sm text-slate-600 text-center max-w-md mb-6">
                   Choose a roadmap to access quizzes and test your knowledge on specific topics.
                 </p>
@@ -1107,7 +1107,7 @@ return renderHomeView({
                 <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
                   <Code className="w-10 h-10 text-indigo-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
                 <p className="text-sm text-slate-600 text-center max-w-md mb-6">
                   Choose a roadmap to access hands-on projects and build your portfolio.
                 </p>
@@ -1126,7 +1126,7 @@ return renderHomeView({
                 <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
                   <BarChart className="w-10 h-10 text-indigo-600" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
                 <p className="text-sm text-slate-600 text-center max-w-md mb-6">
                   Choose a roadmap to view personalized AI insights and track your learning progress.
                 </p>
@@ -1196,7 +1196,7 @@ return renderHomeView({
         return (
           <div className="space-y-5">
             <div>
-              <h2 className="font-display font-bold text-2xl text-white">Achievements Sandbox</h2>
+              <h2 className="font-display font-bold text-xl sm:text-2xl text-white">Achievements Sandbox</h2>
               <p className="text-xs text-zinc-400">Complete curriculum chapters to unlock high-integrity milestones.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1218,7 +1218,7 @@ return renderHomeView({
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="font-display font-bold text-2xl text-white">Your Notifications</h2>
+                <h2 className="font-display font-bold text-xl sm:text-2xl text-white">Your Notifications</h2>
                 <p className="text-xs text-zinc-400">Review system updates and AI mentor messages.</p>
               </div>
               <button

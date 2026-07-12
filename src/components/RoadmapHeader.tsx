@@ -40,7 +40,7 @@ export const RoadmapHeader: React.FC<RoadmapHeaderProps> = ({ roadmap, onBack })
           </motion.button>
         )}
         
-        <h1 className="text-[32px] md:text-4xl font-extrabold text-white tracking-tight leading-tight">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">
           {goal}
         </h1>
         
@@ -53,12 +53,12 @@ export const RoadmapHeader: React.FC<RoadmapHeaderProps> = ({ roadmap, onBack })
         <div className="flex items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
             <span className="text-white/70 text-xs font-medium uppercase tracking-wide">XP Earned</span>
-            <span className="text-2xl font-extrabold text-white">{totalXp}</span>
+            <span className="text-xl sm:text-2xl font-extrabold text-white">{totalXp}</span>
           </div>
           <div className="w-px h-8 bg-white/20" />
           <div className="flex items-center gap-2">
             <span className="text-white/70 text-xs font-medium uppercase tracking-wide">Lessons</span>
-            <span className="text-2xl font-extrabold text-white">
+            <span className="text-xl sm:text-2xl font-extrabold text-white">
               {lessonsCompleted}
               <span className="text-base font-semibold text-white/70"> / {totalLessons}</span>
             </span>

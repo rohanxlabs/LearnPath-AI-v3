@@ -122,7 +122,7 @@ const Header = ({ total, goal }: { total: number, goal: string }) => (
   <div className="p-6 bg-white/5 rounded-2xl border border-white/10 shadow-lg">
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
-        <h2 className="font-display font-bold text-2xl bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-blue-400">Curated AI Resource Hub</h2>
+        <h2 className="font-display font-bold text-xl sm:text-2xl bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-blue-400">Curated AI Resource Hub</h2>
         <p className="text-sm text-zinc-400 mt-1">Deepen your knowledge of {goal} with these vetted materials.</p>
       </div>
       <div className="text-sm font-bold text-zinc-300 bg-white/5 border border-white/10 rounded-xl px-4 py-2 flex items-center gap-2 self-start">

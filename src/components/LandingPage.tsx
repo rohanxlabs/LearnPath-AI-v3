@@ -59,7 +59,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-lg">
             <Sparkles className="w-10 h-10 text-white" />
           </div>
-          <h1 className="font-display font-extrabold text-[40px] md:text-5xl text-white mb-4">
+          <h1 className="font-display font-extrabold text-[28px] sm:text-3xl md:text-5xl text-white mb-4">
             LearnPath <span className="text-purple-400">AI</span>
           </h1>
           <p className="text-lg text-zinc-400 max-w-2xl mx-auto">
@@ -111,7 +111,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           className="text-center p-8 rounded-2xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20"
         >
           <BookOpen className="w-12 h-12 text-purple-400 mx-auto mb-4" />
-          <h2 className="font-display font-bold text-2xl text-white mb-2">
+          <h2 className="font-display font-bold text-xl sm:text-2xl text-white mb-2">
             Ready to accelerate your learning?
           </h2>
           <p className="text-sm text-zinc-400 mb-6">

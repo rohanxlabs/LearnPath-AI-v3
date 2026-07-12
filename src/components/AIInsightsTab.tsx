@@ -39,7 +39,7 @@ export function AIInsightsTab({ roadmap, profile }: AIInsightsTabProps) {
         {icon}
       </div>
       <div className="mt-2">
-        <p className="text-2xl font-bold text-white">{value}</p>
+        <p className="text-xl sm:text-2xl font-bold text-white">{value}</p>
         {change && <p className="text-xs text-green-400">{change}</p>}
       </div>
     </div>
@@ -66,7 +66,7 @@ export function AIInsightsTab({ roadmap, profile }: AIInsightsTabProps) {
   return (
     <div className="space-y-8">
       <header>
-        <h2 className="text-2xl font-bold text-white">AI Insights Dashboard</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-white">AI Insights Dashboard</h2>
         <p className="text-sm text-zinc-400 max-w-2xl">
           Your personalized learning command center. Analyze your progress, identify patterns, and get AI-driven recommendations.
         </p>

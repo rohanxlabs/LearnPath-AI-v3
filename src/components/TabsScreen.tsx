@@ -102,7 +102,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       {/* 1. Header with title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
         <div>
-          <h2 className="font-display font-bold text-2xl text-white">Progress & Analytics</h2>
+          <h2 className="font-display font-bold text-xl sm:text-2xl text-white">Progress & Analytics</h2>
           <p className="text-xs text-zinc-350">Track your consistency and see how your learning pace is trending.</p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-card text-[10px] text-zinc-350 font-mono font-bold">
@@ -157,7 +157,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
                 </div>
               </div>
               <div className="mt-4">
-                <span className="text-2xl font-bold text-white font-display">
+                <span className="text-xl sm:text-2xl font-bold text-white font-display">
                   {item.value}
                 </span>
                 <span className="block text-[10px] text-zinc-400 mt-1 truncate">
@@ -221,7 +221,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
               <circle cx="56" cy="56" r="45" className="stroke-purple-500" strokeWidth="6" strokeDasharray="282" strokeDashoffset="70" strokeLinecap="round" fill="none" />
             </svg>
             <div className="absolute text-center">
-               <span className="text-2xl font-extrabold text-white font-display">{Math.round(completionPercent)}%</span>
+               <span className="text-xl sm:text-2xl font-extrabold text-white font-display">{Math.round(completionPercent)}%</span>
               <span className="block text-[8px] font-bold text-zinc-400 tracking-wider">MASTERY INDEX</span>
             </div>
           </div>

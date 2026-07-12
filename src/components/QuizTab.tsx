@@ -303,7 +303,7 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
 
 const Header = () => (
   <div className="p-6 bg-white/5 rounded-2xl border border-white/10 shadow-lg">
-    <h2 className="font-display font-bold text-2xl bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-blue-400">Mastery Center</h2>
+    <h2 className="font-display font-bold text-xl sm:text-2xl bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-blue-400">Mastery Center</h2>
     <p className="text-sm text-zinc-400 mt-1">Test your knowledge, track your progress, and master new skills.</p>
   </div>
 );
@@ -470,7 +470,7 @@ const QuizResultDisplay = ({ result, onDismiss }) => (
   <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="p-6 mb-6 rounded-2xl border border-violet-500/30 bg-violet-500/10 shadow-lg text-center relative">
     <button onClick={onDismiss} className="absolute top-3 right-3 text-zinc-400 hover:text-white"><XCircle size={20} /></button>
     <Trophy className="w-16 h-16 text-amber-400 mx-auto mb-4" />
-    <h3 className="text-2xl font-bold text-white">Quiz Complete!</h3>
+    <h3 className="text-xl sm:text-2xl font-bold text-white">Quiz Complete!</h3>
     <p className="text-zinc-300">You scored <span className="font-bold text-white">{result.score}%</span>, answering {result.correct} of {result.total} questions correctly.</p>
     {result.xp > 0 && <p className="mt-2 text-lg font-bold text-green-400">+ {result.xp} XP Earned!</p>}
   </motion.div>
