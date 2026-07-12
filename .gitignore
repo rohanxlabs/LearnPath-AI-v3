@@ -12,6 +12,7 @@ dev-server.err.log
 
 .vite/
 .kilo/
+/plans
 .agent/
 
 # IDE / editor artifacts
