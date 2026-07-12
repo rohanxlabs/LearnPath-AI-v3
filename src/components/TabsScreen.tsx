@@ -71,7 +71,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
     },
     {
       id: 'p-stat-topics',
-      label: 'Syllabus Steps',
+      label: 'Lessons Completed',
       value: stats?.lessonsCompleted ?? 0,
       desc: 'Assessed units',
       icon: BarChart3,
@@ -103,7 +103,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
         <div>
           <h2 className="font-display font-bold text-2xl text-white">Progress & Analytics</h2>
-          <p className="text-xs text-zinc-350">Audit your skill consistency and learning velocity logs.</p>
+          <p className="text-xs text-zinc-350">Track your consistency and see how your learning pace is trending.</p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-card text-[10px] text-zinc-350 font-mono font-bold">
           <span>Current Study Level: {profile.level}</span>
@@ -113,10 +113,10 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       {/* 2. Overall completion ring card */}
       <div className="p-6 rounded-3xl glass-card glass-card-purple flex flex-col sm:flex-row items-center justify-between gap-6 transition-all duration-300">
         <div className="flex-1 text-center sm:text-left">
-          <span className="text-xs font-semibold text-purple-300 uppercase tracking-widest font-mono">CONSOLIDATED SYLLABUS EFFORT</span>
-          <h3 className="font-display font-bold text-xl text-white mt-1">Overall Curriculum Mastery</h3>
+          <span className="text-xs font-semibold text-purple-300 uppercase tracking-widest font-mono">OVERALL PROGRESS</span>
+          <h3 className="font-display font-bold text-xl text-white mt-1">Your Roadmap Progress</h3>
           <p className="text-xs text-zinc-350 mt-1.5">
-            You are accelerating at a steady pace. Keep pushing the active nodes to boost your total learning coverage index.
+            You're making steady progress. Keep completing lessons to raise your overall completion.
           </p>
         </div>
         <div className="relative flex-shrink-0 w-24 h-24 flex items-center justify-center bg-white/5 rounded-full border border-white/10">
@@ -236,7 +236,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
 
       {/* Advanced performance analytics widgets styled with glass-card-teal */}
       <div className="p-5 rounded-3xl glass-card glass-card-teal">
-        <h4 className="font-display font-semibold text-sm text-white mb-4">Syllabus Complete Speed Indices</h4>
+        <h4 className="font-display font-semibold text-sm text-white mb-4">Completion Speed</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* This section can now be powered by analytics or other dynamic data */}
           <div className="space-y-4">
@@ -303,7 +303,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
                     {action.difficulty}
                   </span>
                   <h4 className="font-semibold text-sm text-white mt-2">{action.title}</h4>
-                  <p className="text-xs text-zinc-350 mt-1 lines-clamp-2">{action.description}</p>
+                  <p className="text-xs text-zinc-350 mt-1 line-clamp-2">{action.description}</p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-bold text-purple-450 hover:brightness-110 cursor-pointer">
                   <span>+{action.xpReward} XP Reward</span>

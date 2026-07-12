@@ -237,9 +237,9 @@ app.get('/api/health', (req, res) => {
 });
 
 app.post('/api/register', authLimiter, async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' });
+  const { email, password, name } = req.body;
+  if (!email || !password || !name || !name.trim()) {
+    return res.status(400).json({ error: 'Name, email, and password are required' });
   }
 
   try {
@@ -250,8 +250,17 @@ app.post('/api/register', authLimiter, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
     db.passwordHash = passwordHash;
+    if (!db.progress) db.progress = {};
+    if (!db.progress.profile) db.progress.profile = {};
+    db.progress.profile.name = name.trim();
     saveUserDB(email, db);
-    return res.json({ success: true, email });
+    req.session.regenerate((err) => {
+      if (err) {
+        return res.status(500).json({ error: 'Session initialization failed' });
+      }
+      req.session.userEmail = email;
+      return res.json({ success: true, email, name });
+    });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -281,12 +290,14 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
+  const storedName = dbUser.progress?.profile?.name || null;
+
   req.session.regenerate((err) => {
     if (err) {
       return res.status(500).json({ error: 'Session initialization failed' });
     }
     req.session.userEmail = normalizedEmail;
-    return res.json({ ok: true });
+    return res.json({ ok: true, name: storedName });
   });
 });
 
@@ -2228,7 +2239,20 @@ async function loadUserDB(userEmail: string, options: { createIfMissing?: boolea
         // Save migrated data
         await saveUserDB(userEmail, dbData);
       }
-      
+
+      // MIGRATION: Backfill profile.name for accounts created before the name
+      // field existed at signup
+      if (!dbData.profile) dbData.profile = {};
+      if (!dbData.profile.name || !dbData.profile.name.trim()) {
+        const derivedName = userEmail
+          .split('@')[0]
+          .replace(/[._-]+/g, ' ')
+          .replace(/\b\w/g, (c: string) => c.toUpperCase());
+        console.log('[Migration] Backfilling profile.name for user:', userEmail);
+        dbData.profile.name = derivedName;
+        await saveUserDB(userEmail, dbData);
+      }
+
       // Ensure roadmaps is always an array
       if (!dbData.roadmaps) {
         dbData.roadmaps = [];

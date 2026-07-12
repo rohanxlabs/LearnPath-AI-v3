@@ -264,7 +264,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder={isVoiceActive ? "Listening..." : "Ask Mentor anything about neural mechanics..."}
+            placeholder={isVoiceActive ? "Listening..." : "Ask Mentor anything about your roadmap..."}
             className="flex-1 px-4 py-2.5 bg-black/40 border border-white/5 text-xs rounded-xl text-white focus:outline-hidden focus:border-purple-500/50"
             disabled={isGenerating || isVoiceActive}
           />

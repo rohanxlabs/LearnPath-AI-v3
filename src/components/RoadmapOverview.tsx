@@ -150,11 +150,11 @@ export function RoadmapOverview({
   };
 
   const loadingQuotes = [
-    "Orchestrating adaptive phases...",
-    "Calibrating multiple-choice quizzes...",
-    "Synthesizing coding environment parameters...",
-    "Structuring foundational neural definitions with OpenRouter...",
-    "Completing Duolingo-style RPG node linkages..."
+    "Mapping out your learning phases...",
+    "Building your quizzes...",
+    "Setting up your coding exercises...",
+    "Generating your personalized lessons...",
+    "Putting together your milestones..."
   ];
 
   const [quoteIdx, setQuoteIdx] = useState(0);

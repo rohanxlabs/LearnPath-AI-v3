@@ -146,6 +146,7 @@ export default function App() {
 
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authName, setAuthName] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -445,8 +446,8 @@ export default function App() {
     const password = authPassword;
     const mode = authMode;
     
-    if (!email || !password) {
-      setAuthError('Email and password are required.');
+    if (!email || !password || (mode === 'signup' && !authName.trim())) {
+      setAuthError(mode === 'signup' ? 'Name, email, and password are required.' : 'Email and password are required.');
       return;
     }
 
@@ -455,7 +456,11 @@ export default function App() {
       const response = await fetch(mode === 'login' ? '/api/login' : '/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(
+          mode === 'signup'
+            ? { email, password, name: authName.trim() }
+            : { email, password }
+        )
       });
 
       const data = await response.json().catch(() => ({}));
@@ -464,7 +469,7 @@ export default function App() {
         return;
       }
 
-      const name = (data.email || email).split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const name = data.name || (data.email || email).split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       setProfile(prev => ({ ...createEmptyProfile(data.email || email, name), name, avatar: prev.avatar }));
       setSettings(DEFAULT_SETTINGS);
       setRoadmaps([]);
@@ -478,6 +483,7 @@ export default function App() {
         setShowAuthModal(false);
         setAuthEmail('');
         setAuthPassword('');
+        setAuthName('');
       }
       
       if (mode === 'signup') {
@@ -506,6 +512,7 @@ export default function App() {
     setIsAuthenticated(false);
     setAuthEmail('');
     setAuthPassword('');
+    setAuthName('');
     setAuthMode('login');
     setAuthError('');
     setIsAuthenticating(false);
@@ -1286,6 +1293,20 @@ return renderHomeView({
         )}
 
         <form onSubmit={handleAuthenticate} className="space-y-4">
+          {authMode === 'signup' && (
+            <div className="space-y-1.5">
+              <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Full Name</label>
+              <input
+                type="text"
+                value={authName}
+                onChange={(e) => setAuthName(e.target.value)}
+                placeholder="Jane Smith"
+                className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
+                required
+              />
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Registry Email</label>
             <input

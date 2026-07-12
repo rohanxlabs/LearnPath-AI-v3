@@ -106,7 +106,7 @@ export function StatsCard({ stats }: StatsCardProps) {
     },
     {
       id: 'stat-topics',
-      label: 'Syllabus Steps',
+      label: 'Lessons Completed',
       value: stats.completedTopics,
       desc: 'Assessed lessons',
       icon: BookOpen,
@@ -359,20 +359,20 @@ export function AIRecommendationCard({ recommendation, onLaunch }: AIRecommendat
         <h4 className="font-semibold text-sm text-white mt-2.5">
           {recommendation.title}
         </h4>
-        <p className="text-xs text-zinc-300 mt-1 lines-clamp-2 leading-relaxed">
-          {recommendation.description}
-        </p>
-      </div>
+          <p className="text-xs text-zinc-300 mt-1 line-clamp-2 leading-relaxed">
+            {recommendation.description}
+          </p>
+        </div>
 
-      <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-        <span className="text-[10px] font-semibold text-zinc-400 font-mono capitalize">
-          Category: {recommendation.category}
-        </span>
+        <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+          <span className="text-[10px] font-semibold text-zinc-400 font-mono capitalize">
+            Category: {recommendation.category}
+          </span>
 <button
-           onClick={() => onLaunch(recommendation)}
-           className={`inline-flex items-center gap-1 hover:gap-1.5 text-xs text-purple-400 font-bold hover:text-purple-300 transition-all cursor-pointer ${buttonStyles.ghost}`}
-         >
-           <span>Instigate Tasks</span>
+            onClick={() => onLaunch(recommendation)}
+            className={`inline-flex items-center gap-1 hover:gap-1.5 text-xs text-purple-400 font-bold hover:text-purple-300 transition-all cursor-pointer ${buttonStyles.ghost}`}
+          >
+            <span>Start Task</span>
            <ChevronRight className="w-3.5 h-3.5" />
          </button>
       </div>
@@ -403,10 +403,10 @@ export function LearningScoreCard({ profile }: LearningScoreCardProps) {
       <div className="flex items-center justify-between gap-2.5 mb-4">
         <div className="flex items-center gap-2">
           <BrainCircuit className="w-5 h-5 text-purple-400" />
-          <h4 className="font-display font-semibold text-sm text-white font-sans">Syllabus Skill Mastery</h4>
-        </div>
-        <span className="text-xs text-zinc-400 font-semibold flex items-center gap-1">
-          <BarChart className="w-3.5 h-3.5" /> Calculated AI Metrics
+           <h4 className="font-display font-semibold text-sm text-white font-sans">Skill Mastery</h4>
+         </div>
+         <span className="text-xs text-zinc-400 font-semibold flex items-center gap-1">
+           <BarChart className="w-3.5 h-3.5" /> Based on your activity
         </span>
       </div>
 
