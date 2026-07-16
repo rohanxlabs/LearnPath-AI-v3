@@ -1,14 +1,16 @@
 import React from 'react';
 import { Trash2, Calendar, TrendingUp, Clock, ChevronRight } from 'lucide-react';
 import { Roadmap } from '../types';
+import { Skeleton } from './Skeleton';
 
 interface RoadmapsListProps {
   roadmaps: Roadmap[];
   onSelectRoadmap: (id: string) => void;
   onDeleteRoadmap: (id: string) => void;
+  isLoading?: boolean;
 }
 
-export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap }: RoadmapsListProps) {
+export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoading }: RoadmapsListProps) {
   const getStatusColor = (progress: number) => {
     if (progress === 0) return 'bg-slate-100 text-slate-700 border-slate-200';
     if (progress === 100) return 'bg-green-100 text-green-700 border-green-200';
@@ -30,7 +32,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap }: Roa
     }
   };
 
-  if (roadmaps.length === 0) {
+  if (roadmaps.length === 0 && !isLoading) {
     return (
       <div className="text-center py-12 px-6">
         <div className="max-w-md mx-auto">
@@ -42,6 +44,34 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap }: Roa
             Create your first learning roadmap to get started on your journey!
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="p-5 rounded-2xl bg-white border border-slate-200 space-y-3">
+            <Skeleton className="h-5 w-3/4 rounded-lg" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-5 w-24 rounded-full" />
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-16 rounded" />
+                <Skeleton className="h-3 w-8 rounded" />
+              </div>
+              <Skeleton className="h-2 w-full rounded-full" />
+            </div>
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-3 w-16 rounded" />
+              <Skeleton className="h-3 w-20 rounded" />
+            </div>
+            <Skeleton className="h-3 w-32 rounded" />
+          </div>
+        ))}
       </div>
     );
   }

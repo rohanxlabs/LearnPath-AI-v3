@@ -98,6 +98,7 @@ export function renderHomeView(
     achievements: Achievement[];
     aiRecommendations: any[];
     isRecsLoading: boolean;
+    isLoading?: boolean;
     roadmapProgress?: Record<string, any>;
     getNextIncompleteLesson: (roadmap: Roadmap) => { phaseId: string; levelId: string; lessonId: string } | null;
     setActiveTab: (tab: string) => void;
@@ -112,6 +113,7 @@ export function renderHomeView(
     achievements,
     aiRecommendations,
     isRecsLoading,
+    isLoading,
     roadmapProgress,
     getNextIncompleteLesson,
     setActiveTab,
@@ -127,6 +129,7 @@ export function renderHomeView(
       achievements={achievements}
       aiRecommendations={aiRecommendations}
       isRecsLoading={isRecsLoading}
+      isLoading={isLoading}
       roadmapProgress={roadmapProgress}
       onContinueLearning={() => {
         const nextLesson = getNextIncompleteLesson(activeRoadmap);
@@ -999,13 +1002,14 @@ await fetch('/api/roadmaps', {
   const renderTabContent = () => {
     if (!activeRoadmap) {
       if (activeTab === 'home') {
-return renderHomeView({
+ return renderHomeView({
            profile,
            activeRoadmap: null,
            activePhase: null,
            achievements,
            aiRecommendations,
            isRecsLoading,
+           isLoading: isLoadingAuth,
            roadmapProgress,
            getNextIncompleteLesson,
            setActiveTab,
@@ -1075,6 +1079,7 @@ return renderHomeView({
           achievements,
           aiRecommendations,
           isRecsLoading,
+          isLoading: isLoadingAuth,
           roadmapProgress,
           getNextIncompleteLesson,
           setActiveTab,
@@ -1182,23 +1187,24 @@ return renderHomeView({
           return <AIInsightsTab roadmap={selectedRm} profile={profile} />;
         }
         return (
-           <RoadmapsTabContainer
-            roadmaps={roadmaps}
-            selectedRoadmapId={selectedRoadmapId}
-            onSelectRoadmap={(id) => {
-              setSelectedRoadmapId(id);
-              setActiveRoadmapId(id);
-            }}
-            onBackToList={() => setSelectedRoadmapId(null)}
-            onDeleteRoadmap={handleDeleteRoadmap}
-            onGenerateRoadmap={handleGenerateRoadmap}
-            isGenerating={isAiGeneratingRoadmap}
-            profile={profile}
-            onAiAction={handleAiAction}
-            onLessonClick={(phaseId, levelId, lessonId) => {
-              setActiveLesson({ phaseId, levelId, lessonId });
-            }}
-          />
+<RoadmapsTabContainer
+             roadmaps={roadmaps}
+             selectedRoadmapId={selectedRoadmapId}
+             onSelectRoadmap={(id) => {
+               setSelectedRoadmapId(id);
+               setActiveRoadmapId(id);
+             }}
+             onBackToList={() => setSelectedRoadmapId(null)}
+             onDeleteRoadmap={handleDeleteRoadmap}
+             onGenerateRoadmap={handleGenerateRoadmap}
+             isGenerating={isAiGeneratingRoadmap}
+             profile={profile}
+             isLoading={isLoadingAuth}
+             onAiAction={handleAiAction}
+             onLessonClick={(phaseId, levelId, lessonId) => {
+               setActiveLesson({ phaseId, levelId, lessonId });
+             }}
+           />
         );
 
       case 'mentor':
@@ -1386,7 +1392,34 @@ return renderHomeView({
 
 // Render the app based on auth state
   if (isLoadingAuth) {
-    return <SplashScreen />;
+    return (
+      <div className={`min-h-screen pb-20 ${themeClass} transition-colors duration-300 relative select-none`} style={customBackground}>
+        <MobileHeader
+          profile={profile}
+          notifications={notifications}
+          onTabChange={() => {}}
+          onNotificationsClick={() => {}}
+          onUpgradeClick={() => {}}
+          onOpenDrawer={() => {}}
+        />
+        <main className="max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]">
+          {renderHomeView({
+            profile,
+            activeRoadmap: null,
+            activePhase: null,
+            achievements: [],
+            aiRecommendations: [],
+            isRecsLoading: false,
+            isLoading: true,
+            roadmapProgress: {},
+            getNextIncompleteLesson: () => ({ phaseId: '', levelId: '', lessonId: '' }),
+            setActiveTab: () => {},
+            setActiveLesson: () => {},
+            handleSelectRecommendationTask: () => {},
+          })}
+        </main>
+      </div>
+    );
   }
 
   // If not authenticated, show landing page

@@ -19,6 +19,7 @@ interface RoadmapsTabContainerProps {
   onGenerateRoadmap: (params: any) => Promise<void>;
   isGenerating: boolean;
   profile: UserProfile;
+  isLoading?: boolean;
   onAiAction?: (actionType: string, phaseName?: string) => void;
   onLessonClick?: (phaseId: string, levelId: string, lessonId: string) => void;
 }
@@ -65,6 +66,7 @@ export function RoadmapsTabContainer({
   onGenerateRoadmap,
   isGenerating,
   profile,
+  isLoading,
   onLessonClick,
   onAiAction,
 }: RoadmapsTabContainerProps) {
@@ -118,6 +120,7 @@ export function RoadmapsTabContainer({
           roadmaps={roadmaps}
           onSelectRoadmap={onSelectRoadmap}
           onDeleteRoadmap={onDeleteRoadmap}
+          isLoading={isLoading}
         />
 
         {/* Generate New Button */}

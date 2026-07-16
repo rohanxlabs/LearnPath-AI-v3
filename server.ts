@@ -165,9 +165,10 @@ function sanitizeForPrompt(input: string | number | undefined | null, maxLength:
 
 const OPENROUTER_MODELS = [
   "nvidia/nemotron-3-super-120b-a12b:free",
-  "openrouter/free",
-  "google/gemma-4-31b-it:free",
-  "openrouter/free"
+  "meta-llama/llama-3.3-70b-instruct:free",
+  "qwen/qwen3-next-80b-a3b-instruct:free",
+  "google/gemma-4-27b-it:free",
+  "tencent/hy3:free"
 ];
 
 async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7, asJSON = false): Promise<string> {

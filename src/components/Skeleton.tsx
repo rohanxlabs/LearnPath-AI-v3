@@ -110,3 +110,93 @@ export function LoadingSpinner({ size = 'md', label }: LoadingSpinnerProps) {
     </div>
   );
 }
+
+interface SkeletonHeaderProps {
+  className?: string;
+}
+
+export function SkeletonHeader({ className = '' }: SkeletonHeaderProps) {
+  return (
+    <div className={`p-5 sm:p-6 rounded-3xl bg-white/5 border border-white/10 relative overflow-hidden ${className}`}>
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-6 w-64 sm:w-96" />
+        <div className="flex flex-wrap items-center gap-2 mt-3.5">
+          <Skeleton className="h-7 w-40 rounded-xl" />
+          <Skeleton className="h-7 w-28 rounded-xl" />
+          <Skeleton className="h-7 w-24 rounded-xl" />
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2.5 mt-4">
+          <Skeleton className="h-10 w-40 sm:w-auto rounded-xl" />
+          <Skeleton className="h-10 w-36 sm:w-auto rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SkeletonRoadmapCardProps {
+  className?: string;
+}
+
+export function SkeletonRoadmapCard({ className = '' }: SkeletonRoadmapCardProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className={`p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3 ${className}`}
+    >
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-5 w-1/2" />
+      <div className="space-y-2">
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-5/6" />
+      </div>
+      <div className="flex items-center gap-2 pt-1">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-12" />
+      </div>
+    </motion.div>
+  );
+}
+
+interface SkeletonNotificationCardProps {
+  className?: string;
+}
+
+export function SkeletonNotificationCard({ className = '' }: SkeletonNotificationCardProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className={`p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3 ${className}`}
+    >
+      <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-full" />
+        <Skeleton className="h-3 w-24" />
+      </div>
+    </motion.div>
+  );
+}
+
+interface SkeletonChatPreviewProps {
+  className?: string;
+}
+
+export function SkeletonChatPreview({ className = '' }: SkeletonChatPreviewProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className={`p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3 ${className}`}
+    >
+      <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-3 w-1/3" />
+        <Skeleton className="h-3 w-2/3" />
+      </div>
+    </motion.div>
+  );
+}
