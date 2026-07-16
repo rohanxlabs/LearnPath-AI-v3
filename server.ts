@@ -319,6 +319,47 @@ app.get('/api/session', (req, res) => {
   return res.json({ authenticated: true, email: userEmail });
 });
 
+// Merged bootstrap endpoint: session + profile + roadmaps in ONE db call + ONE round trip.
+// Replaces the old sequential /api/session -> /api/user-profile -> /api/roadmaps chain
+// that all hit loadUserDB() independently on every page load.
+app.get('/api/bootstrap', async (req, res) => {
+  const userEmail = req.session.userEmail;
+  if (!userEmail) {
+    return res.status(401).json({ authenticated: false });
+  }
+
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    const progress = dbData?.progress || {};
+    const roadmaps = dbData?.roadmaps || [];
+
+    return res.json({
+      authenticated: true,
+      email: userEmail,
+      profile: progress.profile || {},
+      settings: progress.settings || {},
+      achievements: progress.achievements || [],
+      notifications: progress.notifications || [],
+      chats: progress.chats || [],
+      roadmaps
+    });
+  } catch (error) {
+    console.error('Bootstrap error:', error);
+    // Degrade gracefully: user IS authenticated (session valid), just couldn't load their data.
+    // Frontend should treat this as "authenticated, empty state" rather than logged out.
+    return res.json({
+      authenticated: true,
+      email: userEmail,
+      profile: {},
+      settings: {},
+      achievements: [],
+      notifications: [],
+      chats: [],
+      roadmaps: []
+    });
+  }
+});
+
 
 // 2. API: Generate Roadmaps
 app.post('/api/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {

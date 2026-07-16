@@ -217,49 +217,50 @@ export default function App() {
 
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Bootstrap already fetches roadmaps in the same call as session+profile. This ref lets the
+  // separate syncRoadmapsFromDatabase effect (still needed after login/register, which don't
+  // return roadmaps) skip firing again immediately after a bootstrap-driven auth state change.
+  const skipNextRoadmapSyncRef = React.useRef(false);
 
   useEffect(() => {
     const verifySession = async () => {
       try {
-        const response = await fetch('/api/session');
+        // Single bootstrap call replaces the old /api/session -> /api/user-profile -> /api/roadmaps
+        // sequential chain (3 round trips, 3 separate loadUserDB() calls on the server) with one
+        // request that returns everything needed to render the app.
+        const response = await fetch('/api/bootstrap');
         if (!response.ok) throw new Error('Session invalid');
         const data = await response.json();
         if (data.authenticated && data.email) {
           const email = data.email;
           const name = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-          setProfile(prev => ({ ...createEmptyProfile(email, name), name, avatar: prev.avatar }));
-          setSettings(DEFAULT_SETTINGS);
-          setRoadmaps([]);
-          setActiveRoadmapId('');
-          setAchievements([]);
-          setNotifications([]);
-          setChats([]);
-          setActiveTab('home');
-          setIsAuthenticated(true);
 
-          try {
-            const profileRes = await fetch('/api/user-profile');
-            if (profileRes.ok) {
-              const profileData = await profileRes.json();
-              if (profileData.profile && Object.keys(profileData.profile).length > 0) {
-                setProfile(prev => ({ ...prev, ...profileData.profile }));
-              }
-              if (profileData.settings && Object.keys(profileData.settings).length > 0) {
-                setSettings(prev => ({ ...prev, ...profileData.settings }));
-              }
-              if (profileData.achievements && Array.isArray(profileData.achievements)) {
-                setAchievements(profileData.achievements);
-              }
-              if (profileData.notifications && Array.isArray(profileData.notifications)) {
-                setNotifications(profileData.notifications);
-              }
-              if (profileData.chats && Array.isArray(profileData.chats)) {
-                setChats(profileData.chats);
-              }
+          setProfile(prev => {
+            const base = { ...createEmptyProfile(email, name), name, avatar: prev.avatar };
+            if (data.profile && Object.keys(data.profile).length > 0) {
+              return { ...base, ...data.profile };
             }
-          } catch (profileErr) {
-            console.warn('Failed to load user profile from database:', profileErr);
-          }
+            return base;
+          });
+          setSettings(data.settings && Object.keys(data.settings).length > 0 ? { ...DEFAULT_SETTINGS, ...data.settings } : DEFAULT_SETTINGS);
+          setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
+          setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+          setChats(Array.isArray(data.chats) ? data.chats : []);
+          setActiveTab('home');
+
+          const uniqueList: Roadmap[] = [];
+          const seen = new Set<string>();
+          (data.roadmaps || []).forEach((r: Roadmap) => {
+            if (r && r.id && !seen.has(r.id)) {
+              seen.add(r.id);
+              uniqueList.push(r);
+            }
+          });
+          setRoadmaps(uniqueList);
+          setActiveRoadmapId(uniqueList[0]?.id || '');
+          skipNextRoadmapSyncRef.current = true;
+
+          setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);
         }
@@ -273,10 +274,13 @@ export default function App() {
     verifySession();
   }, []);
 
-  // Load recommendations on mount
+  // Load recommendations once auth state resolves (previously fired on mount before
+  // isAuthenticated was known, so it silently no-op'd and recommendations never loaded).
   useEffect(() => {
-    fetchRecommendations();
-  }, []);
+    if (isAuthenticated) {
+      fetchRecommendations();
+    }
+  }, [isAuthenticated]);
 
   const saveUserProfileToServer = async () => {
     if (!isAuthenticated || !profile.email) return;
@@ -425,7 +429,11 @@ export default function App() {
      }
 
       if (isAuthenticated && profile.email) {
-        syncRoadmapsFromDatabase();
+        if (skipNextRoadmapSyncRef.current) {
+          skipNextRoadmapSyncRef.current = false;
+        } else {
+          syncRoadmapsFromDatabase();
+        }
         if (redirectAfterLogin) {
           setActiveTab(redirectAfterLogin.replace('/', '') || 'home');
           setRedirectAfterLogin(null);
