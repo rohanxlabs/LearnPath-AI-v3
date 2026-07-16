@@ -24,8 +24,56 @@ type RoadmapCacheEntry = {
 };
 const roadmapCache: Map<string, RoadmapCacheEntry> = new Map();
 const ROADMAP_CACHE_TTL = 30 * 1000; // 30 seconds
+
+// Per-user write lock: serializes read-modify-write cycles (complete-lesson,
+// profile updates, streak updates) for the same user so concurrent requests
+// cannot clobber each other (lost-update race on the single JSONB column).
+// Re-entrancy is tracked via AsyncLocalStorage so a NESTED call (e.g. saveUserDB
+// invoked from within an already-locked handler) runs inline, while a CONCURRENT
+// request for the same user correctly waits its turn.
+import { AsyncLocalStorage } from 'node:async_hooks';
+const userLocks: Map<string, Promise<void>> = new Map();
+const lockContext = new AsyncLocalStorage<string>();
+
+async function withUserLock<T>(email: string, fn: () => Promise<T>): Promise<T> {
+  const key = email.toLowerCase();
+  const heldKey = lockContext.getStore();
+
+  // Nested acquisition within the same async execution that already holds the
+  // lock for this user -> run synchronously (no deadlock, no double queue).
+  if (heldKey === key) {
+    return fn();
+  }
+
+  const previous = userLocks.get(key) || Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => { release = resolve; });
+  userLocks.set(key, previous.then(() => next));
+  let result: T;
+  try {
+    result = await lockContext.run(key, async () => {
+      await previous;
+      return await fn();
+    });
+  } finally {
+    release();
+    if (userLocks.get(key) === previous.then(() => next)) {
+      userLocks.delete(key);
+    }
+  }
+  return result;
+}
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
+
+// Lightweight HTTP error used to propagate status codes out of locked closures.
+class HttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1875,12 +1923,34 @@ app.put('/api/user-profile', requireAuth, async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
+  // Fields owned/derived by the server. Clients must never set these via profile
+  // updates, otherwise they could spoof XP, level, Pro status, or identity.
+  const PROFILE_BLOCKLIST = [
+    'xp', 'level', 'streak', 'isPro', 'email', 'createdAt', 'id', 'tier'
+  ];
+
+  function sanitizeProfile(input: any): Record<string, any> | null {
+    if (input === undefined || input === null) return null;
+    if (typeof input !== 'object' || Array.isArray(input)) return {};
+    const clean: Record<string, any> = {};
+    for (const key of Object.keys(input)) {
+      if (PROFILE_BLOCKLIST.includes(key)) continue;
+      clean[key] = input[key];
+    }
+    return clean;
+  }
+
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: true });
     if (!dbData.progress) dbData.progress = {};
     
-    if (profile) dbData.progress.profile = profile;
-    if (settings) dbData.progress.settings = settings;
+    const safeProfile = sanitizeProfile(profile);
+    if (safeProfile) {
+      const merged = { ...(dbData.progress.profile || {}), ...safeProfile };
+      dbData.progress.profile = merged;
+      dbData.profile = merged; // keep alias in sync so saveUserDB persists it
+    }
+    if (settings && typeof settings === 'object' && !Array.isArray(settings)) dbData.progress.settings = settings;
     if (achievements) dbData.progress.achievements = Array.isArray(achievements) ? achievements : [];
     if (notifications) dbData.progress.notifications = Array.isArray(notifications) ? notifications : [];
     if (chats) dbData.progress.chats = Array.isArray(chats) ? chats : [];
@@ -1906,19 +1976,19 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'lessonId is required' });
   }
 
-  const xpValue = Number(xpEarned ?? xpReward);
-  if (!xpValue || xpValue <= 0) {
-    return res.status(400).json({ error: 'xpEarned is required' });
-  }
-
   try {
+    // Wrap the ENTIRE read-modify-write (load -> mutate -> save -> streak) inside
+    // the per-user lock so concurrent requests cannot interleave reads and clobber
+    // each other (lost-update race on the single JSONB column).
+    const result = await withUserLock(userEmail, async () => {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     if (!dbData) {
-      return res.status(404).json({ error: 'User data not found' });
+      throw new HttpError(404, 'User data not found');
     }
 
     const roadmaps = dbData.roadmaps || [];
     let lessonFound = false;
+    let foundLesson: any = null;
     let totalLessons = 0;
     let completedLessons = 0;
 
@@ -1931,6 +2001,7 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
           for (const lesson of level.lessons || []) {
             totalLessons++;
             if (lesson.id === lessonId) {
+              foundLesson = lesson;
               if (lesson.status !== 'completed') {
                 lesson.status = 'completed';
                 lessonFound = true;
@@ -1945,7 +2016,14 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     }
 
     if (!lessonFound) {
-      return res.status(404).json({ error: 'Lesson not found' });
+      throw new HttpError(404, 'Lesson not found');
+    }
+
+    // Server-authoritative XP: ignore any client-supplied xpEarned/xpReward.
+    // Derive the reward from the lesson's own stored xpReward to prevent inflation.
+    const xpValue = Number(foundLesson?.xpReward) || 0;
+    if (xpValue <= 0) {
+      throw new HttpError(400, 'Lesson has no valid XP reward');
     }
 
     const newXP = (dbData.xp || 0) + xpValue;
@@ -1985,18 +2063,24 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
       }
     }
 
+    // Already inside the per-user lock: persist and update streak atomically.
     await saveUserDB(userEmail, dbData);
     invalidateUserRoadmaps(userEmail);
-
     const newStreak = await updateStreak(userEmail);
 
-    return res.json({
+    return {
       xp: newXP,
       streak: newStreak,
       completionPercent,
       message: 'Lesson complete!'
+    };
     });
+
+    return res.json(result);
   } catch (error) {
+    if (error instanceof HttpError) {
+      return res.status(error.status).json({ error: error.message });
+    }
     console.error('Complete lesson error:', error);
     return res.status(500).json({ error: 'Failed to complete lesson. Database unavailable.' });
   }
@@ -2270,6 +2354,7 @@ async function loadUserDB(userEmail: string, options: { createIfMissing?: boolea
       const dbData: UserDB = {
         ...roadmap,
         ...progress,
+        progress,
         xp: row.xp ?? 0,
         passwordHash: row.password_hash || undefined,
         last_active_date: row.last_active_date,
@@ -2345,6 +2430,9 @@ function invalidateUserRoadmaps(userEmail: string): void {
 }
 
 async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
+  // Serialize all writes per user so concurrent read-modify-write cycles on the
+  // single JSONB column cannot overwrite each other (lost-update race).
+  return withUserLock(userEmail, async () => {
   await ensureUsersTable();
 
   try {
@@ -2390,53 +2478,54 @@ async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
     console.error('[Database Error] Failed to save user data:', error);
     throw error;
   }
+  });
 }
 
 async function updateStreak(userEmail: string): Promise<number> {
   await ensureUsersTable();
 
   const today = new Date().toISOString().split('T')[0];
-  
+
   try {
-    const result = await sql`
-      SELECT streak, last_active_date
-      FROM users
-      WHERE email = ${userEmail.toLowerCase()}
-    `;
+      const result = await sql`
+        SELECT streak, last_active_date
+        FROM users
+        WHERE email = ${userEmail.toLowerCase()}
+      `;
 
-    let currentStreak = 0;
-    let lastActiveDate: string | null = null;
+      let currentStreak = 0;
+      let lastActiveDate: string | null = null;
 
-    if (result[0]) {
-      currentStreak = result[0].streak ?? 0;
-      lastActiveDate = result[0].last_active_date;
-    }
+      if (result[0]) {
+        currentStreak = result[0].streak ?? 0;
+        lastActiveDate = result[0].last_active_date;
+      }
 
-    if (lastActiveDate === today) {
+      if (lastActiveDate === today) {
+        return currentStreak;
+      }
+
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+      if (lastActiveDate === yesterdayStr) {
+        currentStreak += 1;
+      } else if (!lastActiveDate || lastActiveDate < yesterdayStr) {
+        currentStreak = 1;
+      }
+
+      await sql`
+        UPDATE users
+        SET streak = ${currentStreak}, last_active_date = ${today}
+        WHERE email = ${userEmail.toLowerCase()}
+      `;
+
       return currentStreak;
+    } catch (error) {
+      console.error('[Database Error] Failed to update streak:', error);
+      return 0;
     }
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-    if (lastActiveDate === yesterdayStr) {
-      currentStreak += 1;
-    } else if (!lastActiveDate || lastActiveDate < yesterdayStr) {
-      currentStreak = 1;
-    }
-
-    await sql`
-      UPDATE users
-      SET streak = ${currentStreak}, last_active_date = ${today}
-      WHERE email = ${userEmail.toLowerCase()}
-    `;
-
-    return currentStreak;
-  } catch (error) {
-    console.error('[Database Error] Failed to update streak:', error);
-    return 0;
-  }
 }
 
 // Helper to prepare PWA assets on start
