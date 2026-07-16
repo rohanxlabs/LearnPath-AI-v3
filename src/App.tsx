@@ -1,29 +1,60 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Sparkles, Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, CheckCircle, ArrowLeft, BookOpen, Brain, Code, BarChart } from 'lucide-react';
 import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, ChatMessage } from './types';
 import { usePWA } from './lib/usePWA';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
 import { AchievementCard, NotificationCard } from './components/Cards';
 import { HomeView } from './components/HomeView';
-import { LearningWorkspace } from './components/LearningWorkspace';
-import RoadmapTree from './components/RoadmapTree';
-import { RoadmapOverview } from './components/RoadmapOverview';
-import { RoadmapsTabContainer } from './components/RoadmapsTabContainer';
-import { MentorChatView } from './components/MentorChatView';
-import { AnalyticsView, ProfileView } from './components/TabsScreen';
-import { LessonPlayView } from './components/LessonPlayView';
-import { TopicDetailView } from './components/TopicDetailView';
-import { AchievementCelebration } from './components/AchievementCelebration';
-import { motion } from 'motion/react';
-import { ResourcesTab } from './components/ResourcesTab';
-import { QuizTab } from './components/QuizTab';
-import { ProjectsTab } from './components/ProjectsTab';
-import { AIInsightsTab } from './components/AIInsightsTab';
-import { RoadmapHero } from './components/RoadmapHero';
-import { AIMentorAnalysis } from './components/AIMentorAnalysis';
 import { SplashScreen } from './components/SplashScreen';
-import { LandingPage } from './components/LandingPage';
-import { OnboardingPage } from './components/OnboardingPage';
+import { motion } from 'motion/react';
+
+// Route-level code splitting: each tab/view below is only fetched the first
+// time the user actually navigates to it, instead of shipping in the main
+// bundle. Cuts initial JS payload substantially (see README perf notes).
+const LearningWorkspace = lazy(() =>
+  import('./components/LearningWorkspace').then(m => ({ default: m.LearningWorkspace }))
+);
+const RoadmapOverview = lazy(() =>
+  import('./components/RoadmapOverview').then(m => ({ default: m.RoadmapOverview }))
+);
+const RoadmapsTabContainer = lazy(() =>
+  import('./components/RoadmapsTabContainer').then(m => ({ default: m.RoadmapsTabContainer }))
+);
+const MentorChatView = lazy(() =>
+  import('./components/MentorChatView').then(m => ({ default: m.MentorChatView }))
+);
+const AnalyticsView = lazy(() =>
+  import('./components/TabsScreen').then(m => ({ default: m.AnalyticsView }))
+);
+const ProfileView = lazy(() =>
+  import('./components/TabsScreen').then(m => ({ default: m.ProfileView }))
+);
+const AchievementCelebration = lazy(() =>
+  import('./components/AchievementCelebration').then(m => ({ default: m.AchievementCelebration }))
+);
+const ResourcesTab = lazy(() =>
+  import('./components/ResourcesTab').then(m => ({ default: m.ResourcesTab }))
+);
+const QuizTab = lazy(() => import('./components/QuizTab').then(m => ({ default: m.QuizTab })));
+const ProjectsTab = lazy(() =>
+  import('./components/ProjectsTab').then(m => ({ default: m.ProjectsTab }))
+);
+const AIInsightsTab = lazy(() =>
+  import('./components/AIInsightsTab').then(m => ({ default: m.AIInsightsTab }))
+);
+const LandingPage = lazy(() =>
+  import('./components/LandingPage').then(m => ({ default: m.LandingPage }))
+);
+
+// Lightweight fallback shown only during the brief chunk fetch; matches the
+// app's dark theme so there's no flash of unstyled content.
+function TabFallback() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <div className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+    </div>
+  );
+}
 
 const DEFAULT_AVATAR =
   'data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" rx="64" fill="%238b5cf6"/%3E%3Ccircle cx="64" cy="48" r="22" fill="white" opacity=".9"/%3E%3Cpath d="M28 112c7-22 20-33 36-33s29 11 36 33" fill="white" opacity=".9"/%3E%3C/svg%3E';
@@ -1373,16 +1404,18 @@ return renderHomeView({
       return renderAuthUI();
     }
     return (
-      <LandingPage
-        onGetStarted={() => {
-          setAuthMode('signup');
-          setShowAuthModal(true);
-        }}
-        onSignIn={() => {
-          setAuthMode('login');
-          setShowAuthModal(true);
-        }}
-      />
+      <Suspense fallback={<SplashScreen />}>
+        <LandingPage
+          onGetStarted={() => {
+            setAuthMode('signup');
+            setShowAuthModal(true);
+          }}
+          onSignIn={() => {
+            setAuthMode('login');
+            setShowAuthModal(true);
+          }}
+        />
+      </Suspense>
     );
   }
 
@@ -1477,16 +1510,18 @@ return renderHomeView({
 
 {/* Primary tab Content Layout with desktop alignment container constraint */}
       <main className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}>
-        {activeLesson && activeRoadmap ? (
-          <LearningWorkspace
-            roadmap={activeRoadmap}
-            activeLesson={activeLesson}
-            onCompleteLesson={(xpAdded, lessonId) => handleLessonComplete(xpAdded, lessonId)}
-            onNavigateToLesson={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
-          />
-        ) : (
-          renderTabContent()
-        )}
+        <Suspense fallback={<TabFallback />}>
+          {activeLesson && activeRoadmap ? (
+            <LearningWorkspace
+              roadmap={activeRoadmap}
+              activeLesson={activeLesson}
+              onCompleteLesson={(xpAdded, lessonId) => handleLessonComplete(xpAdded, lessonId)}
+              onNavigateToLesson={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
+            />
+          ) : (
+            renderTabContent()
+          )}
+        </Suspense>
       </main>
 
       {/* Modern Floating PWA Interaction and State Notifications */}
@@ -1540,10 +1575,12 @@ return renderHomeView({
 
       {/* Achievement Celebration Overlay */}
       {unlockedAchievement && (
-        <AchievementCelebration
-          achievement={unlockedAchievement}
-          onDone={() => setUnlockedAchievement(null)}
-        />
+        <Suspense fallback={null}>
+          <AchievementCelebration
+            achievement={unlockedAchievement}
+            onDone={() => setUnlockedAchievement(null)}
+          />
+        </Suspense>
       )}
     </div>
   );
