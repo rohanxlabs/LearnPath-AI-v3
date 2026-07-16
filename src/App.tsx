@@ -217,10 +217,6 @@ export default function App() {
 
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  // Bootstrap already fetches roadmaps in the same call as session+profile. This ref lets the
-  // separate syncRoadmapsFromDatabase effect (still needed after login/register, which don't
-  // return roadmaps) skip firing again immediately after a bootstrap-driven auth state change.
-  const skipNextRoadmapSyncRef = React.useRef(false);
 
   useEffect(() => {
     const verifySession = async () => {
@@ -258,7 +254,6 @@ export default function App() {
           });
           setRoadmaps(uniqueList);
           setActiveRoadmapId(uniqueList[0]?.id || '');
-          skipNextRoadmapSyncRef.current = true;
 
           setIsAuthenticated(true);
         } else {
@@ -394,52 +389,38 @@ export default function App() {
   };
 
 // Sync roadmaps with Database per user
-    useEffect(() => {
-      async function syncRoadmapsFromDatabase() {
-        if (!isAuthenticated) return;
-        const email = profile.email;
-        if (!email) return;
+  const syncRoadmapsFromDatabase = async () => {
+    if (!isAuthenticated) return;
+    const email = profile.email;
+    if (!email) return;
 
-        try {
-         const response = await fetch('/api/roadmaps');
-         if (response.ok) {
-           const data = await response.json();
-           
-           const uniqueList: Roadmap[] = [];
-           const seen = new Set<string>();
-           data.forEach((r: Roadmap) => {
-             if (r && r.id && !seen.has(r.id)) {
-               seen.add(r.id);
-               uniqueList.push(r);
-             }
-           });
-
-           setRoadmaps(uniqueList);
-           const hasRoadmap = uniqueList.some(r => r.id === activeRoadmapId);
-           if (!hasRoadmap && uniqueList[0]) {
-             setActiveRoadmapId(uniqueList[0].id);
-           } else if (uniqueList.length === 0) {
-             setActiveRoadmapId('');
-             setSelectedRoadmapId(null);
-           }
+    try {
+     const response = await fetch('/api/roadmaps');
+     if (response.ok) {
+       const data = await response.json();
+       
+       const uniqueList: Roadmap[] = [];
+       const seen = new Set<string>();
+       data.forEach((r: Roadmap) => {
+         if (r && r.id && !seen.has(r.id)) {
+           seen.add(r.id);
+           uniqueList.push(r);
          }
-       } catch (err) {
-         console.error('Failed to sync roadmaps from database:', err);
+       });
+
+       setRoadmaps(uniqueList);
+       const hasRoadmap = uniqueList.some(r => r.id === activeRoadmapId);
+       if (!hasRoadmap && uniqueList[0]) {
+         setActiveRoadmapId(uniqueList[0].id);
+       } else if (uniqueList.length === 0) {
+         setActiveRoadmapId('');
+         setSelectedRoadmapId(null);
        }
      }
-
-      if (isAuthenticated && profile.email) {
-        if (skipNextRoadmapSyncRef.current) {
-          skipNextRoadmapSyncRef.current = false;
-        } else {
-          syncRoadmapsFromDatabase();
-        }
-        if (redirectAfterLogin) {
-          setActiveTab(redirectAfterLogin.replace('/', '') || 'home');
-          setRedirectAfterLogin(null);
-        }
-      }
-   }, [profile.email, isAuthenticated]);
+   } catch (err) {
+     console.error('Failed to sync roadmaps from database:', err);
+   }
+ };
 
   const getStoredUserEmail = () => profile.email;
 
@@ -517,6 +498,7 @@ export default function App() {
       setNotifications([]);
       setChats([]);
       setIsAuthenticated(true);
+      syncRoadmapsFromDatabase();
       
       if (showAuthModal) {
         setShowAuthModal(false);
@@ -525,13 +507,11 @@ export default function App() {
         setAuthName('');
       }
       
-      if (mode === 'signup') {
-        if (redirectAfterLogin) {
-          setActiveTab(redirectAfterLogin.replace('/', '') || 'home');
-          setRedirectAfterLogin(null);
-        } else {
-          setActiveTab('home');
-        }
+      if (redirectAfterLogin) {
+        setActiveTab(redirectAfterLogin.replace('/', '') || 'home');
+        setRedirectAfterLogin(null);
+      } else if (mode === 'signup') {
+        setActiveTab('home');
       }
     } catch (err) {
       console.error(err);
@@ -644,6 +624,7 @@ await fetch('/api/roadmaps', {
       setRoadmaps(updatedRoadmaps);
       setActiveRoadmapId(newRoadmap.id);
       setSelectedRoadmapId(newRoadmap.id);
+      syncRoadmapsFromDatabase();
       
       // Dispatch alert notify
       const newNotif: SystemNotification = {
@@ -690,6 +671,8 @@ await fetch('/api/roadmaps', {
         if (selectedRoadmapId === id) {
           setSelectedRoadmapId(null);
         }
+
+        syncRoadmapsFromDatabase();
 
         const notif: SystemNotification = {
           id: `notif-del-${Date.now()}`,
@@ -1188,11 +1171,11 @@ return renderHomeView({
         }
         if (roadmapDetailTab === 'quiz') {
           if (!selectedRm) return null;
-          return <QuizTab roadmap={selectedRm} onAddXp={handleAddXp} />;
+          return <QuizTab roadmap={selectedRm} onAddXp={handleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} />;
         }
         if (roadmapDetailTab === 'projects') {
           if (!selectedRm) return null;
-          return <ProjectsTab roadmap={selectedRm} onAddXp={handleAddXp} />;
+          return <ProjectsTab roadmap={selectedRm} onAddXp={handleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} />;
         }
         if (roadmapDetailTab === 'insights') {
           if (!selectedRm) return null;

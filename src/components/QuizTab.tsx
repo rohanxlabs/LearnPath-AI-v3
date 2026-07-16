@@ -15,6 +15,7 @@ interface CachedPhaseQuiz {
 interface QuizTabProps {
   roadmap: Roadmap;
   onAddXp: (amount: number) => void;
+  onRoadmapUpdated?: () => void;
 }
 
 interface Question {
@@ -25,7 +26,7 @@ interface Question {
    misconceptionNotes?: string[];
 }
 
-export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
+export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated }: QuizTabProps) {
   const [quizzes, setQuizzes] = useState<TopicQuizAttempt[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -129,6 +130,7 @@ export function QuizTab({ roadmap, onAddXp }: QuizTabProps) {
               }
             })
           });
+          onRoadmapUpdated?.();
           console.log('[QuizTab] Successfully persisted quiz to roadmap');
 
         } catch (e) {

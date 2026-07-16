@@ -16,6 +16,14 @@ type RecCacheEntry = {
 };
 const recCache: Map<string, RecCacheEntry> = new Map();
 const REC_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// In-memory cache for roadmap lookups (short TTL, invalidated on write)
+type RoadmapCacheEntry = {
+  data: any[];
+  timestamp: number;
+};
+const roadmapCache: Map<string, RoadmapCacheEntry> = new Map();
+const ROADMAP_CACHE_TTL = 30 * 1000; // 30 seconds
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 
@@ -331,7 +339,7 @@ app.get('/api/bootstrap', async (req, res) => {
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     const progress = dbData?.progress || {};
-    const roadmaps = dbData?.roadmaps || [];
+    const roadmaps = await getUserRoadmaps(userEmail);
 
     return res.json({
       authenticated: true,
@@ -1578,6 +1586,7 @@ app.post('/api/update-roadmap', requireAuth, async (req, res) => {
 
     dbData.roadmaps[idx] = merged;
     await saveUserDB(userEmail, dbData);
+    invalidateUserRoadmaps(userEmail);
 
     return res.json({ success: true, roadmap: dbData.roadmaps[idx] });
   } catch (error) {
@@ -1595,12 +1604,7 @@ app.get('/api/roadmaps', requireAuth, async (req, res) => {
   }
 
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    if (!dbData) {
-      return res.json([]);
-    }
-    
-    const roadmaps = dbData.roadmaps || [];
+    const roadmaps = await getUserRoadmaps(userEmail);
     return res.json(roadmaps);
   } catch (error) {
     console.error('Get roadmaps error:', error);
@@ -1633,6 +1637,7 @@ app.delete('/api/roadmaps/:id', requireAuth, async (req, res) => {
     }
     
     await saveUserDB(userEmail, dbData);
+    invalidateUserRoadmaps(userEmail);
     return res.json({ success: true, deletedId: id });
   } catch (error) {
     console.error('Delete roadmap error:', error);
@@ -1669,6 +1674,7 @@ app.post('/api/roadmaps', requireAuth, async (req, res) => {
 
     dbData.roadmaps = roadmaps;
     await saveUserDB(userEmail, dbData);
+    invalidateUserRoadmaps(userEmail);
 
     return res.json({ success: true, roadmap: roadmaps[existingIndex >= 0 ? existingIndex : roadmaps.length - 1] });
   } catch (error) {
@@ -1979,6 +1985,7 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     }
 
     await saveUserDB(userEmail, dbData);
+    invalidateUserRoadmaps(userEmail);
 
     const newStreak = await updateStreak(userEmail);
 
@@ -2317,6 +2324,23 @@ async function loadUserDB(userEmail: string, options: { createIfMissing?: boolea
     }
     return null;
   }
+}
+
+async function getUserRoadmaps(userEmail: string): Promise<any[]> {
+  const key = userEmail.toLowerCase();
+  const cached = roadmapCache.get(key);
+  if (cached && Date.now() - cached.timestamp < ROADMAP_CACHE_TTL) {
+    return cached.data;
+  }
+
+  const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+  const roadmaps = dbData?.roadmaps || [];
+  roadmapCache.set(key, { data: roadmaps, timestamp: Date.now() });
+  return roadmaps;
+}
+
+function invalidateUserRoadmaps(userEmail: string): void {
+  roadmapCache.delete(userEmail.toLowerCase());
 }
 
 async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {

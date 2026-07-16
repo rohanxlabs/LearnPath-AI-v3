@@ -10,9 +10,10 @@ import { EmptyState } from './EmptyState';
 interface ProjectsTabProps {
   roadmap: Roadmap;
   onAddXp: (amount: number) => void;
+  onRoadmapUpdated?: () => void;
 }
 
-export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
+export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabProps) {
   const [projects, setProjects] = useState<ProjectTrack[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [filterDifficulty, setFilterDifficulty] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
@@ -78,6 +79,7 @@ export function ProjectsTab({ roadmap, onAddXp }: ProjectsTabProps) {
           updates: { projects: updatedProjects }
         })
       });
+      onRoadmapUpdated?.();
     } catch (e) {
       console.warn('[ProjectsTab] Could not persist project progress:', e);
     }
