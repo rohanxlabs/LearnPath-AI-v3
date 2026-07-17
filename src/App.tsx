@@ -183,6 +183,7 @@ export default function App() {
   const [authName, setAuthName] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authError, setAuthError] = useState('');
+  const [showForgotCredentialsNotice, setShowForgotCredentialsNotice] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -938,11 +939,13 @@ await fetch('/api/roadmaps', {
     }
   };
 
-  // Stripe payments simulate trigger
+  // Demo-only Pro upgrade — no payment processor is wired up. This flips the local
+  // isPro flag so the Pro experience can be previewed, but does not charge anyone
+  // or talk to Stripe/Razorpay. See P0 audit item: relabel or wire a real processor.
   const handleStripeCheckout = () => {
-    setStripeCheckoutStatus("Connecting to secure server-side checkout process...");
+    setStripeCheckoutStatus("Simulating checkout (demo mode, no real charge)...");
     setTimeout(() => {
-      setStripeCheckoutStatus("Payment processed successfully via Stripe portal! Pro benefits unlocked.");
+      setStripeCheckoutStatus("Demo complete — Pro features unlocked for this session. No payment was processed.");
       setProfile(p => ({ ...p, isPro: true }));
       
       const newNotif: SystemNotification = {
@@ -1352,7 +1355,13 @@ await fetch('/api/roadmaps', {
           <div className="space-y-1.5 font-sans">
             <div className="flex justify-between items-center bg-transparent text-[10px]">
               <label className="block uppercase font-bold text-zinc-400 font-mono">Security Password</label>
-              <button type="button" className="text-zinc-500 hover:text-white cursor-pointer select-text">Forgot Credentials?</button>
+              <button
+                type="button"
+                onClick={() => setShowForgotCredentialsNotice(true)}
+                className="text-zinc-500 hover:text-white cursor-pointer"
+              >
+                Forgot Credentials?
+              </button>
             </div>
             <input
               type="password"
@@ -1362,6 +1371,12 @@ await fetch('/api/roadmaps', {
               className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
               required
             />
+            {showForgotCredentialsNotice && (
+              <p className="text-[10px] text-amber-300 pt-1">
+                Self-serve password reset isn't available yet. For now, contact support to
+                have your account reset manually.
+              </p>
+            )}
           </div>
 
           <button

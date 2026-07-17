@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Clock, Trophy, Shield, Eye, Sparkles, User, Settings, CreditCard, HelpCircle, CheckCircle, BellRing, Lock, ToggleLeft, ToggleRight, Laptop, Moon, Sun } from 'lucide-react';
+import { BarChart3, Clock, Trophy, Shield, Eye, Sparkles, User, Settings, CreditCard, HelpCircle, CheckCircle, BellRing, Lock, ToggleLeft, ToggleRight, Sun } from 'lucide-react';
 import { UserProfile, UserSettings } from '../types';
 import { XPBadge, StreakBadge } from './Badges';
 
@@ -364,19 +364,9 @@ export function ProfileView({
   onRequestNotificationPermission
 }: ProfileViewProps) {
   const [notificationEnabled, setNotificationEnabled] = useState(settings.notificationsEnabled);
-  const [isSyncingTheme, setIsSyncingTheme] = useState(settings.theme);
-
-  useEffect(() => {
-    setIsSyncingTheme(settings.theme);
-  }, [settings.theme]);
 
   const handleUpdate = (updates: any) => {
     onUpdateSettings(updates);
-  };
-
-  const selectColorTheme = (theme: 'dark' | 'light' | 'system') => {
-    setIsSyncingTheme(theme);
-    onUpdateSettings({ theme });
   };
 
   return (
@@ -425,32 +415,14 @@ export function ProfileView({
             <span>Preferences Menu</span>
           </h4>
 
-          {/* Theme custom selector */}
+          {/* Theme mode — dark/system switching isn't implemented yet, so we show the
+              one supported theme honestly instead of a selector that silently does nothing. */}
           <div className="space-y-1.5 border-b border-white/5 pb-3">
             <span className="block text-[10px] font-bold text-zinc-300 uppercase font-mono">Theme Mode</span>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: 'dark', label: 'Dark Mode', icon: Moon },
-                { id: 'light', label: 'Light Mode', icon: Sun },
-                { id: 'system', label: 'System', icon: Laptop }
-              ].map((t) => {
-                const IconComponent = t.icon;
-                const isSelected = isSyncingTheme === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => selectColorTheme(t.id as any)}
-                    className={`p-3 rounded-xl text-xs font-semibold gap-1.5 flex flex-col items-center justify-center border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-purple-500 to-blue-600 text-white border-transparent shadow-[0_4px_12px_rgba(168,85,247,0.3)]'
-                        : 'bg-[#0A0A0A]/40 border-white/5 text-zinc-350 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <IconComponent className="w-4 h-4" />
-                    <span>{t.label}</span>
-                  </button>
-                );
-              })}
+            <div className="p-3 rounded-xl text-xs font-semibold gap-1.5 flex items-center border bg-gradient-to-r from-purple-500 to-blue-600 text-white border-transparent shadow-[0_4px_12px_rgba(168,85,247,0.3)]">
+              <Sun className="w-4 h-4" />
+              <span>Light Mode</span>
+              <span className="ml-auto text-[9px] font-normal opacity-80">Dark mode coming soon</span>
             </div>
           </div>
 
@@ -506,7 +478,7 @@ export function ProfileView({
               <CreditCard className="w-4.5 h-4.5 text-purple-400" />
               <span>Payments & Subscriptions</span>
             </h4>
-            <p className="text-[10px] text-zinc-400 mt-0.5">Secure payments managed by Stripe & Razorpay portals.</p>
+            <p className="text-[10px] text-zinc-400 mt-0.5">Demo checkout — no payment processor is connected yet, no real charge occurs.</p>
           </div>
 
           <div className="p-4 rounded-xl border border-purple-500/10 bg-purple-500/5 shadow-sm space-y-2 text-xs">
@@ -546,7 +518,7 @@ export function ProfileView({
                 className="w-full py-2.5 font-bold text-xs text-white bg-gradient-to-r from-purple-500 to-blue-600 hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shadow-md rounded-xl"
                 id="btn-stripe-checkout"
               >
-                {profile.isPro ? 'Verified Pro Member' : 'Trigger Stripe Premium Checkout'}
+                {profile.isPro ? 'Verified Pro Member' : 'Try Pro (Demo — No Charge)'}
               </button>
             </div>
           )}

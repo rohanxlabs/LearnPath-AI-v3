@@ -88,8 +88,13 @@ interface MentorChatViewProps {
 export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAction }: MentorChatViewProps) {
   const [inputText, setInputText] = useState('');
   const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
-   
+  const [attachmentContent, setAttachmentContent] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  const recognitionRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -99,25 +104,80 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
-    onSendMessage(inputText);
+    const outgoing = attachmentContent
+      ? `${inputText}\n\n[Attached file: ${attachmentName}]\n\`\`\`\n${attachmentContent}\n\`\`\``
+      : inputText;
+    onSendMessage(outgoing);
     setInputText('');
     setAttachmentName(null);
-  }, [inputText, onSendMessage]);
+    setAttachmentContent(null);
+  }, [inputText, attachmentContent, attachmentName, onSendMessage]);
 
   const handleSuggestedPrompt = useCallback((prompt: string) => {
     onSendMessage(prompt);
   }, [onSendMessage]);
 
+  // Real dictation via the browser's Web Speech API (no server round-trip needed).
   const toggleVoice = useCallback(() => {
-    setIsVoiceActive(!isVoiceActive);
-    if (!isVoiceActive) {
-      // Simulate speech detection
-      setInputText("Hey AI Mentor, can you give me a code example of how to build a simple neural network layer?");
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setVoiceSupported(false);
+      return;
     }
+
+    if (isVoiceActive) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setIsVoiceActive(true);
+    recognition.onerror = () => setIsVoiceActive(false);
+    recognition.onend = () => setIsVoiceActive(false);
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((r: any) => r[0].transcript)
+        .join('');
+      setInputText(transcript);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   }, [isVoiceActive]);
 
-  const handleFileMockUpload = useCallback(() => {
-    setAttachmentName("numpy_matrix_ops.py");
+  // Real file reading — content is attached as literal text context sent to the mentor.
+  const MAX_ATTACHMENT_BYTES = 50_000;
+  const handleFileButtonClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setAttachmentError(null);
+
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setAttachmentError(`"${file.name}" is too large to attach (max 50KB).`);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachmentName(file.name);
+      setAttachmentContent(String(reader.result ?? ''));
+    };
+    reader.onerror = () => {
+      setAttachmentError(`Couldn't read "${file.name}".`);
+    };
+    reader.readAsText(file);
   }, []);
 
   const suggestedPrompts = [
@@ -227,7 +287,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
             </span>
             <button
               type="button"
-              onClick={() => setAttachmentName(null)}
+              onClick={() => { setAttachmentName(null); setAttachmentContent(null); }}
               className="text-[9px] text-red-450 hover:text-red-500 font-semibold"
             >
               Remove
@@ -235,12 +295,31 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
           </div>
         )}
 
+        {attachmentError && (
+          <div className="mb-2 py-1 px-2.5 rounded border border-amber-500/30 bg-amber-500/10 max-w-sm">
+            <span className="text-[10px] text-amber-300">{attachmentError}</span>
+          </div>
+        )}
+
+        {!voiceSupported && (
+          <div className="mb-2 py-1 px-2.5 rounded border border-amber-500/30 bg-amber-500/10 max-w-sm">
+            <span className="text-[10px] text-amber-300">Voice dictation isn't supported in this browser.</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".py,.js,.ts,.tsx,.jsx,.txt,.md,.json,.csv"
+            onChange={handleFileSelected}
+            className="hidden"
+          />
           <button
             type="button"
-            onClick={handleFileMockUpload}
+            onClick={handleFileButtonClick}
             className="p-2.5 text-zinc-400 hover:text-white hover:bg-white/[0.05] rounded-xl transition-colors cursor-pointer"
-            title="Attach python scripts"
+            title="Attach a code or text file"
             id="btn-chat-attach"
           >
             <Paperclip className="w-4 h-4" />
@@ -254,7 +333,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
                 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
                 : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
             }`}
-            title="Toggle Mic Speech"
+            title="Dictate your message"
             id="btn-chat-mic"
           >
             {isVoiceActive ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
