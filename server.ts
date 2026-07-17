@@ -65,6 +65,8 @@ async function withUserLock<T>(email: string, fn: () => Promise<T>): Promise<T> 
 }
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
+import connectPgSimple from 'connect-pg-simple';
+import pg from 'pg';
 
 // Lightweight HTTP error used to propagate status codes out of locked closures.
 class HttpError extends Error {
@@ -75,11 +77,38 @@ class HttpError extends Error {
   }
 }
 
+// Input validation helpers (email format + password strength policy).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isValidEmail(email: string): boolean {
+  return typeof email === 'string' && EMAIL_RE.test(email) && email.length <= 254;
+}
+function validatePassword(password: string): string | null {
+  if (typeof password !== 'string') return 'Password is required';
+  if (password.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return 'Password must contain at least one letter and one number';
+  }
+  return null;
+}
+
 const app = express();
 app.set('trust proxy', 1);
 const PORT = 3000;
 
 const sql = neon(process.env.DATABASE_URL!);
+
+// Separate pg Pool used only for the persistent session store (connect-pg-simple
+// requires a Pool, whereas the app's data layer uses the serverless `neon` client).
+const PgStore = connectPgSimple(session);
+let sessionStore: any;
+try {
+  const pgPool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  sessionStore = new PgStore({ pool: pgPool, createTableIfMissing: true });
+  console.log('[Session] Using PostgreSQL-backed persistent session store');
+} catch (err) {
+  console.warn('[Session] Falling back to in-memory store:', (err as Error).message);
+  sessionStore = undefined;
+}
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -96,6 +125,8 @@ declare module 'express-session' {
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(session({
+  store: sessionStore,
+  name: 'learnpath.sid',
   secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
@@ -298,6 +329,13 @@ app.post('/api/register', authLimiter, async (req, res) => {
   if (!email || !password || !name || !name.trim()) {
     return res.status(400).json({ error: 'Name, email, and password are required' });
   }
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address' });
+  }
+  const pwErr = validatePassword(password);
+  if (pwErr) {
+    return res.status(400).json({ error: pwErr });
+  }
 
   try {
     const db = await loadUserDB(email);
@@ -329,6 +367,9 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
   if (!email || typeof email !== 'string' || !email.trim()) {
     return res.status(400).json({ error: 'Email is required' });
+  }
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address' });
   }
   if (!password || typeof password !== 'string') {
     return res.status(400).json({ error: 'Password is required' });
@@ -1598,6 +1639,17 @@ app.post('/api/update-roadmap', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'roadmapId and updates object are required' });
   }
 
+  // Allowlist of client-mutable roadmap fields. Anything else (e.g. id, email,
+  // createdAt, ownership fields) is rejected to prevent tampering.
+  const ROADMAP_MUTABLE_FIELDS = new Set([
+    'title', 'goal', 'progressPercent', 'totalXp', 'lessonsCompleted',
+    'hoursRemaining', 'phases', 'resources', 'projects', 'quizzes'
+  ]);
+  const forbidden = Object.keys(updates).filter((k) => !ROADMAP_MUTABLE_FIELDS.has(k));
+  if (forbidden.length > 0) {
+    return res.status(400).json({ error: `Cannot update field(s): ${forbidden.join(', ')}` });
+  }
+
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     if (!dbData || !dbData.roadmaps) {
@@ -2570,7 +2622,7 @@ function preparePWAAssets() {
 
 // 8. API: Track Lesson Progress
 app.post('/api/progress', aiLimiter, requireAuth, async (req, res) => {
-  const { roadmapId, lessonId, action, totalXP } = req.body;
+  const { roadmapId, lessonId, action } = req.body;
   const userEmail = req.session.userEmail;
 
   if (!userEmail) {
@@ -2621,20 +2673,15 @@ app.post('/api/progress', aiLimiter, requireAuth, async (req, res) => {
       progress.updatedAt = new Date().toISOString();
     }
 
-    // Calculate total XP from completed lessons
-    if (action === 'get') {
+    // Total XP is ALWAYS derived server-side from completed lessons' xpReward.
+    // The client may send `totalXP` but it is ignored to prevent XP inflation.
+    {
       const roadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
-      const allLessons = roadmap?.phases?.flatMap((ph: any) => 
+      const allLessons = roadmap?.phases?.flatMap((ph: any) =>
         ph.levels?.flatMap((lvl: any) => lvl.lessons || []) || []) || [];
-      const xpEarned = allLessons
+      progress.totalXP = allLessons
         .filter((l: any) => progress.completedLessonIds.includes(l.id))
         .reduce((sum: number, l: any) => sum + (l.xpReward || 0), 0);
-      progress.totalXP = xpEarned;
-    }
-
-    // Update XP if provided
-    if (totalXP !== undefined) {
-      progress.totalXP = totalXP;
     }
 
     // Calculate progress percentage

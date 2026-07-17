@@ -78,7 +78,7 @@ export function AIInsightsTab({ roadmap, profile }: AIInsightsTabProps) {
         transition={{ duration: 0.5 }}
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
       >
-        <StatCard icon={<TrendingUp size={20} />} title="XP This Week" value={insightsData.weeklyReports[0].xpGained.toString()} change="+15% vs last week" />
+        <StatCard icon={<TrendingUp size={20} />} title="Total XP" value={insightsData.weeklyReports[0].xpGained.toString()} />
         <StatCard icon={<Check size={20} />} title="Lessons Completed" value={insightsData.weeklyReports[0].lessonsCompleted.toString()} />
         <StatCard icon={<GitBranch size={20} />} title="Projects Completed" value={insightsData.weeklyReports[0].projectsCompleted.toString()} />
         <StatCard icon={<Calendar size={20} />} title="Est. Completion" value={insightsData.predictedCompletionDate ? insightsData.predictedCompletionDate.toLocaleDateString() : 'N/A'} />

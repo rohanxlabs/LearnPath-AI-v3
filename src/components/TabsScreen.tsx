@@ -265,20 +265,36 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
             <div>
               <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
                 <span className="text-zinc-300 font-medium">Quiz Accuracy</span>
-                <span className="font-mono text-white font-semibold">92% Average score</span>
+                {(() => {
+                  const quizzes = (profile?.topicWiseQuizzes || []) as any[];
+                  const total = quizzes.reduce((s: number, q: any) => s + (q.totalQuestions || 0), 0);
+                  const score = quizzes.reduce((s: number, q: any) => s + (q.score || 0), 0);
+                  const pct = total > 0 ? Math.round((score / total) * 100) : null;
+                  return (
+                    <span className="font-mono text-white font-semibold">
+                      {pct === null ? 'No quiz data' : `${pct}% Average score`}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '92%' }} />
+                {(() => {
+                  const quizzes = (profile?.topicWiseQuizzes || []) as any[];
+                  const total = quizzes.reduce((s: number, q: any) => s + (q.totalQuestions || 0), 0);
+                  const score = quizzes.reduce((s: number, q: any) => s + (q.score || 0), 0);
+                  const pct = total > 0 ? Math.round((score / total) * 100) : 0;
+                  return <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />;
+                })()}
               </div>
             </div>
 
             <div>
               <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
-                <span className="text-zinc-300 font-medium">Coding Compilation Accuracy</span>
-                <span className="font-mono text-white font-semibold">85% Compile pass rate</span>
+                <span className="text-zinc-300 font-medium">Lessons Completed</span>
+                <span className="font-mono text-white font-semibold">{stats?.lessonsCompleted ?? 0} lessons done</span>
               </div>
               <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-amber-500 rounded-full" style={{ width: '85%' }} />
+                <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, (stats?.lessonsCompleted ?? 0) * 5)}%` }} />
               </div>
             </div>
           </div>

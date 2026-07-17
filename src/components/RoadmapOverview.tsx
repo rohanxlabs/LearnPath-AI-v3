@@ -3,15 +3,9 @@ import React from 'react';
 import { Sparkles, PlusCircle, GraduationCap } from 'lucide-react';
 import { Roadmap, UserProfile } from '../types';
 import { RoadmapHero } from './RoadmapHero';
-import RoadmapTree from './RoadmapTree';
+import RoadmapTree, { transformRoadmapToSkillTree } from './RoadmapTree';
 import { AIMentorAnalysis } from './AIMentorAnalysis';
 import { buttonStyles } from '../styles/theme';
-
-interface SkillNode {
-  name: string;
-  status: 'completed' | 'current' | 'locked' | 'available';
-  children?: SkillNode[];
-}
 
 // Helper function to generate AI Mentor Analysis
 const generateMentorAnalysis = (roadmap: Roadmap, profile: UserProfile) => {
@@ -50,64 +44,7 @@ const generateMentorAnalysis = (roadmap: Roadmap, profile: UserProfile) => {
 };
 
 // Helper function to transform roadmap data into a skill tree
-const transformRoadmapToSkillTree = (roadmap: Roadmap): SkillNode | null => {
-  if (!roadmap || !roadmap.phases) return null;
-
-  const findCurrentNode = (phases: any[]) => {
-    for (const phase of phases || []) {
-      for (const level of (phase.levels || [])) {
-        for (const lesson of (level.lessons || [])) {
-          if (lesson.status === 'current') {
-            return { phase: phase.name, level: level.name, lesson: lesson.name };
-          }
-        }
-      }
-    }
-    return null;
-  };
-
-  const currentNode = findCurrentNode(roadmap.phases);
-
-  return {
-    name: roadmap.goal,
-    status: 'current',
-    children: (roadmap.phases || []).map(phase => ({
-      name: phase.name,
-      status: (phase.levels || []).every(l => (l.lessons || []).every(le => le.status === 'completed')) ? 'completed' : 'current',
-      children: (phase.levels || []).map(level => ({
-        name: level.name,
-        status: (level.lessons || []).every(le => le.status === 'completed') ? 'completed' : 'current',
-        children: (level.lessons || []).map(lesson => {
-          let status: SkillNode['status'] = lesson.status === 'completed' ? 'completed' : 'locked';
-          
-          if (status !== 'completed') {
-             if (currentNode) {
-               const isCurrentPhase = phase.name === currentNode.phase;
-               const isCurrentLevel = level.name === currentNode.level;
-               if (isCurrentPhase && isCurrentLevel) {
-                 status = 'available';
-               } else {
-                 status = 'locked';
-               }
-             } else {
-                const firstLesson = roadmap.phases?.[0]?.levels?.[0]?.lessons?.[0];
-                if(lesson.name === firstLesson?.name) {
-                    status = 'available';
-                } else {
-                    status = 'locked';
-                }
-             }
-          }
-
-          return {
-            name: lesson.name,
-            status: status,
-          };
-        }),
-      })),
-    })),
-  };
-};
+// (imported from RoadmapTree so lesson IDs are preserved for selection)
 
 interface RoadmapOverviewProps {
   roadmaps: Roadmap[];
@@ -122,6 +59,8 @@ interface RoadmapOverviewProps {
   isGenerating: boolean;
   onContinueActive: () => void;
   profile: UserProfile;
+  onLessonSelect?: (phaseId: string, levelId: string, lessonId: string) => void;
+  onAiAction?: (actionType: string, phaseName?: string) => void;
 }
 
 export function RoadmapOverview({
@@ -131,7 +70,9 @@ export function RoadmapOverview({
   onGenerateRoadmap,
   isGenerating,
   onContinueActive,
-  profile
+  profile,
+  onLessonSelect,
+  onAiAction
 }: RoadmapOverviewProps) {
   const [showGenerator, setShowGenerator] = useState(false);
   const [goal, setGoal] = useState('');
@@ -183,7 +124,7 @@ export function RoadmapOverview({
               recommendation={mentorAnalysisData.recommendation}
             />
           )}
-          {skillTreeData && <RoadmapTree data={skillTreeData} />}
+          {skillTreeData && <RoadmapTree data={skillTreeData} onLessonSelect={onLessonSelect} onAiAction={onAiAction} />}
         </>
       )}
 

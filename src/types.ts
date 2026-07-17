@@ -13,6 +13,7 @@ export interface UserProfile {
   hoursStudied: number;
   aiSessionsCount: number;
   completedLessonIds?: string[];
+  topicWiseQuizzes?: Array<{ quizId: string; score: number; totalQuestions: number; [key: string]: any }>;
   createdAt: string;
 }
 

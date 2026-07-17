@@ -363,13 +363,16 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                       )}
                     </div>
                     
-                    <button 
+                    <button
                       onClick={() => {
-                        const totalQuestions = topicData.quizQuestions?.length || 1;
-                        const correct = Object.keys(quizAnswers).length;
-                        const score = correct >= totalQuestions / 2 ? totalQuestions : correct;
-                        setQuizScore(score);
-                        if (score === totalQuestions) {
+                        const questions = topicData.quizQuestions || [];
+                        const totalQuestions = questions.length || 1;
+                        let correct = 0;
+                        questions.forEach((q: any) => {
+                          if (quizAnswers[q.id] === q.correctIndex) correct += 1;
+                        });
+                        setQuizScore(correct);
+                        if (correct === totalQuestions) {
                           handleMarkComplete();
                         }
                       }}

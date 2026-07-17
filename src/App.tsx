@@ -1065,6 +1065,8 @@ await fetch('/api/roadmaps', {
             isGenerating={isAiGeneratingRoadmap}
             onContinueActive={() => setActiveLesson(null)}
             profile={profile}
+            onLessonSelect={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
+            onAiAction={handleAiAction}
           />
         </div>
       );

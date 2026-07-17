@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import React from 'react';
 import { Sparkles, PlusCircle, GraduationCap } from 'lucide-react';
 import { Roadmap, UserProfile } from '../types';
@@ -75,6 +75,14 @@ export function RoadmapsTabContainer({
   const [experienceLevel, setExperienceLevel] = useState('Beginner');
   const [weeklyHours, setWeeklyHours] = useState(10);
   const [preferredStyle, setPreferredStyle] = useState('Hands-on');
+
+  // Redirect to the list view when a selected roadmap no longer exists.
+  // Done in an effect (not during render) to avoid side effects in the render path.
+  useEffect(() => {
+    if (selectedRoadmapId && !roadmaps.some(r => r.id === selectedRoadmapId)) {
+      onBackToList();
+    }
+  }, [selectedRoadmapId, roadmaps, onBackToList]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,7 +238,6 @@ export function RoadmapsTabContainer({
 
   const selectedRoadmap = roadmaps.find(r => r.id === selectedRoadmapId);
   if (!selectedRoadmap) {
-    onBackToList();
     return null;
   }
 

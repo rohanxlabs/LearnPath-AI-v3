@@ -5,6 +5,11 @@ import { Roadmap } from '../types';
 interface SkillNode {
   name: string;
   status: 'completed' | 'current' | 'locked' | 'available';
+  id?: string;
+  phaseId?: string;
+  levelId?: string;
+  lessonId?: string;
+  isLesson?: boolean;
   children?: SkillNode[];
 }
 
@@ -12,10 +17,10 @@ interface RoadmapTreeProps {
   data?: SkillNode;
   roadmap?: Roadmap;
   onLessonSelect?: (phaseId: string, levelId: string, lessonId: string) => void;
-  onAiAction?: (actionType: 'quiz' | 'projects' | 'explain' | 'study_plan', phaseName: string) => Promise<void>;
+  onAiAction?: (actionType: string, phaseName?: string) => void;
 }
 
-const transformRoadmapToSkillTree = (roadmap?: Roadmap): SkillNode | null => {
+export const transformRoadmapToSkillTree = (roadmap?: Roadmap): SkillNode | null => {
   if (!roadmap || !roadmap.phases?.length) return null;
 
   const firstIncomplete = (roadmap.phases || [])
@@ -29,9 +34,12 @@ const transformRoadmapToSkillTree = (roadmap?: Roadmap): SkillNode | null => {
     children: (roadmap.phases || []).map(phase => ({
       name: phase.name,
       status: (phase.levels || []).every(level => (level.lessons || []).every(lesson => lesson.status === 'completed')) ? 'completed' : 'current',
+      phaseId: phase.id,
       children: (phase.levels || []).map(level => ({
         name: level.name,
         status: (level.lessons || []).every(lesson => lesson.status === 'completed') ? 'completed' : 'current',
+        phaseId: phase.id,
+        levelId: level.id,
         children: (level.lessons || []).map(lesson => {
           const status: SkillNode['status'] =
             lesson.status === 'completed'
@@ -43,6 +51,11 @@ const transformRoadmapToSkillTree = (roadmap?: Roadmap): SkillNode | null => {
           return {
             name: lesson.name,
             status,
+            id: lesson.id,
+            phaseId: phase.id,
+            levelId: level.id,
+            lessonId: lesson.id,
+            isLesson: true,
           };
         }),
       })),
@@ -108,8 +121,9 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
                 </div>
               </div>
             </div>
-            {onAiAction && node.children && (
+            {onAiAction && (
               <button
+                type="button"
                 onClick={() => onAiAction('explain', node.name)}
                 className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
               >
@@ -142,9 +156,13 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
                     )}
                   </div>
                   <span
+                    role={child.isLesson && onLessonSelect ? 'button' : undefined}
+                    tabIndex={child.isLesson && onLessonSelect ? 0 : undefined}
+                    onClick={child.isLesson && onLessonSelect && child.lessonId ? () => onLessonSelect(child.phaseId!, child.levelId!, child.lessonId!) : undefined}
+                    onKeyDown={child.isLesson && onLessonSelect && child.lessonId ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLessonSelect!(child.phaseId!, child.levelId!, child.lessonId!); } } : undefined}
                     className={`text-sm flex-1 ${
                       child.status === 'locked' ? 'text-slate-400' : 'text-slate-700 font-medium'
-                    }`}
+                    } ${child.isLesson && onLessonSelect ? 'cursor-pointer hover:underline' : ''}`}
                   >
                     {child.name}
                   </span>

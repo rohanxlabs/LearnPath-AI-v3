@@ -35,11 +35,20 @@ export const LessonItem: React.FC<LessonItemProps> = ({
     }
   };
   
-  return (
-    <motion.button
+   return (
+    <motion.div
       whileTap={{ scale: 0.98 }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open lesson: ${lesson.name}`}
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all group ${
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
         displayStatus === 'current'
           ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/60 hover:border-indigo-300 shadow-sm'
           : 'hover:bg-slate-50 border border-transparent'
@@ -59,14 +68,18 @@ export const LessonItem: React.FC<LessonItemProps> = ({
         {lesson.name}
       </span>
       
-{isRecommended && (
-       <button
-         onClick={onRecommendedClick || onClick}
-         className="flex-shrink-0 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full uppercase tracking-wide hover:bg-indigo-200 transition-colors cursor-pointer"
-       >
-         Continue Learning
-       </button>
-     )}
-    </motion.button>
-  );
+ {isRecommended && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            (onRecommendedClick || onClick)();
+          }}
+          className="flex-shrink-0 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full uppercase tracking-wide hover:bg-indigo-200 transition-colors cursor-pointer"
+        >
+          Continue Learning
+        </button>
+      )}
+    </motion.div>
+   );
 };

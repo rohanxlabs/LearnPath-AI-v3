@@ -27,61 +27,93 @@ export interface AIInsight {
   type: 'strength' | 'weakness' | 'recommendation';
 }
 
-// This function would live on the backend and be called via an API.
-// For now, we simulate it here.
+// Derives insights from REAL user/roadmap data. No random/fake metrics.
 export const generateInsightsData = (roadmap: Roadmap, profile: UserProfile) => {
   const allLessons: Lesson[] = (roadmap.phases || [])
     .flatMap(p => (p.levels || [])
       .flatMap(l => (l.lessons || [])));
   const completedLessonIds = new Set(profile.completedLessonIds || []);
   const completedLessons = allLessons.filter(l => completedLessonIds.has(l.id));
+  const completedCount = completedLessons.length;
+  const totalLessons = allLessons.length;
 
-  // 1. Weekly Report Data
+  // 1. Weekly Report Data — derived from real totals only (no fabricated history).
   const weeklyReports: WeeklyReport[] = [
-    { week: 'This Week', xpGained: 125, lessonsCompleted: 5, projectsCompleted: 1, quizzesTaken: 3 },
-    { week: 'Last Week', xpGained: 90, lessonsCompleted: 3, projectsCompleted: 0, quizzesTaken: 2 },
-    { week: '2 Weeks Ago', xpGained: 150, lessonsCompleted: 7, projectsCompleted: 1, quizzesTaken: 4 },
-    { week: '3 Weeks Ago', xpGained: 70, lessonsCompleted: 2, projectsCompleted: 0, quizzesTaken: 1 },
+    {
+      week: 'All Time',
+      xpGained: profile.xp || 0,
+      lessonsCompleted: completedCount,
+      projectsCompleted: (roadmap.projects || []).filter((p: any) => (p.progress || 0) >= 100).length,
+      quizzesTaken: (profile.topicWiseQuizzes || []).length,
+    },
   ];
 
-  // 2. Learning Velocity Data
-  const learningVelocity: LearningVelocity[] = Array.from({ length: 30 }, (_, i) => {
+  // 2. Learning Velocity Data — flat, honest spread of actual total XP across
+  // the days the account has been active (0 if account is brand new).
+  const daysSinceStart = Math.max(
+    1,
+    Math.round((Date.now() - new Date(profile.createdAt || Date.now()).getTime()) / (1000 * 3600 * 24))
+  );
+  const xpPerDay = Math.round((profile.xp || 0) / daysSinceStart);
+  const learningVelocity: LearningVelocity[] = Array.from({ length: 14 }, (_, i) => {
     const date = new Date();
-    date.setDate(date.getDate() - i);
+    date.setDate(date.getDate() - (13 - i));
     return {
       date: date.toISOString().split('T')[0],
-      xp: Math.floor(Math.random() * (i < 7 ? 50 : 30)), // More XP in recent days
+      xp: completedCount > 0 ? xpPerDay : 0,
     };
-  }).reverse();
+  });
 
-  // 3. Skill Mastery Data
-  const techSet = new Set<string>();
-  completedLessons.forEach(l => (l.tags || []).forEach(t => techSet.add(t)));
-  const skillMastery: SkillMastery[] = Array.from(techSet).slice(0, 8).map(skill => ({
+  // 3. Skill Mastery Data — deterministic level from actual completion, not random.
+  const techMap = new Map<string, { total: number; done: number }>();
+  allLessons.forEach(l => {
+    (l.tags || []).forEach(t => {
+      const entry = techMap.get(t) || { total: 0, done: 0 };
+      entry.total += 1;
+      if (completedLessonIds.has(l.id)) entry.done += 1;
+      techMap.set(t, entry);
+    });
+  });
+  const skillMastery: SkillMastery[] = Array.from(techMap.entries()).slice(0, 8).map(([skill, v]) => ({
     skill,
-    level: Math.floor(1 + Math.random() * 4), // Random level from 1-5
+    level: v.total > 0 ? Math.min(5, Math.max(1, Math.round((v.done / v.total) * 5))) : 1,
   }));
 
-  // 4. Predicted Completion
-  const totalLessons = allLessons.length;
-  const completedCount = completedLessons.length;
+  // 4. Predicted Completion — only when there is a real velocity.
   const completionPercentage = totalLessons > 0 ? (completedCount / totalLessons) : 0;
-  const daysSinceStart = (new Date().getTime() - new Date(profile.createdAt).getTime()) / (1000 * 3600 * 24);
   const lessonsPerDay = daysSinceStart > 0 ? completedCount / daysSinceStart : 0;
   const remainingLessons = totalLessons - completedCount;
   const remainingDays = lessonsPerDay > 0 ? Math.ceil(remainingLessons / lessonsPerDay) : Infinity;
-  
-  const predictedCompletionDate = isFinite(remainingDays) ? new Date() : null;
-  if (predictedCompletionDate && isFinite(remainingDays)) {
+
+  let predictedCompletionDate: Date | null = null;
+  if (isFinite(remainingDays) && remainingDays > 0) {
+    predictedCompletionDate = new Date();
     predictedCompletionDate.setDate(predictedCompletionDate.getDate() + remainingDays);
   }
 
-  // 5. AI-Generated Insights
-  const aiInsights: AIInsight[] = [
-    { id: '1', type: 'strength', title: 'Consistent Week-over-Week Progress', description: 'You have consistently completed lessons for the past 4 weeks. Keep up the momentum!' },
-    { id: '2', type: 'weakness', title: 'Lower Quiz Accuracy in "State Management"', description: 'Your quiz scores in State Management topics are slightly lower. Consider reviewing the related resources.' },
-    { id: '3', type: 'recommendation', title: 'Start a Project on "Authentication"', description: 'You have completed all the lessons on Authentication. Now is a great time to start a project to solidify your knowledge.' },
-  ];
+  // 5. AI Insights — conditional on real activity (no fabricated claims).
+  const aiInsights: AIInsight[] = [];
+  if (completedCount > 0) {
+    aiInsights.push({
+      id: '1', type: 'strength',
+      title: 'Lessons in Progress',
+      description: `You have completed ${completedCount} of ${totalLessons} lessons (${Math.round(completionPercentage * 100)}%). Keep the momentum going!`,
+    });
+  }
+  if (skillMastery.length > 0) {
+    aiInsights.push({
+      id: '2', type: 'recommendation',
+      title: 'Reinforce Weak Skills',
+      description: `Focus next on skills with lower mastery: ${skillMastery.filter(s => s.level <= 2).map(s => s.skill).slice(0, 3).join(', ') || 'none yet'}.`,
+    });
+  }
+  if (remainingLessons > 0 && completedCount > 0) {
+    aiInsights.push({
+      id: '3', type: 'recommendation',
+      title: 'Stay Consistent',
+      description: `At your current pace you could finish the remaining ${remainingLessons} lessons in about ${remainingDays} days.`,
+    });
+  }
 
   return {
     weeklyReports,
