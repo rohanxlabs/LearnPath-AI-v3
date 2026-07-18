@@ -222,6 +222,25 @@ export default function App() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Whether the server has a working AI key. null = not checked yet.
+  // Powers an honest banner instead of letting canned fallback content
+  // pass silently as real AI output. See P1 audit item: "AI fallback transparency".
+  const [aiActive, setAiActive] = useState<boolean | null>(null);
+  const [showAiOfflineBanner, setShowAiOfflineBanner] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled) setAiActive(!!data.aiActive);
+      })
+      .catch(() => {
+        if (!cancelled) setAiActive(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     const verifySession = async () => {
       try {
@@ -1027,6 +1046,7 @@ await fetch('/api/roadmaps', {
             isGenerating={isAiChatGenerating}
             onSendMessage={handleSendMessage}
             onSelectAction={(topic) => handleSendMessage(topic)}
+            aiActive={aiActive}
           />
         );
       }
@@ -1219,6 +1239,7 @@ await fetch('/api/roadmaps', {
             isGenerating={isAiChatGenerating}
             onSendMessage={handleSendMessage}
             onSelectAction={(topic) => handleSendMessage(topic)}
+            aiActive={aiActive}
           />
         );
 
@@ -1509,6 +1530,24 @@ await fetch('/api/roadmaps', {
         }}
         onLogoutClick={handleLogout}
       />
+
+      {/* Honest notice when the server has no working AI key — every AI feature
+          (Mentor, Roadmap, Quiz, Recommendations, Insights) is currently serving
+          canned fallback content that only looks AI-generated. */}
+      {aiActive === false && showAiOfflineBanner && (
+        <div className="px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between gap-3">
+          <p className="text-[11px] text-amber-300 leading-snug">
+            <strong className="font-bold">AI features are offline.</strong> Mentor replies, roadmaps,
+            quizzes, recommendations, and insights are showing generic fallback content, not real AI output.
+          </p>
+          <button
+            onClick={() => setShowAiOfflineBanner(false)}
+            className="text-amber-300/70 hover:text-amber-200 text-[11px] font-bold shrink-0 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Sticky Horizontal Sub-Navigation Bar for Roadmap Details */}
       {activeTab === 'roadmaps' && !selectedLevelObj && (

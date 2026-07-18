@@ -83,9 +83,10 @@ interface MentorChatViewProps {
   onSendMessage: (text: string) => void;
   isGenerating: boolean;
   onSelectAction: (topic: string) => void;
+  aiActive: boolean | null;
 }
 
-export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAction }: MentorChatViewProps) {
+export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAction, aiActive }: MentorChatViewProps) {
   const [inputText, setInputText] = useState('');
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
@@ -209,9 +210,11 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
           <div>
             <h4 className="font-semibold text-xs text-white flex items-center gap-1.5">
               <span>LearnPath AI Mentor</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${aiActive === false ? 'bg-amber-500' : 'bg-emerald-500'}`} />
             </h4>
-            <p className="text-[10px] text-zinc-400 font-mono">OpenRouter model active</p>
+            <p className="text-[10px] text-zinc-400 font-mono">
+              {aiActive === false ? 'Offline mode — fallback replies' : 'OpenRouter model active'}
+            </p>
           </div>
         </div>
 
