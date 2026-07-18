@@ -379,19 +379,21 @@ export async function upsertModule(module: {
   roadmapId: string;
   name: string;
   type?: string | null;
+  description?: string | null;
   status?: string;
   orderIndex?: number;
 }): Promise<void> {
   await ensureRoadmapTables();
   await sql`
-    INSERT INTO modules (id, phase_id, roadmap_id, name, type, status, order_index, updated_at)
+    INSERT INTO modules (id, phase_id, roadmap_id, name, type, description, status, order_index, updated_at)
     VALUES (
       ${module.id}, ${module.phaseId}, ${module.roadmapId}, ${module.name},
-      ${module.type ?? null}, ${module.status ?? 'current'}, ${module.orderIndex ?? 0}, NOW()
+      ${module.type ?? null}, ${module.description ?? null}, ${module.status ?? 'current'}, ${module.orderIndex ?? 0}, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
       type = EXCLUDED.type,
+      description = EXCLUDED.description,
       status = EXCLUDED.status,
       order_index = EXCLUDED.order_index,
       updated_at = NOW()
@@ -850,7 +852,7 @@ export async function migrateRoadmapJsonToTables(
       orderIndex: pIdx
     });
 
-    const levels = asArray(phase.levels);
+    const levels = asArray(phase.modules && phase.modules.length ? phase.modules : phase.levels);
     for (let lIdx = 0; lIdx < levels.length; lIdx++) {
       const level = levels[lIdx];
       const moduleId = level.id || `mod-${phaseId}-${lIdx}`;
@@ -859,7 +861,8 @@ export async function migrateRoadmapJsonToTables(
         phaseId,
         roadmapId,
         name: level.name || `Module ${lIdx + 1}`,
-        type: level.type ?? null,
+        type: level.difficulty ?? level.type ?? null,
+        description: level.description ?? null,
         status: level.status ?? 'current',
         orderIndex: lIdx
       });
@@ -873,7 +876,7 @@ export async function migrateRoadmapJsonToTables(
           moduleId,
           phaseId,
           roadmapId,
-          title: lesson.name || `Lesson ${lesIdx + 1}`,
+          title: lesson.name || lesson.title || `Lesson ${lesIdx + 1}`,
           description: lesson.description ?? null,
           type: lesson.type ?? 'learn',
           xpReward: lesson.xpReward ?? 0,
@@ -883,11 +886,11 @@ export async function migrateRoadmapJsonToTables(
           difficulty: lesson.difficulty ?? null,
           estimatedMinutes: typeof lesson.estimatedMinutes === 'number' ? lesson.estimatedMinutes : null,
           skillTags: asTextArray(lesson.skillTags),
-          contentStatus: lesson.content ? 'generated' : 'pending',
+          contentStatus: 'pending',
           orderIndex: lesIdx
         });
 
-        // Seed lesson content from the inline markdown if present (legacy data).
+        // Legacy inline content/quiz/assignment support (retained for back-compat).
         if (lesson.content) {
           await upsertLessonContent({
             lessonId,
@@ -897,8 +900,6 @@ export async function migrateRoadmapJsonToTables(
             generatedAt: nowIso()
           });
         }
-
-        // Quiz questions live inline on quiz-type lessons.
         if (lesson.type === 'quiz' && asArray(lesson.quizQuestions).length > 0) {
           await upsertQuiz({
             id: `quiz-${lessonId}`,
@@ -906,13 +907,11 @@ export async function migrateRoadmapJsonToTables(
             moduleId,
             phaseId,
             roadmapId,
-            title: lesson.name || 'Quiz',
+            title: lesson.name || lesson.title || 'Quiz',
             questions: lesson.quizQuestions,
             orderIndex: 0
           });
         }
-
-        // Coding exercise -> assignment.
         if (lesson.codingExercise) {
           const ce = lesson.codingExercise;
           await upsertAssignment({
@@ -921,7 +920,7 @@ export async function migrateRoadmapJsonToTables(
             moduleId,
             phaseId,
             roadmapId,
-            title: lesson.name || 'Assignment',
+            title: lesson.name || lesson.title || 'Assignment',
             instructions: ce.instructions ?? null,
             templateCode: ce.templateCode ?? null,
             solutionCode: ce.solutionCode ?? null,
@@ -931,9 +930,75 @@ export async function migrateRoadmapJsonToTables(
           });
         }
       }
+
+      // Resources that belong to this module (new curriculum shape).
+      for (const resource of asArray(level.resources)) {
+        await upsertResource({
+          id: resource.id || `res-${moduleId}-${Math.random().toString(36).slice(2, 8)}`,
+          roadmapId,
+          phaseId,
+          moduleId,
+          title: resource.title || 'Resource',
+          type: resource.type ?? 'article',
+          provider: resource.provider ?? null,
+          url: resource.url ?? null,
+          description: resource.description ?? null,
+          duration: resource.duration ?? null
+        });
+      }
     }
 
-    // Projects attached to a phase context (legacy roadmap.projects have no phaseId).
+    // Projects attached to this phase (new curriculum shape prefers phase.projects).
+    const phaseProjects = asArray(phase.projects);
+    if (phaseProjects.length > 0) {
+      for (const project of phaseProjects) {
+        await upsertPhaseProject({
+          id: project.id || `proj-${phaseId}-${Math.random().toString(36).slice(2, 8)}`,
+          roadmapId,
+          phaseId,
+          title: project.title || 'Project',
+          difficulty: project.difficulty ?? 'beginner',
+          description: project.description ?? null,
+          techStack: asTextArray(project.techStack),
+          features: asTextArray(project.features),
+          githubUrl: project.githubUrl ?? null,
+          progress: typeof project.progress === 'number' ? project.progress : 0
+        });
+      }
+    }
+  }
+
+  // Roadmap-level resources/projects fallback (legacy shape) — only if not already
+  // provided per-phase above.
+  const existingResourceIds = new Set<string>();
+  for (const phase of phases) {
+    for (const lvl of asArray(phase.modules && phase.modules.length ? phase.modules : phase.levels)) {
+      for (const r of asArray((lvl as any).resources)) {
+        if (r.id) existingResourceIds.add(r.id);
+      }
+    }
+  }
+  for (const resource of asArray(jsonRoadmap.resources)) {
+    if (resource.id && existingResourceIds.has(resource.id)) continue;
+    const resPhaseId =
+      resource.phaseId && phases.some((p: any) => p.id === resource.phaseId)
+        ? resource.phaseId
+        : null;
+    await upsertResource({
+      id: resource.id || `res-${roadmapId}-${Math.random().toString(36).slice(2, 8)}`,
+      roadmapId,
+      phaseId: resPhaseId,
+      moduleId: null,
+      title: resource.title || 'Resource',
+      type: resource.type ?? 'article',
+      provider: resource.provider ?? null,
+      url: resource.url ?? null,
+      description: resource.description ?? null,
+      duration: resource.duration ?? null
+    });
+  }
+
+  if (!phases.some((p: any) => (p.projects || []).length > 0)) {
     for (const project of asArray(jsonRoadmap.projects)) {
       await upsertPhaseProject({
         id: project.id || `proj-${roadmapId}-${Math.random().toString(36).slice(2, 8)}`,
@@ -946,26 +1011,6 @@ export async function migrateRoadmapJsonToTables(
         features: asTextArray(project.features),
         githubUrl: project.githubUrl ?? null,
         progress: typeof project.progress === 'number' ? project.progress : 0
-      });
-    }
-
-    // Resources (legacy are roadmap-level; tag with the phase when a phaseId matches).
-    for (const resource of asArray(jsonRoadmap.resources)) {
-      const resPhaseId =
-        resource.phaseId && phases.some((p: any) => p.id === resource.phaseId)
-          ? resource.phaseId
-          : null;
-      await upsertResource({
-        id: resource.id || `res-${roadmapId}-${Math.random().toString(36).slice(2, 8)}`,
-        roadmapId,
-        phaseId: resPhaseId,
-        moduleId: null,
-        title: resource.title || 'Resource',
-        type: resource.type ?? 'article',
-        provider: resource.provider ?? null,
-        url: resource.url ?? null,
-        description: resource.description ?? null,
-        duration: resource.duration ?? null
       });
     }
   }

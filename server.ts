@@ -188,7 +188,12 @@ function requireAuth(req: express.Request, res: express.Response, next: express.
   next();
 }
 
-// Resilient JSON cleaner and parser
+// Resilient JSON cleaner and parser.
+//
+// Free-tier models frequently wrap JSON in prose/markdown, leave trailing commas,
+// or get truncated mid-object. This attempts, in order: direct parse, trailing-comma
+// removal, boundary slicing, and finally a truncation-repair pass that closes any
+// dangling strings/brackets/braces so a partially-streamed object is still usable.
 function cleanAndParseJSON(rawText: string | null | undefined, fallbackDefault: string = '{}'): any {
   const fallbackVal = (() => {
     try {
@@ -202,51 +207,89 @@ function cleanAndParseJSON(rawText: string | null | undefined, fallbackDefault: 
 
   let cleaned = rawText.trim();
 
-  // Strip markdown wraps if present
+  // Strip markdown code fences if present (```json ... ```).
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   }
-
   cleaned = cleaned.trim();
 
+  // Fast path.
+  const directOrRepaired = tryParseWithRepairs(cleaned);
+  if (directOrRepaired !== undefined) return directOrRepaired;
+
+  // Boundary slice: keep only the outermost { } or [ ] region.
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  const firstBracket = cleaned.indexOf('[');
+  const lastBracket = cleaned.lastIndexOf(']');
+
+  let sliceStr = '';
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    sliceStr = cleaned.slice(firstBrace, lastBrace + 1);
+  } else if (firstBracket !== -1 && lastBracket > firstBracket) {
+    sliceStr = cleaned.slice(firstBracket, lastBracket + 1);
+  }
+  if (sliceStr) {
+    const sliced = tryParseWithRepairs(sliceStr);
+    if (sliced !== undefined) return sliced;
+  }
+
+  // Truncation repair: model was likely cut off. Close the structure from the
+  // last complete opening brace/bracket.
+  const truncated = repairTruncatedJson(firstBrace !== -1 ? cleaned.slice(firstBrace) : cleaned);
+  if (truncated !== undefined) return truncated;
+
+  console.warn('[JSON Clean] All repair strategies failed. Returning fallback.');
+  return fallbackVal;
+}
+
+// Attempt to parse, first as-is and then after removing trailing commas.
+// Returns `undefined` (never a value) when parsing is impossible.
+function tryParseWithRepairs(text: string): any {
   try {
-    return JSON.parse(cleaned);
-  } catch (err: any) {
-    console.warn("[JSON Clean] Direct parse failed, attempting repairs. Error:", err.message);
-
+    return JSON.parse(text);
+  } catch (_) {
     try {
-      // 1. Remove trailing commas before closing braces/brackets
-      let repaired = cleaned.replace(/,\s*([}\]])/g, '$1');
-      return JSON.parse(repaired);
-    } catch (e) {
-      // 2. Bound matching
-      const firstBrace = cleaned.indexOf('{');
-      const lastBrace = cleaned.lastIndexOf('}');
-      const firstBracket = cleaned.indexOf('[');
-      const lastBracket = cleaned.lastIndexOf(']');
-      
-      let sliceStr = '';
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        sliceStr = cleaned.slice(firstBrace, lastBrace + 1);
-      } else if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-        sliceStr = cleaned.slice(firstBracket, lastBracket + 1);
-      }
-
-      if (sliceStr) {
-        try {
-          const repairedSlice = sliceStr.replace(/,\s*([}\]])/g, '$1');
-          return JSON.parse(repairedSlice);
-        } catch (innerErr: any) {
-          console.warn("[JSON Clean] Slice boundary repair failed. Returning fallback.");
-        }
-      }
-      try {
-        return JSON.parse(fallbackDefault || '{}');
-      } catch (_) {
-        return fallbackVal;
-      }
+      return JSON.parse(text.replace(/,\s*([}\]])/g, '$1'));
+    } catch (_) {
+      return undefined;
     }
   }
+}
+
+// Best-effort recovery of a truncated JSON object/array by balancing quotes and
+// brackets. Handles the common "response cut off mid-array" failure mode.
+function repairTruncatedJson(text: string): any {
+  let s = text.trim();
+  if (!s) return undefined;
+
+  // Track structure while respecting strings/escapes.
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (const ch of s) {
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+
+  // Close a dangling string.
+  if (inString) s += '"';
+  // Drop a trailing partial key/value fragment and any trailing comma.
+  s = s.replace(/,\s*$/, '').replace(/:\s*$/, ': null');
+  s = s.replace(/,\s*([}\]])/g, '$1');
+  // Close open structures in reverse order.
+  for (let i = stack.length - 1; i >= 0; i--) {
+    s += stack[i] === '{' ? '}' : ']';
+  }
+
+  return tryParseWithRepairs(s);
 }
 
 function sanitizeForPrompt(input: string | number | undefined | null, maxLength: number = 500): string {
@@ -269,51 +312,59 @@ const OPENROUTER_MODELS = [
   "tencent/hy3:free"
 ];
 
-async function callOpenRouterChatCompletion(prompt: string, temperature = 0.7, asJSON = false): Promise<string> {
-   const key = process.env.OPENROUTER_API_KEY;
-   if (!key) {
-     throw new Error('OPENROUTER_API_KEY is not configured');
-   }
+// Default per-request timeout. Curriculum generation is large, so callers can
+// raise this via the `timeoutMs` option to give slower free-tier models room.
+const OPENROUTER_TIMEOUT_MS = 15000;
 
-   let lastError: Error | null = null;
+interface OpenRouterOptions {
+  temperature?: number;
+  asJSON?: boolean;
+  timeoutMs?: number;
+  maxTokens?: number;
+}
 
-   for (const model of OPENROUTER_MODELS) {
-     try {
-       const controller = new AbortController();
-       const timeoutId = setTimeout(() => controller.abort(), 15000);
-       
-       const body: any = {
-         model,
-         temperature,
-         messages: [
-           {
-             role: 'system',
-             content: asJSON 
-               ? 'You are a helpful AI assistant. Return valid JSON only.'
-               : 'You are a helpful AI assistant. Provide responses in markdown format with clear headings and bullet points.'
-           },
-           {
-             role: 'user',
-             content: prompt
-           }
-         ]
-       };
-       
-       if (asJSON) {
-         body.response_format = { type: 'json_object' };
-       }
-       
-       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+async function callOpenRouterChatCompletion(
+  prompt: string,
+  options: OpenRouterOptions = {}
+): Promise<string> {
+  const { temperature = 0.7, asJSON = false, timeoutMs = OPENROUTER_TIMEOUT_MS, maxTokens } = options;
+
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) {
+    throw new Error('OPENROUTER_API_KEY is not configured');
+  }
+
+  const systemContent = asJSON
+    ? 'You are a precise data generator. Output a single valid JSON object only, with no markdown fences, comments, or prose.'
+    : 'You are a helpful AI assistant. Provide responses in markdown format with clear headings and bullet points.';
+
+  let lastError: Error | null = null;
+
+  for (const model of OPENROUTER_MODELS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const body: Record<string, any> = {
+        model,
+        temperature,
+        messages: [
+          { role: 'system', content: systemContent },
+          { role: 'user', content: prompt }
+        ]
+      };
+      if (asJSON) body.response_format = { type: 'json_object' };
+      if (maxTokens) body.max_tokens = maxTokens;
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json',
           'HTTP-Referer': 'http://localhost:5173'
         },
-body: JSON.stringify(body),
-         signal: controller.signal
-       });
-      clearTimeout(timeoutId);
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
 
       const responseText = await response.text();
       if (!response.ok) {
@@ -321,12 +372,18 @@ body: JSON.stringify(body),
       }
 
       const parsed = JSON.parse(responseText) as { choices?: Array<{ message?: { content?: string } }> };
-      return parsed.choices?.[0]?.message?.content || '';
+      const content = parsed.choices?.[0]?.message?.content || '';
+      if (!content.trim()) {
+        throw new Error('OpenRouter returned an empty completion');
+      }
+      return content;
     } catch (error: any) {
       lastError = error;
-      const reason = error.name === 'AbortError' ? 'timed out after 15s' : error.message;
+      const reason = error.name === 'AbortError' ? `timed out after ${Math.round(timeoutMs / 1000)}s` : error.message;
       console.warn(`[Model Fallback] Model ${model} failed:`, reason);
       continue;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -480,7 +537,862 @@ app.get('/api/bootstrap', async (req, res) => {
 });
 
 
+// ---------------------------------------------------------------------------
+// Curriculum generation helpers (the redesigned generation pipeline)
+// ---------------------------------------------------------------------------
+
+const DIFFICULTY_LADDER = ['beginner', 'intermediate', 'advanced', 'expert'] as const;
+type Difficulty = (typeof DIFFICULTY_LADDER)[number];
+const LESSON_DIFFICULTIES = ['beginner', 'intermediate', 'advanced'] as const;
+
+function clampInt(value: any, min: number, max: number, fallback: number): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function asStringArray(value: any): string[] {
+  if (Array.isArray(value)) return value.map((v) => String(v).trim()).filter(Boolean);
+  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  return [];
+}
+
+// Names that signal low-quality / generic AI output. Used by both the validator
+// and the normalizer to flag or repair weak titles.
+const GENERIC_NAMES = new Set([
+  'introduction', 'intro', 'overview', 'basics', 'basic', 'fundamentals', 'getting started',
+  'getting started', 'misc', 'miscellaneous', 'extra', 'additional', 'other', 'more', 'next',
+  'lesson 1', 'lesson 2', 'lesson 3', 'module 1', 'module 2', 'module 3', 'project',
+  'assignment', 'exercise', 'topic', 'concepts', 'concept', 'things', 'stuff', 'etc',
+  'conclusion', 'summary', 'wrap up', 'final', 'part', 'section', 'chapter', 'untitled'
+]);
+
+// Skill tags that carry no analytical value.
+const PROHIBITED_SKILL_TAGS = new Set([
+  'basics', 'basic', 'concepts', 'concept', 'fundamentals', 'intro', 'introduction',
+  'overview', 'misc', 'miscellaneous', 'general', 'things', 'stuff', 'skills', 'learning', 'theory'
+]);
+
+// Difficulty ordering for progression checks.
+const DIFFICULTY_RANK: Record<string, number> = {
+  beginner: 0, intermediate: 1, advanced: 2, expert: 3
+};
+
+// Curriculum depth/structure targets. Centralised so the prompt, validator, and
+// normalizer all agree on the same contract.
+const CURRICULUM_LIMITS = {
+  minPhases: 6,
+  maxPhases: 10,
+  minModulesPerPhase: 3,
+  maxModulesPerPhase: 6,
+  minLessonsPerModule: 4,
+  maxLessonsPerModule: 8,
+  minTotalModules: 18,
+  minTotalLessons: 45,
+  minLessonMinutes: 15,
+  maxLessonMinutes: 40
+} as const;
+
+// The recognised project difficulty ladder, from lightest to heaviest. Used to
+// verify that projects become progressively harder across phases.
+const PROJECT_LADDER = ['mini-exercise', 'mini-project', 'real-application', 'portfolio-project', 'capstone'] as const;
+const PROJECT_LADDER_RANK: Record<string, number> = Object.fromEntries(
+  PROJECT_LADDER.map((tier, i) => [tier, i])
+);
+
+function normalizeProjectTier(value: any): string | null {
+  const s = String(value || '').toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+  if (s in PROJECT_LADDER_RANK) return s;
+  // Map plain difficulty words onto the ladder for models that ignore it.
+  const map: Record<string, string> = {
+    beginner: 'mini-project', intermediate: 'real-application',
+    advanced: 'portfolio-project', expert: 'capstone'
+  };
+  return map[s] || null;
+}
+
+/**
+ * Quality gate for AI-generated curricula. Returns a score (0-100) and a list of
+ * human-readable issues. The route handler retries generation when `ok` is false.
+ *
+ * This never invents content; it only inspects what the model produced and reports
+ * concrete, fixable weaknesses so the corrective prompt can target them. Checks:
+ *  - structural depth (phases/modules/lessons counts)
+ *  - logical concept ordering (phase & module difficulty rise monotonically)
+ *  - duplicate lesson titles / module names
+ *  - realistic estimated time
+ *  - meaningful objectives & skill tags
+ *  - valid prerequisite chains (references resolve, point backwards, first lesson none)
+ *  - project progression (rising difficulty ladder)
+ *  - resources match their module topic
+ */
+function validateCurriculumQuality(input: any): { ok: boolean; score: number; issues: string[] } {
+  const issues: string[] = [];
+  const phases = Array.isArray(input?.phases) ? input.phases : [];
+  const totalPhases = phases.length;
+
+  if (totalPhases < CURRICULUM_LIMITS.minPhases) {
+    issues.push(`Too few phases (${totalPhases}); need at least ${CURRICULUM_LIMITS.minPhases}.`);
+  }
+  if (totalPhases > CURRICULUM_LIMITS.maxPhases) {
+    issues.push(`Too many phases (${totalPhases}); keep at most ${CURRICULUM_LIMITS.maxPhases}.`);
+  }
+
+  let totalModules = 0;
+  let totalLessons = 0;
+  let lessonsWithEmptyTags = 0;
+  let lessonsMissingPrereqs = 0;
+  let genericPhaseNames = 0;
+  let genericModuleNames = 0;
+  let duplicateLessonTitles = 0;
+  let duplicateModuleNames = 0;
+  let brokenPrereqs = 0;
+  let forwardPrereqs = 0;
+  let genericLessonTitles = 0;
+  let unrealisticTime = 0;
+  let resourceMismatch = 0;
+  let emptyObjectives = 0;
+  let weakObjectives = 0;
+
+  // Two-pass prerequisite validation: collect every lesson ID and its ordinal
+  // position first, so we can detect both missing and forward-pointing refs.
+  const lessonOrder = new Map<string, number>();
+  let ordinal = 0;
+  for (const phase of phases) {
+    for (const mod of Array.isArray(phase?.modules) ? phase.modules : []) {
+      for (const les of Array.isArray(mod?.lessons) ? mod.lessons : []) {
+        const id = String(les?.id || '').trim();
+        if (id && !lessonOrder.has(id)) lessonOrder.set(id, ordinal);
+        ordinal++;
+      }
+    }
+  }
+
+  const seenLessonTitles = new Set<string>();
+  const seenModuleNames = new Set<string>();
+  const phaseDiffs: string[] = [];
+  let position = 0;
+
+  for (const phase of phases) {
+    const mods = Array.isArray(phase?.modules) ? phase.modules : [];
+    totalModules += mods.length;
+    if (mods.length < CURRICULUM_LIMITS.minModulesPerPhase) {
+      issues.push(`Phase "${phase?.name || '?'}" has only ${mods.length} modules; need ${CURRICULUM_LIMITS.minModulesPerPhase}-${CURRICULUM_LIMITS.maxModulesPerPhase}.`);
+    }
+    if (typeof phase?.difficulty === 'string') phaseDiffs.push(String(phase.difficulty).toLowerCase());
+
+    const phaseName = String(phase?.name || '').trim().toLowerCase();
+    if (phaseName && GENERIC_NAMES.has(phaseName)) genericPhaseNames++;
+
+    for (const mod of mods) {
+      const modName = String(mod?.name || '').trim().toLowerCase();
+      if (modName) {
+        if (seenModuleNames.has(modName)) duplicateModuleNames++;
+        else if (GENERIC_NAMES.has(modName)) genericModuleNames++;
+        seenModuleNames.add(modName);
+      }
+
+      const lessons = Array.isArray(mod?.lessons) ? mod.lessons : [];
+      totalLessons += lessons.length;
+      if (lessons.length < CURRICULUM_LIMITS.minLessonsPerModule) {
+        issues.push(`Module "${mod?.name || '?'}" has only ${lessons.length} lessons; need ${CURRICULUM_LIMITS.minLessonsPerModule}-${CURRICULUM_LIMITS.maxLessonsPerModule}.`);
+      }
+
+      // Resources should reference the module topic or the overall goal.
+      const modTopicWords = modName.split(/\s+/).filter((w) => w.length > 3);
+      const goalWords = String(input?.goal || '').toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+      for (const r of Array.isArray(mod?.resources) ? mod.resources : []) {
+        const hay = `${String(r?.title || '')} ${String(r?.provider || '')} ${String(r?.description || '')}`.toLowerCase();
+        const matchesTopic = modTopicWords.some((w) => hay.includes(w));
+        const matchesGoal = goalWords.some((w) => hay.includes(w));
+        if (modTopicWords.length && !matchesTopic && !matchesGoal) resourceMismatch++;
+      }
+
+      for (const les of lessons) {
+        position++;
+        const title = String(les?.name || '').trim().toLowerCase();
+        if (title) {
+          if (seenLessonTitles.has(title)) duplicateLessonTitles++;
+          else if (GENERIC_NAMES.has(title)) genericLessonTitles++;
+          seenLessonTitles.add(title);
+        }
+
+        const tags = asStringArray(les?.skillTags).filter((t) => !PROHIBITED_SKILL_TAGS.has(t.toLowerCase()));
+        if (tags.length === 0) lessonsWithEmptyTags++;
+
+        const objectives = asStringArray(les?.learningObjectives);
+        if (objectives.length === 0) emptyObjectives++;
+        else if (objectives.every((o) => o.split(/\s+/).length < 3)) weakObjectives++;
+
+        const lesId = String(les?.id || '').trim();
+        const lesOrd = lesId ? lessonOrder.get(lesId) : undefined;
+        const isFirstOverall = lesOrd === 0;
+        const prereqs = asStringArray(les?.prerequisites);
+        if (!isFirstOverall && prereqs.length === 0) lessonsMissingPrereqs++;
+        for (const pr of prereqs) {
+          const prOrd = lessonOrder.get(pr);
+          if (prOrd === undefined) brokenPrereqs++;
+          else if (lesOrd !== undefined && prOrd >= lesOrd) forwardPrereqs++;
+        }
+
+        const em = Number(les?.estimatedMinutes);
+        if (!Number.isFinite(em) || em < CURRICULUM_LIMITS.minLessonMinutes || em > CURRICULUM_LIMITS.maxLessonMinutes) {
+          unrealisticTime++;
+        }
+      }
+    }
+  }
+
+  // Project progression: difficulty must not decrease across phases.
+  const projTiers: number[] = [];
+  let phasesWithoutProject = 0;
+  for (const phase of phases) {
+    const projs = Array.isArray(phase?.projects) ? phase.projects : [];
+    if (projs.length === 0) phasesWithoutProject++;
+    for (const pr of projs) {
+      const tier = normalizeProjectTier(pr?.difficulty);
+      if (tier) projTiers.push(PROJECT_LADDER_RANK[tier]);
+    }
+  }
+  if (phasesWithoutProject > 0) issues.push(`${phasesWithoutProject} phase(s) have no project.`);
+  for (let i = 1; i < projTiers.length; i++) {
+    if (projTiers[i] < projTiers[i - 1]) {
+      issues.push('Project difficulty does not rise across phases (mini-exercise -> capstone).');
+      break;
+    }
+  }
+
+  // Phase difficulty must rise monotonically (fundamentals first).
+  for (let i = 1; i < phaseDiffs.length; i++) {
+    if ((DIFFICULTY_RANK[phaseDiffs[i]] ?? 0) < (DIFFICULTY_RANK[phaseDiffs[i - 1]] ?? 0)) {
+      issues.push('Phase difficulty does not rise monotonically (beginner -> expert).');
+      break;
+    }
+  }
+
+  if (lessonsWithEmptyTags > 0) issues.push(`${lessonsWithEmptyTags} lesson(s) have empty or meaningless skill tags.`);
+  if (lessonsMissingPrereqs > 0) issues.push(`${lessonsMissingPrereqs} non-first lesson(s) are missing prerequisites.`);
+  if (genericPhaseNames > 0) issues.push(`${genericPhaseNames} phase(s) have generic names.`);
+  if (genericModuleNames > 0) issues.push(`${genericModuleNames} module(s) have generic names.`);
+  if (duplicateLessonTitles > 0) issues.push(`${duplicateLessonTitles} duplicate lesson title(s).`);
+  if (duplicateModuleNames > 0) issues.push(`${duplicateModuleNames} duplicate module name(s).`);
+  if (brokenPrereqs > 0) issues.push(`${brokenPrereqs} prerequisite reference(s) point to non-existent lessons.`);
+  if (forwardPrereqs > 0) issues.push(`${forwardPrereqs} prerequisite(s) point forward instead of to earlier lessons.`);
+  if (genericLessonTitles > 0) issues.push(`${genericLessonTitles} lesson(s) have generic titles.`);
+  if (unrealisticTime > 0) issues.push(`${unrealisticTime} lesson(s) have unrealistic estimatedMinutes (must be ${CURRICULUM_LIMITS.minLessonMinutes}-${CURRICULUM_LIMITS.maxLessonMinutes}).`);
+  if (emptyObjectives > 0) issues.push(`${emptyObjectives} lesson(s) have empty learning objectives.`);
+  if (weakObjectives > 0) issues.push(`${weakObjectives} lesson(s) have vague, one-word learning objectives.`);
+  if (resourceMismatch > 0) issues.push(`${resourceMismatch} resource(s) do not match their module topic or the goal.`);
+  if (totalModules < CURRICULUM_LIMITS.minTotalModules) issues.push(`Too few modules overall (${totalModules}); curriculum is too shallow.`);
+  if (totalLessons < CURRICULUM_LIMITS.minTotalLessons) issues.push(`Too few lessons overall (${totalLessons}); curriculum is too shallow.`);
+
+  // Score: start at 100, deduct per reported issue (capped so a couple of minor
+  // flaws still leaves a passable score for logging/telemetry).
+  const score = Math.max(0, 100 - Math.min(60, issues.length * 6));
+  return { ok: issues.length === 0, score, issues };
+}
+
+// Allowed resource types persisted with each module.
+const RESOURCE_TYPES = ['documentation', 'video', 'practice', 'book'] as const;
+
+// Providers that signal a high-quality, reputable source. Used to normalize the
+// `provider` label and to prefer official/authoritative material.
+const REPUTABLE_PROVIDERS = [
+  'official docs', 'documentation', 'mdn', 'freecodecamp', 'the odin project', 'khan academy',
+  'coursera', 'edx', 'youtube', 'leetcode', 'hackerrank', 'codewars', 'exercism', 'kaggle',
+  'w3schools', 'geeksforgeeks', 'roadmap.sh', 'digitalocean', 'refactoring guru'
+];
+
+function inferResourceType(raw: any): (typeof RESOURCE_TYPES)[number] {
+  const declared = String(raw?.type || '').toLowerCase();
+  if ((RESOURCE_TYPES as readonly string[]).includes(declared)) {
+    return declared as (typeof RESOURCE_TYPES)[number];
+  }
+  const hay = `${String(raw?.title || '')} ${String(raw?.provider || '')} ${String(raw?.url || '')}`.toLowerCase();
+  if (/youtube|video|playlist|course|lecture/.test(hay)) return 'video';
+  if (/leetcode|hackerrank|codewars|exercism|kaggle|practice|exercise|challenge/.test(hay)) return 'practice';
+  if (/book|o'reilly|manning|press|isbn/.test(hay)) return 'book';
+  return 'documentation';
+}
+
+function cleanProvider(raw: any): string {
+  const provider = String(raw?.provider || '').trim();
+  if (provider) return provider;
+  const url = String(raw?.url || '');
+  const host = url.match(/^https?:\/\/(?:www\.)?([^/]+)/i)?.[1];
+  return host || 'Official Docs';
+}
+
+/**
+ * Normalize a module's resources: type them, clean providers, keep only valid
+ * https URLs, prefer reputable/official sources, dedupe, and cap at 4. We do NOT
+ * invent extra resources beyond what the model returned to avoid filler.
+ */
+function normalizeResources(
+  raw: any[],
+  ctx: { phase: number; module: number; moduleName: string; goal: string }
+): any[] {
+  const seen = new Set<string>();
+  const normalized = raw
+    .filter((r) => r && typeof r === 'object')
+    .map((r: any, ri: number) => {
+      const url = typeof r.url === 'string' && /^https?:\/\//i.test(r.url) ? r.url : '';
+      const provider = cleanProvider(r);
+      return {
+        id: typeof r.id === 'string' ? r.id : `res-${ctx.phase}-${ctx.module}-${ri + 1}`,
+        title: typeof r.title === 'string' && r.title.trim() ? r.title.trim() : `${ctx.moduleName || 'Topic'} reference`,
+        type: inferResourceType(r),
+        provider,
+        url: url || 'https://example.com',
+        description: typeof r.description === 'string' ? r.description.trim() : '',
+        reputable: REPUTABLE_PROVIDERS.some((p) => provider.toLowerCase().includes(p))
+      };
+    })
+    .filter((r) => {
+      const key = `${r.title.toLowerCase()}|${r.url}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    // Prefer reputable providers first, then keep the model's order.
+    .sort((a, b) => Number(b.reputable) - Number(a.reputable))
+    .slice(0, 4)
+    .map(({ reputable, ...rest }) => rest);
+
+  return normalized;
+}
+
+/**
+ * Validate and NORMALIZE a curriculum-shaped roadmap produced by the AI model.
+ *
+ * Free-tier models emit inconsistent field types, bad time estimates, and broken
+ * prerequisite references. This function repairs those fields on the REAL content
+ * the model produced so the persisted roadmap is reliable. It does NOT invent
+ * phases, modules, lessons, or resources (the retry loop + fallback handle depth).
+ */
+function validateAndNormalizeCurriculum(
+  input: any,
+  meta: {
+    goal: string;
+    experienceLevel?: string;
+    weeklyHours?: string | number;
+    preferredStyle?: string;
+    college?: string;
+    branch?: string;
+    year?: string;
+  }
+): any {
+  const goal = meta.goal || (typeof input.goal === 'string' ? input.goal : 'Learning Goal');
+
+  // Keep only the REAL phases the model produced (capped at the max). We never
+  // synthesize filler phases/modules/lessons here: the quality gate plus retry
+  // loop re-request proper depth, and the offline fallback is the final net.
+  let phases = Array.isArray(input.phases) ? input.phases : [];
+  if (phases.length > CURRICULUM_LIMITS.maxPhases) phases = phases.slice(0, CURRICULUM_LIMITS.maxPhases);
+
+  const numPhases = Math.max(1, phases.length);
+  // Difficulty ladder spanning beginner -> expert across however many real phases exist.
+  const phaseDifficulties: Difficulty[] = [];
+  for (let i = 0; i < numPhases; i++) {
+    const t = i / Math.max(1, numPhases - 1); // 0..1
+    const idx = Math.min(DIFFICULTY_LADDER.length - 1, Math.floor(t * (DIFFICULTY_LADDER.length - 1) + 0.0001));
+    phaseDifficulties.push(DIFFICULTY_LADDER[idx]);
+  }
+
+  // Collect every real lesson ID up-front so prerequisite references can be
+  // validated against the whole roadmap (not just earlier-in-this-module).
+  const orderedLessonIds: string[] = [];
+  const lessonIndexById = new Map<string, number>();
+  for (let p = 0; p < phases.length; p++) {
+    const phase = phases[p] || {};
+    const modules = Array.isArray(phase.modules) ? phase.modules.slice(0, CURRICULUM_LIMITS.maxModulesPerPhase) : [];
+    for (let m = 0; m < modules.length; m++) {
+      const module = modules[m] || {};
+      const lessons = Array.isArray(module.lessons) ? module.lessons.slice(0, CURRICULUM_LIMITS.maxLessonsPerModule) : [];
+      for (let l = 0; l < lessons.length; l++) {
+        const raw = lessons[l] || {};
+        const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : `les-${p + 1}-${m + 1}-${l + 1}`;
+        if (!lessonIndexById.has(id)) {
+          lessonIndexById.set(id, orderedLessonIds.length);
+          orderedLessonIds.push(id);
+        }
+      }
+    }
+  }
+
+  const normalizedPhases: any[] = [];
+  let globalLessonCounter = 0;
+  let previousLessonId: string | null = null;
+
+  for (let p = 0; p < phases.length; p++) {
+    const phase = phases[p] || {};
+    const phaseId = typeof phase.id === 'string' ? phase.id : `ph-${p + 1}`;
+    const phaseDiff = phaseDifficulties[p] || 'beginner';
+
+    // Keep only the real modules the model returned (capped at the max).
+    const modules = Array.isArray(phase.modules)
+      ? phase.modules.slice(0, CURRICULUM_LIMITS.maxModulesPerPhase)
+      : [];
+    const moduleCount = Math.max(1, modules.length);
+
+    // Module difficulty rises within the phase (beginner -> advanced).
+    const moduleDifficulties: string[] = [];
+    for (let i = 0; i < moduleCount; i++) {
+      const t = i / Math.max(1, moduleCount - 1);
+      const idx = Math.min(LESSON_DIFFICULTIES.length - 1, Math.floor(t * (LESSON_DIFFICULTIES.length - 1) + 0.0001));
+      moduleDifficulties.push(LESSON_DIFFICULTIES[idx]);
+    }
+
+    const normalizedModules: any[] = [];
+    let phaseEstimatedMinutes = 0;
+    const phaseSkills = new Set<string>();
+
+    for (let m = 0; m < modules.length; m++) {
+      const module = modules[m] || {};
+      const moduleId = typeof module.id === 'string' ? module.id : `mod-${p + 1}-${m + 1}`;
+      const moduleDiff = moduleDifficulties[m] || phaseDiff;
+
+      const lessons = Array.isArray(module.lessons)
+        ? module.lessons.slice(0, CURRICULUM_LIMITS.maxLessonsPerModule)
+        : [];
+
+      const normalizedLessons: any[] = [];
+
+      for (let l = 0; l < lessons.length; l++) {
+        const lesson = lessons[l] || {};
+        globalLessonCounter++;
+        const lessonId =
+          typeof lesson.id === 'string' && lesson.id.trim() ? lesson.id.trim() : `les-${p + 1}-${m + 1}-${l + 1}`;
+        const lessonOrd = lessonIndexById.get(lessonId) ?? -1;
+        const isFirstOverall = lessonOrd === 0;
+
+        // Lesson difficulty tracks the module, never exceeding advanced.
+        const declaredDiff = String(lesson.difficulty || '').toLowerCase();
+        const lessonDiff = (LESSON_DIFFICULTIES as readonly string[]).includes(declaredDiff)
+          ? declaredDiff
+          : moduleDiff === 'expert' ? 'advanced' : moduleDiff;
+
+        // Prerequisites: keep only real IDs that point strictly BACKWARD. When a
+        // non-first lesson has none valid, link it to the immediately preceding
+        // lesson so the chain stays intact (metadata correctness, not filler).
+        let prereqs = asStringArray(lesson.prerequisites).filter((id) => {
+          const ord = lessonIndexById.get(id);
+          return ord !== undefined && ord < lessonOrd;
+        });
+        if (!isFirstOverall && prereqs.length === 0 && previousLessonId) {
+          prereqs = [previousLessonId];
+        }
+
+        // Skill tags: strip meaningless tags; derive from the title only as a
+        // last resort so analytics always have something specific to work with.
+        let skillTags = asStringArray(lesson.skillTags)
+          .map((t) => t.toLowerCase())
+          .filter((t) => t && !PROHIBITED_SKILL_TAGS.has(t));
+        skillTags = Array.from(new Set(skillTags));
+        if (skillTags.length === 0 && typeof lesson.name === 'string') {
+          skillTags = lesson.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .split(' ')
+            .filter((w: string) => w.length > 3 && !PROHIBITED_SKILL_TAGS.has(w))
+            .slice(0, 3);
+        }
+        skillTags.forEach((s) => phaseSkills.add(s));
+
+        const lessonName = typeof lesson.name === 'string' && lesson.name.trim() ? lesson.name.trim() : `Lesson ${l + 1}`;
+        const objectives = asStringArray(lesson.learningObjectives);
+        const estMinutes = clampInt(
+          lesson.estimatedMinutes,
+          CURRICULUM_LIMITS.minLessonMinutes,
+          CURRICULUM_LIMITS.maxLessonMinutes,
+          20 + ((globalLessonCounter * 5) % 20)
+        );
+        phaseEstimatedMinutes += estMinutes;
+
+        // Rich, reliable metadata. Includes forward-looking fields consumed by
+        // later phases (lesson generation, mentor, revision, analytics, etc.).
+        const normalizedLesson = {
+          id: lessonId,
+          name: lessonName,
+          description: typeof lesson.description === 'string' ? lesson.description.trim() : '',
+          learningObjectives: objectives.length ? objectives : [`Understand and apply ${lessonName}`],
+          prerequisites: prereqs,
+          skillTags,
+          difficulty: lessonDiff,
+          estimatedMinutes: estMinutes,
+          type: 'learn',
+          status: isFirstOverall ? 'available' : 'locked',
+          contentStatus: 'pending',
+          xpReward: 0
+        };
+        previousLessonId = lessonId;
+        normalizedLessons.push(normalizedLesson);
+      }
+
+      const normalizedResources = normalizeResources(
+        Array.isArray(module.resources) ? module.resources : [],
+        { phase: p + 1, module: m + 1, moduleName: typeof module.name === 'string' ? module.name : '', goal }
+      );
+
+      const lessonMinutesForModule = normalizedLessons.reduce((a, les) => a + (les.estimatedMinutes || 0), 0);
+      const moduleEstimatedHours = clampInt(
+        module.estimatedHours,
+        3,
+        8,
+        Math.max(3, Math.min(8, Math.round(lessonMinutesForModule / 60) || 4))
+      );
+
+      normalizedModules.push({
+        id: moduleId,
+        name: typeof module.name === 'string' && module.name.trim() ? module.name.trim() : `Module ${m + 1}`,
+        description: typeof module.description === 'string' ? module.description.trim() : '',
+        difficulty: moduleDiff,
+        estimatedHours: moduleEstimatedHours,
+        lessons: normalizedLessons,
+        resources: normalizedResources
+      });
+    }
+
+    // Projects: preserve what the model returned; only default the tier so the
+    // ladder rises across phases. Empty phase projects are left to the retry
+    // loop / fallback rather than fabricated here.
+    const rawProjects = Array.isArray(phase.projects) ? phase.projects.slice(0, 3) : [];
+    const defaultTier = PROJECT_LADDER[Math.min(PROJECT_LADDER.length - 1, p)];
+    const normalizedProjects = rawProjects.map((proj: any, pi: number) => ({
+      id: typeof proj.id === 'string' ? proj.id : `proj-${p + 1}-${pi + 1}`,
+      title: typeof proj.title === 'string' && proj.title.trim()
+        ? proj.title.trim()
+        : `${phase.name || `Phase ${p + 1}`} Project`,
+      difficulty: normalizeProjectTier(proj.difficulty) || defaultTier,
+      description:
+        typeof proj.description === 'string' && proj.description.trim()
+          ? proj.description.trim()
+          : `Apply the skills from ${phase.name || `Phase ${p + 1}`} to build a project for: ${goal}.`,
+      techStack: asStringArray(proj.techStack),
+      features: asStringArray(proj.features),
+      progress: 0
+    }));
+
+    const phaseEstimatedHours = clampInt(
+      phase.estimatedHours,
+      10,
+      30,
+      Math.max(10, Math.min(30, normalizedModules.reduce((a, mod) => a + (mod.estimatedHours || 0), 0)))
+    );
+
+    normalizedPhases.push({
+      id: phaseId,
+      name: typeof phase.name === 'string' && phase.name.trim() ? phase.name.trim() : `Phase ${p + 1}`,
+      description: typeof phase.description === 'string' ? phase.description.trim() : '',
+      estimatedHours: phaseEstimatedHours,
+      difficulty: phaseDiff,
+      skillsCovered: phaseSkills.size ? Array.from(phaseSkills) : asStringArray(phase.skillsCovered),
+      modules: normalizedModules,
+      projects: normalizedProjects
+    });
+  }
+
+  // Flatten resources/projects into top-level arrays for client compatibility.
+  const resources: any[] = [];
+  const projects: any[] = [];
+  const allSkillTags = new Set<string>();
+  let totalLessons = 0;
+  for (const phase of normalizedPhases) {
+    projects.push(...phase.projects);
+    for (const module of phase.modules) {
+      totalLessons += module.lessons.length;
+      for (const les of module.lessons) {
+        for (const tag of les.skillTags) allSkillTags.add(tag);
+      }
+      for (const r of module.resources) {
+        resources.push({ ...r, phaseId: phase.id, moduleId: module.id });
+      }
+    }
+  }
+
+  return {
+    id: `roadmap-${Date.now()}`,
+    title: typeof input.title === 'string' ? input.title : goal,
+    goal,
+    experienceLevel: meta.experienceLevel || 'Beginner',
+    weeklyHours: Number(meta.weeklyHours) || 5,
+    preferredStyle: meta.preferredStyle || 'Hands-on',
+    college: meta.college || null,
+    branch: meta.branch || null,
+    year: meta.year || null,
+    progressPercent: 0,
+    totalXp: 0,
+    lessonsCompleted: 0,
+    hoursRemaining: normalizedPhases.reduce((a, p) => a + (p.estimatedHours || 0), 0),
+    status: 'current',
+    createdAt: new Date().toISOString(),
+    // Forward-looking summary metadata (consumed by later phases: analytics,
+    // revision planner, certificates). Purely additive; not persisted as columns.
+    metadata: {
+      totalPhases: normalizedPhases.length,
+      totalModules: normalizedPhases.reduce((a, p) => a + p.modules.length, 0),
+      totalLessons,
+      skillTags: Array.from(allSkillTags),
+      schemaVersion: 2
+    },
+    phases: normalizedPhases,
+    resources,
+    projects
+  };
+}
+
+/**
+ * Offline, no-AI fallback that builds a structured, goal-agnostic but DEEP
+ * curriculum-shaped roadmap. It mirrors the college-curriculum contract:
+ * 6 phases, 3-5 modules each, 4-6 lessons each, with prerequisites, skill
+ * tags, realistic time estimates, per-module resources, and per-phase projects
+ * that rise in difficulty. The lesson titles are generic scaffolding the user
+ * can rename; no lesson content is generated.
+ */
+function buildFallbackCurriculum(meta: {
+  goal: string;
+  experienceLevel?: string;
+  weeklyHours?: string | number;
+  preferredStyle?: string;
+  college?: string;
+  branch?: string;
+  year?: string;
+}): any {
+  const goal = meta.goal || 'the learning goal';
+  const goalTitle = goal.charAt(0).toUpperCase() + goal.slice(1);
+
+  // A reusable academic phase skeleton; difficulty rises across the array.
+  const phasePlan: Array<{
+    name: string;
+    description: string;
+    difficulty: Difficulty;
+    moduleThemes: string[];
+    projectTitle: string;
+    projectTech: string[];
+  }> = [
+    {
+      name: `Foundations of ${goalTitle}`,
+      description: `Build core mental models, tooling, and vocabulary for ${goal}. No prior experience assumed.`,
+      difficulty: 'beginner',
+      moduleThemes: ['Environment & Tooling', 'Core Concepts & Terminology', 'First Principles', 'Hands-on Basics'],
+      projectTitle: `Starter Sandbox: ${goalTitle} Hello-World Project`,
+      projectTech: ['Git', 'CLI', 'Editor/IDE']
+    },
+    {
+      name: `Essential Skills in ${goalTitle}`,
+      description: `Develop the day-to-day competencies every practitioner needs, with guided practice.`,
+      difficulty: 'beginner',
+      moduleThemes: ['Working with Data', 'Core Patterns', 'Debugging & Testing', 'Small Projects'],
+      projectTitle: `Guided Mini-Project: First Functional Build`,
+      projectTech: ['Git', 'Unit Tests']
+    },
+    {
+      name: `Intermediate ${goalTitle}`,
+      description: `Move beyond basics into structured, reusable, and maintainable approaches.`,
+      difficulty: 'intermediate',
+      moduleThemes: ['Structures & Abstractions', 'Design Patterns', 'Working at Scale', 'Integration'],
+      projectTitle: `Component Builder: Reusable Module Suite`,
+      projectTech: ['Package Manager', 'Framework']
+    },
+    {
+      name: `Applied ${goalTitle}`,
+      description: `Combine skills into real systems with external integrations and workflows.`,
+      difficulty: 'intermediate',
+      moduleThemes: ['APIs & Interfaces', 'Persistence & State', 'Concurrency & Flow', 'Observability'],
+      projectTitle: `Integrated Service: End-to-End Feature`,
+      projectTech: ['REST/HTTP', 'Database', 'CI']
+    },
+    {
+      name: `Advanced ${goalTitle}`,
+      description: `Tackle performance, architecture, and production-grade engineering.`,
+      difficulty: 'advanced',
+      moduleThemes: ['Performance & Optimization', 'Architecture & Scaling', 'Security & Reliability', 'Automation'],
+      projectTitle: `Production-Grade System: Scalable Build`,
+      projectTech: ['Cloud', 'Containers', 'Monitoring']
+    },
+    {
+      name: `Expert & Specialization in ${goalTitle}`,
+      description: `Mastery, specialization, and capstone-level engineering for ${goal}.`,
+      difficulty: 'expert',
+      moduleThemes: ['Advanced Specialization', 'Research & Cutting-Edge Topics', 'System Design at Scale', 'Leadership & Mentoring'],
+      projectTitle: `Capstone: Expert Portfolio Masterpiece`,
+      projectTech: ['Cloud-Native', 'Distributed Systems']
+    }
+  ];
+
+  const phases = phasePlan.map((plan, pIdx) => {
+    const phaseId = `ph-${pIdx + 1}`;
+    let lessonCounter = 0;
+
+    const modules = plan.moduleThemes.map((theme, mIdx) => {
+      const moduleId = `mod-${pIdx + 1}-${mIdx + 1}`;
+      const lessonCount = 4 + ((pIdx + mIdx) % 3); // 4..6 lessons
+      const lessonIds: string[] = [];
+      const lessons = [];
+      for (let l = 0; l < lessonCount; l++) {
+        lessonCounter++;
+        const lessonId = `les-${pIdx + 1}-${mIdx + 1}-${l + 1}`;
+        const isFirstOverall = pIdx === 0 && mIdx === 0 && l === 0;
+        // Chain to the previous lesson in this module, or the previous module's
+        // last lesson, or the previous phase's last module — a valid backward ref.
+        let prereqs: string[] = [];
+        if (!isFirstOverall) {
+          if (l > 0) prereqs = [lessonIds[l - 1]];
+          else if (mIdx > 0) prereqs = [`mod-prev-${pIdx + 1}-${mIdx}`]; // placeholder resolved below
+          else prereqs = [`phase-prev-${pIdx}`]; // placeholder resolved below
+        }
+        lessonIds.push(lessonId);
+        lessons.push({
+          id: lessonId,
+          name: `${theme}: Lesson ${l + 1}`,
+          description: `Learn and apply ${theme.toLowerCase()} in the context of ${goal}.`,
+          learningObjectives: [
+            `Apply ${theme} concepts to ${goal}`,
+            `Complete a guided exercise reinforcing ${theme.toLowerCase()}`
+          ],
+          prerequisites: prereqs,
+          skillTags: [String(goal).toLowerCase().split(' ')[0], theme.toLowerCase().replace(/[^a-z0-9]+/g, '-')].filter(Boolean),
+          difficulty: plan.difficulty === 'expert' ? 'advanced' : plan.difficulty,
+          estimatedMinutes: 20 + ((lessonCounter * 5) % 20),
+          type: 'learn',
+          status: isFirstOverall ? 'available' : 'locked',
+          contentStatus: 'pending',
+          xpReward: 0
+        });
+      }
+
+      return {
+        id: moduleId,
+        name: theme,
+        description: `Covers ${theme.toLowerCase()} as part of ${plan.name}.`,
+        difficulty: plan.difficulty === 'expert' ? 'advanced' : plan.difficulty,
+        estimatedHours: 4 + (mIdx % 3),
+        lessons,
+        resources: [
+          {
+            id: `res-${pIdx + 1}-${mIdx + 1}-1`,
+            title: `Official ${theme} Documentation`,
+            type: 'documentation',
+            provider: 'Official Docs',
+            url: 'https://example.com/docs',
+            description: `Authoritative reference for ${theme}.`
+          },
+          {
+            id: `res-${pIdx + 1}-${mIdx + 1}-2`,
+            title: `${theme} - Video Course`,
+            type: 'video',
+            provider: 'YouTube',
+            url: 'https://example.com/course',
+            description: `Structured video walkthrough of ${theme}.`
+          },
+          {
+            id: `res-${pIdx + 1}-${mIdx + 1}-3`,
+            title: `${theme} Practice Exercises`,
+            type: 'practice',
+            provider: 'Practice Platform',
+            url: 'https://example.com/practice',
+            description: `Hands-on exercises for ${theme}.`
+          }
+        ]
+      };
+    });
+
+    // Resolve cross-module / cross-phase prerequisite placeholders to real IDs.
+    for (let mIdx = 0; mIdx < modules.length; mIdx++) {
+      const firstLesson = modules[mIdx].lessons[0];
+      if (!firstLesson) continue;
+      firstLesson.prerequisites = firstLesson.prerequisites.map((pr: string) => {
+        if (pr.startsWith('mod-prev-')) {
+          const prevMod = modules[mIdx - 1];
+          const last = prevMod?.lessons[prevMod.lessons.length - 1];
+          return last ? last.id : '';
+        }
+        if (pr.startsWith('phase-prev-')) return ''; // first module of a phase links to prior phase implicitly
+        return pr;
+      }).filter(Boolean);
+    }
+
+    const projectTier = PROJECT_LADDER[Math.min(PROJECT_LADDER.length - 1, pIdx)];
+    return {
+      id: phaseId,
+      name: plan.name,
+      description: plan.description,
+      estimatedHours: 12 + (pIdx * 2),
+      difficulty: plan.difficulty,
+      skillsCovered: plan.moduleThemes.map((t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-')),
+      modules,
+      projects: [
+        {
+          id: `proj-${pIdx + 1}`,
+          title: plan.projectTitle,
+          difficulty: projectTier,
+          description: `Apply everything from ${plan.name} to ship ${plan.projectTitle}. Build incrementally, test continuously, and document your work for ${goal}.`,
+          techStack: plan.projectTech,
+          features: [
+            'Scaffold the project structure',
+            'Implement core feature set',
+            'Add tests and documentation',
+            'Deploy or demo the result'
+          ],
+          progress: 0
+        }
+      ]
+    };
+  });
+
+  const resources: any[] = [];
+  const projects: any[] = [];
+  const allSkillTags = new Set<string>();
+  let totalLessons = 0;
+  for (const phase of phases) {
+    projects.push(...phase.projects);
+    for (const module of phase.modules) {
+      totalLessons += module.lessons.length;
+      for (const les of module.lessons) {
+        for (const tag of les.skillTags) allSkillTags.add(tag);
+      }
+      for (const r of module.resources) {
+        resources.push({ ...r, phaseId: phase.id, moduleId: module.id });
+      }
+    }
+  }
+
+  return {
+    id: `roadmap-${Date.now()}`,
+    title: goalTitle,
+    goal,
+    experienceLevel: meta.experienceLevel || 'Beginner',
+    weeklyHours: Number(meta.weeklyHours) || 5,
+    preferredStyle: meta.preferredStyle || 'Hands-on',
+    college: meta.college || null,
+    branch: meta.branch || null,
+    year: meta.year || null,
+    progressPercent: 0,
+    totalXp: 0,
+    lessonsCompleted: 0,
+    hoursRemaining: phases.reduce((a, p) => a + (p.estimatedHours || 0), 0),
+    status: 'current',
+    createdAt: new Date().toISOString(),
+    metadata: {
+      totalPhases: phases.length,
+      totalModules: phases.reduce((a, p) => a + p.modules.length, 0),
+      totalLessons,
+      skillTags: Array.from(allSkillTags),
+      schemaVersion: 2,
+      source: 'fallback'
+    },
+    phases,
+    resources,
+    projects
+  };
+}
+
 // 2. API: Generate Roadmaps
+//
+// Pipeline: generate -> validate quality -> corrective retry (max 2) -> offline
+// fallback. We never fabricate filler content to hit depth targets; instead a
+// failing curriculum is re-requested with a targeted corrective prompt, and only
+// if every attempt fails do we return the structured offline fallback.
 app.post('/api/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;
 
@@ -488,532 +1400,135 @@ app.post('/api/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Goal is required' });
   }
 
-// University-specific system prompt for syllabus tailoring
-const universityContext = college && branch && year 
-  ? `\nUser is a ${sanitizeForPrompt(year)} student at ${sanitizeForPrompt(college)} studying ${sanitizeForPrompt(branch)}. Tailor all content to their university's syllabus, especially AKTU curriculum if applicable.`
-  : '';
+  const meta = { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year };
 
-const roadmapSystemPrompt = `
-Generate a learning roadmap for: "${sanitizeForPrompt(goal)}".
-Experience: "${sanitizeForPrompt(experienceLevel || 'Beginner')}", ${sanitizeForPrompt(weeklyHours || 5)} hrs/week, "${sanitizeForPrompt(preferredStyle || 'Hands-on')}" style.${universityContext}
+  // University tailoring (optional).
+  const universityContext = college && branch && year
+    ? `\nLearner is a ${sanitizeForPrompt(year)} student at ${sanitizeForPrompt(college)} studying ${sanitizeForPrompt(branch)}; align topics and ordering with their university syllabus (AKTU where applicable).`
+    : '';
 
-Return JSON with prerequisites in lessons:
-{ "goal": "...", "phases": [{ "id": "ph-1", "name": "Foundations", "skillsCovered": ["skill"], "levels": [{ "id": "lvl-1", "name": "Basics", "lessons": [{ "id": "les-1", "name": "Intro", "type": "learn", "xpReward": 20, "status": "available", "prerequisites": [], "content": "Brief markdown lesson" }, { "id": "les-2", "name": "Quiz", "type": "quiz", "xpReward": 50, "status": "locked", "prerequisites": ["les-1"], "content": "Quiz", "quizQuestions": [{ "id": "q-1", "question": "...", "options": ["A","B","C","D"], "correctIndex": 0, "explanation": "...", "misconceptionNotes": ["Why wrong"] }] }] }] }] }
+  // India-focused, semester-style guidance (kept brief to save tokens).
+  const indiaContext = `\nAudience: Indian college/engineering learners. Flow like a semester (foundations -> core -> applied -> advanced -> specialization), blend theory with heavy coding, and include placement skills (DSA, system design, projects). Prefer globally-recognized resources.`;
 
-2-3 phases, 2 levels per phase, 1 learn + 1 quiz per level.
-`;
+  // Primary curriculum prompt. Compact but strict; engineered so free-tier models
+  // produce DEEP, well-named, well-sequenced curricula. Output is validated and
+  // normalized server-side. Only ONE example lesson/resource/project is shown to
+  // save tokens while still pinning the exact JSON shape.
+  const buildRoadmapPrompt = () => `You are a senior curriculum architect. Design a DEEP, degree-level learning curriculum for: "${sanitizeForPrompt(goal)}".
+Learner level: "${sanitizeForPrompt(experienceLevel || 'Beginner')}". Pace: ${sanitizeForPrompt(weeklyHours || 5)} hrs/week. Style: "${sanitizeForPrompt(preferredStyle || 'Hands-on')}".${universityContext}${indiaContext}
 
-    const resourcesProjectsPrompt = `
-Generate resources and projects for roadmap goal: "${sanitizeForPrompt(goal, 100)}".
+STRUCTURE (mandatory, never under-deliver):
+- ${CURRICULUM_LIMITS.minPhases}-${CURRICULUM_LIMITS.maxPhases} phases; difficulty rises monotonically beginner -> intermediate -> advanced -> expert.
+- ${CURRICULUM_LIMITS.minModulesPerPhase}-${CURRICULUM_LIMITS.maxModulesPerPhase} modules per phase (difficulty rises within the phase).
+- ${CURRICULUM_LIMITS.minLessonsPerModule}-${CURRICULUM_LIMITS.maxLessonsPerModule} lessons per module (metadata only, NO lesson content/markdown/quizzes).
 
-Return JSON: { "resources": [{ "id": "r1", "phaseId": "...", "title": "...", "type": "article|video|course|paper", "provider": "...", "url": "https://...", "description": "..." }], "projects": [{ "id": "p1", "title": "...", "difficulty": "beginner|intermediate|advanced", "description": "...", "techStack": ["..."], "features": ["..."], "progress": 0 }] }
+NAMING & QUALITY:
+- Titles must be specific and domain-accurate (e.g. "Implementing Binary Search Trees"), never generic ("Introduction","Basics","Overview","Module 1","Project").
+- No duplicate lesson titles or module names anywhere. Descriptions: one concise, concrete sentence.
+- Order concepts logically (fundamentals first). Only reference real technologies; do not hallucinate.
 
-Generate exactly 3 resources and 2 projects. Keep descriptions under 25 words.
-`;
+LESSON FIELDS: id "les-{phase}-{module}-{n}" (unique); name; description; learningObjectives (2-4 measurable outcomes, each a full phrase); prerequisites (1-3 EARLIER lesson ids forming a real chain, first lesson []); skillTags (2-5 specific lowercase tags like python,numpy,react,sql — never "basics"/"concepts"); difficulty beginner|intermediate|advanced; estimatedMinutes ${CURRICULUM_LIMITS.minLessonMinutes}-${CURRICULUM_LIMITS.maxLessonMinutes}; type "learn"; status "available" for the FIRST lesson only else "locked"; contentStatus "pending".
 
-try {
-       // Parallelize API calls for better performance - run both requests simultaneously
-       const roadmapPromise = callOpenRouterChatCompletion(roadmapSystemPrompt, 0.7, true);
-       const rpPromise = callOpenRouterChatCompletion(resourcesProjectsPrompt, 0.7, true);
-       
-       let roadmapResponse: string;
-       let rpResponse: string | undefined;
-       let roadmapError: Error | null = null;
-       
-       try {
-         roadmapResponse = await roadmapPromise;
-       } catch (e) {
-         roadmapError = e as Error;
-       }
-       
-       try {
-         rpResponse = await rpPromise;
-       } catch (rpErr) {
-         console.warn('[AI-Fallback] Could not generate resources/projects, using defaults');
-       }
+MODULE FIELDS: id "mod-{phase}-{n}"; name; description; difficulty; estimatedHours 3-8; resources 2-4. Each resource: id, type documentation|video|practice|book, title, provider, url (real https), description. PREFER official documentation, official learning resources, high-quality YouTube playlists, interactive practice platforms, and well-known books; AVOID random blogs. Resources MUST match the module topic.
 
-       if (roadmapError) {
-         throw roadmapError; // Fall through to outer catch for fallback roadmap
-       }
+PHASE FIELDS: id "ph-{n}"; name; description; estimatedHours 10-30; difficulty; skillsCovered (3-6 tags); projects (>=1). Projects reinforce that phase's concepts and get harder across phases using this ladder: mini-exercise -> mini-project -> real-application -> portfolio-project -> capstone. Each project: id, title, difficulty (one ladder value), description (2-3 sentences), techStack (real tools), features (3-6 concrete), progress 0.
 
-       const parsedData = cleanAndParseJSON(roadmapResponse, '{}');
-       
-       if (rpResponse) {
-         const rpData = cleanAndParseJSON(rpResponse, '{}');
-         parsedData.resources = rpData.resources || [];
-         parsedData.projects = rpData.projects || [];
-       } else {
-         parsedData.resources = [];
-         parsedData.projects = [];
-       }
-       console.log(`[AI-Generated] Resources: ${parsedData.resources.length}, Projects: ${parsedData.projects.length}`);
+Return ONLY a JSON object of this exact shape (one example element shown per array; produce the full required counts):
+{"goal":"${sanitizeForPrompt(goal, 120)}","phases":[{"id":"ph-1","name":"...","description":"...","estimatedHours":18,"difficulty":"beginner","skillsCovered":["..."],"modules":[{"id":"mod-1-1","name":"...","description":"...","difficulty":"beginner","estimatedHours":5,"lessons":[{"id":"les-1-1-1","name":"...","description":"...","learningObjectives":["...","..."],"prerequisites":[],"skillTags":["...","..."],"difficulty":"beginner","estimatedMinutes":25,"type":"learn","status":"available","contentStatus":"pending"}],"resources":[{"id":"res-1-1-1","title":"...","type":"documentation","provider":"...","url":"https://...","description":"..."}]}],"projects":[{"id":"proj-1","title":"...","difficulty":"mini-exercise","description":"...","techStack":["..."],"features":["..."],"progress":0}]}]}`;
 
-       return res.json(parsedData);
+  // Corrective prompt used on retry. Concise; targets the exact reported issues.
+  const buildCorrectivePrompt = (issues: string[]) => `Your previous curriculum for "${sanitizeForPrompt(goal, 120)}" was REJECTED. Fix EVERY issue below and regenerate the COMPLETE curriculum:
+${issues.slice(0, 12).map((i) => `- ${i}`).join('\n')}
 
+Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${CURRICULUM_LIMITS.maxPhases} phases (beginner->expert), ${CURRICULUM_LIMITS.minModulesPerPhase}-${CURRICULUM_LIMITS.maxModulesPerPhase} modules each, ${CURRICULUM_LIMITS.minLessonsPerModule}-${CURRICULUM_LIMITS.maxLessonsPerModule} lessons each, unique specific titles, real backward prerequisite chains, specific skillTags, topic-matched reputable resources, and a rising project ladder (mini-exercise -> mini-project -> real-application -> portfolio-project -> capstone). Return ONLY the JSON object.`;
+
+  const MAX_RETRIES = 2;
+  let bestCandidate: { parsed: any; score: number } | null = null;
+
+  try {
+    // Attempt 0 = primary prompt; attempts 1..MAX_RETRIES = corrective prompts.
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const prompt =
+        attempt === 0
+          ? buildRoadmapPrompt()
+          : buildCorrectivePrompt(bestCandidate ? validateCurriculumQuality(bestCandidate.parsed).issues : []);
+
+      let parsed: any;
+      try {
+        const response = await callOpenRouterChatCompletion(prompt, {
+          temperature: attempt === 0 ? 0.5 : 0.35, // lower temperature on retry for stricter compliance
+          asJSON: true,
+          timeoutMs: 30000,
+          maxTokens: 8000
+        });
+        parsed = cleanAndParseJSON(response, '{}');
+      } catch (genErr: any) {
+        console.warn(`[Roadmap] Generation attempt ${attempt + 1} failed:`, genErr.message);
+        continue;
+      }
+
+      if (!parsed?.phases || !Array.isArray(parsed.phases) || parsed.phases.length === 0) {
+        console.warn(`[Roadmap] Attempt ${attempt + 1} returned no usable phases.`);
+        continue;
+      }
+
+      const quality = validateCurriculumQuality(parsed);
+      console.log(`[Roadmap] Attempt ${attempt + 1} quality score ${quality.score}/100 (${quality.issues.length} issue(s)).`);
+
+      // Track the best candidate so far in case all attempts have minor flaws.
+      if (!bestCandidate || quality.score > bestCandidate.score) {
+        bestCandidate = { parsed, score: quality.score };
+      }
+
+      if (quality.ok) {
+        const normalized = validateAndNormalizeCurriculum(parsed, meta);
+        logCurriculumStats('AI-Generated', normalized);
+        return res.json(normalized);
+      }
+
+      if (attempt < MAX_RETRIES) {
+        console.warn(`[Roadmap] Retrying with corrective prompt. Issues: ${quality.issues.slice(0, 5).join('; ')}`);
+      }
+    }
+
+    // No attempt passed the gate. If the best candidate is at least reasonably
+    // structured, normalize and use it (normalization repairs field-level flaws);
+    // otherwise fall through to the offline fallback.
+    if (bestCandidate && bestCandidate.score >= 60 && Array.isArray(bestCandidate.parsed.phases)) {
+      console.warn(`[Roadmap] All retries had issues; using best candidate (score ${bestCandidate.score}) after normalization.`);
+      const normalized = validateAndNormalizeCurriculum(bestCandidate.parsed, meta);
+      logCurriculumStats('AI-Best-Candidate', normalized);
+      return res.json(normalized);
+    }
+
+    throw new Error('All generation attempts failed the quality gate');
   } catch (error: any) {
     let readableError = error.message || String(error);
     try {
       const parsedError = JSON.parse(error.message);
-      if (parsedError?.error?.message) {
-        readableError = parsedError.error.message;
-      }
+      if (parsedError?.error?.message) readableError = parsedError.error.message;
     } catch (_) {}
-    console.error('OpenRouter Roadmap Generation Error, implementing safe custom backup template:', readableError);
-    console.warn(`[AI-Fallback] Roadmap fallback (template) activated for goal: "${sanitizeForPrompt(goal, 80)}"`);
-    
-    const goalTitle = goal.length > 40 ? goal.substring(0, 37) + '...' : goal;
-    const fallbackRoadmap = {
-      id: `roadmap-${Date.now()}`,
-      goal: goalTitle,
-      experienceLevel: experienceLevel || 'Beginner',
-      weeklyHours: Number(weeklyHours) || 8,
-      preferredStyle: preferredStyle || 'Hands-on',
-      progressPercent: 0,
-      totalXp: 0,
-      lessonsCompleted: 0,
-      hoursRemaining: 40,
-      createdAt: new Date().toISOString(),
-      resources: [],
-      projects: [],
-      phases: [
-        {
-          id: 'ph-fallback-1',
-          name: 'Core Fundamentals',
-          description: `Mastering the absolute fundamentals necessary for "${goalTitle}".`,
-          progress: 0,
-          estimatedHours: 12,
-          skillsCovered: ['Definitions', 'System Diagrams', 'Basic Syntax', 'First Operations'],
-          xpEarned: 0,
-          status: 'current',
-          levels: [
-            {
-              id: 'lvl-fallback-1-1',
-              name: 'Getting Started Basics',
-              type: 'Basics',
-              status: 'current',
-              lessons: [
-                {
-                  id: 'les-f1-learn',
-                  name: 'Introduction Chapter',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'available',
-                  content: `
-### Welcome to ${goalTitle}!
+    console.error('[Roadmap] Generation failed, using offline fallback:', readableError);
+    console.warn(`[AI-Fallback] Roadmap fallback activated for goal: "${sanitizeForPrompt(goal, 80)}"`);
 
-In this introductory lesson, we will cover the core landscape. Whether you are a total beginner or just brushing up, visual clarity is key.
-
-#### Key Mechanics:
-1. **Inputs & Definitions**: Define clean pipelines so that you can organize your thoughts.
-2. **First Script Operations**: Execute core computations using the target system parameters.
-3. **Execution flow**: Process inputs chronologically.
-
-We will verify this with a simple multiple-choice quiz up next!
-`
-                },
-                {
-                  id: 'les-f1-quiz',
-                  name: 'Fundamentals Checkpoint Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Test your initial definitions.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f1-1',
-                      question: `What is the most crucial asset when first approaching ${goalTitle}?`,
-                      options: [
-                        'Structured, roadmap-driven sequential practice',
-                        'Memorizing external libraries from front to back',
-                        'Buying the most expensive cloud computing hardware',
-                        'Waiting for others to complete it on video stream'
-                      ],
-                      correctIndex: 0,
-                      explanation: 'Step-by-step sequential practice prevents cognitive overload and embeds skills deeper into long-term retention blocks.'
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              id: 'lvl-fallback-1-2',
-              name: 'Core Concepts',
-              type: 'Basics',
-              status: 'locked',
-              lessons: [
-                {
-                  id: 'les-f1-2-learn',
-                  name: 'Essential Patterns',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'locked',
-                  content: `### Essential Patterns
-
-Learn the foundational patterns that power ${goalTitle}. Understand how to structure your code for clarity and maintainability.
-
-- **Pattern recognition**: Identify common structures in problems.
-- **Code organization**: Structure code with clear boundaries.
-- **Documentation basics**: Write comments that explain why, not what.`
-                },
-                {
-                  id: 'les-f1-2-quiz',
-                  name: 'Core Concepts Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Verify your understanding of core patterns.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f1-2',
-                      question: `Which principle helps organize code for better maintainability?`,
-                      options: [
-                        'Copy-paste everywhere',
-                        'Structure with clear boundaries',
-                        'Write as much code as possible',
-                        'Ignore documentation'
-                      ],
-                      correctIndex: 1,
-                      explanation: 'Clear structure and boundaries make code easier to understand and modify.'
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              id: 'lvl-fallback-1-3',
-              name: 'Foundational Skills',
-              type: 'Basics',
-              status: 'locked',
-              lessons: [
-                {
-                  id: 'les-f1-3-learn',
-                  name: 'Building Blocks',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'locked',
-                  content: `### Building Blocks
-
-Practice the core skills needed throughout your ${goalTitle} journey. These fundamentals will be applied in every subsequent module.
-
-- **Repetition**: Reinforce learning through practice.
-- **Variation**: Apply concepts in different contexts.
-- **Validation**: Check your work against expected outcomes.`
-                },
-                {
-                  id: 'les-f1-3-quiz',
-                  name: 'Foundational Skills Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Test your foundational skills.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f1-3',
-                      question: `What is the best way to reinforce learning?`,
-                      options: [
-                        'Memorize once',
-                        'Apply concepts in different contexts',
-                        'Skip practice',
-                        'Only watch videos'
-                      ],
-                      correctIndex: 1,
-                      explanation: 'Applying concepts in different contexts deepens understanding and retention.'
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          id: 'ph-fallback-2',
-          name: 'Applied Integration',
-          description: 'Applying concepts with practical hands-on mini-projects.',
-          progress: 0,
-          estimatedHours: 16,
-          skillsCovered: ['Local Configurations', 'Script execution', 'Error Handling', 'Debugging'],
-          xpEarned: 0,
-          status: 'locked',
-          levels: [
-            {
-              id: 'lvl-fallback-2-1',
-              name: 'Practical Mechanics',
-              type: 'Foundations',
-              status: 'locked',
-              lessons: [
-                {
-                  id: 'les-f2-learn',
-                  name: 'Setting Up the Logic Loop',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'locked',
-                  content: `
-### Practical Engineering
-
-In this module we focus on creating robust error safety bounds.
-
-- **Check Constraints**: Validate that data structures are non-empty.
-- **Fail Fast**: Log errors, propagate fallback status, and raise clean warnings.
-`
-                },
-                {
-                  id: 'les-f2-quiz',
-                  name: 'Practical Mechanics Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Test your practical knowledge.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f2-1',
-                      question: `Why should you validate data structures?`,
-                      options: [
-                        'To make code slower',
-                        'To prevent runtime errors',
-                        'To ignore problems',
-                        'To reduce code quality'
-                      ],
-                      correctIndex: 1,
-                      explanation: 'Validating data ensures your code handles edge cases gracefully.'
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              id: 'lvl-fallback-2-2',
-              name: 'Integration Patterns',
-              type: 'Foundations',
-              status: 'locked',
-              lessons: [
-                {
-                  id: 'les-f2-2-learn',
-                  name: 'Connecting Components',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'locked',
-                  content: `### Connecting Components
-
-Learn how to integrate different parts of your project. Understand data flow and interface design.
-
-- **API connections**: Link different services.
-- **Data pipelines**: Move data between components.
-- **Error boundaries**: Handle failures gracefully.`
-                },
-                {
-                  id: 'les-f2-2-quiz',
-                  name: 'Integration Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Verify integration knowledge.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f2-2',
-                      question: `What is the purpose of error boundaries in integration?`,
-                      options: [
-                        'To crash the whole system',
-                        'To handle failures gracefully',
-                        'To ignore errors',
-                        'To hide problems'
-                      ],
-                      correctIndex: 1,
-                      explanation: 'Error boundaries ensure failures in one component don\'t break the entire system.'
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              id: 'lvl-fallback-2-3',
-              name: 'Testing Strategies',
-              type: 'Foundations',
-              status: 'locked',
-              lessons: [
-                {
-                  id: 'les-f2-3-learn',
-                  name: 'Verification Methods',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'locked',
-                  content: `### Verification Methods
-
-Learn different ways to verify your code works correctly. Testing is crucial for reliable applications.
-
-- **Unit tests**: Test individual functions.
-- **Integration tests**: Test component interaction.
-- **Edge cases**: Handle unusual inputs.`
-                },
-                {
-                  id: 'les-f2-3-quiz',
-                  name: 'Testing Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Assess your testing knowledge.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f2-3',
-                      question: `What is the primary purpose of unit tests?`,
-                      options: [
-                        'To test everything at once',
-                        'To test individual functions',
-                        'To avoid testing',
-                        'To break code'
-                      ],
-                      correctIndex: 1,
-                      explanation: 'Unit tests verify individual functions work correctly in isolation.'
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          id: 'ph-fallback-3',
-          name: 'Mastery & Scale',
-          description: 'Optimizing architectures and learning professional industry techniques.',
-          progress: 0,
-          estimatedHours: 25,
-          skillsCovered: ['System Design', 'Scaling Protocols', 'Performance Auditing'],
-          xpEarned: 0,
-          status: 'locked',
-          levels: [
-            {
-              id: 'lvl-fallback-3-1',
-              name: 'Expert Deployments',
-              type: 'Advanced',
-              status: 'locked',
-              lessons: [
-                {
-                  id: 'les-f3-learn',
-                  name: 'Auditing Throughput Scenarios',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'locked',
-                  content: '### Scaling the System\nUnderstand the trade-offs between speed, latency, and costs under heavy loads.'
-                },
-                {
-                  id: 'les-f3-quiz',
-                  name: 'Mastery Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Final assessment of mastery.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f3-1',
-                      question: `What is the main trade-off when scaling systems?`,
-                      options: [
-                        'Speed vs. Quality',
-                        'Speed, latency, and costs',
-                        'Features vs. Design',
-                        'Colors vs. Fonts'
-                      ],
-                      correctIndex: 1,
-                      explanation: 'Scaling involves balancing throughput speed, response latency, and operational costs.'
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              id: 'lvl-fallback-3-2',
-              name: 'Performance Optimization',
-              type: 'Advanced',
-              status: 'locked',
-              lessons: [
-                {
-                  id: 'les-f3-2-learn',
-                  name: 'Optimization Techniques',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'locked',
-                  content: `### Optimization Techniques
-
-Learn to make your code faster and more efficient. Performance matters in production systems.
-
-- **Profiling**: Find bottlenecks in code.
-- **Caching**: Store computed results.
-- **Lazy loading**: Load only when needed.`
-                },
-                {
-                  id: 'les-f3-2-quiz',
-                  name: 'Optimization Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Test optimization knowledge.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f3-2',
-                      question: `What is caching used for?`,
-                      options: [
-                        'To store computed results',
-                        'To delete data',
-                        'To slow down systems',
-                        'To ignore performance'
-                      ],
-                      correctIndex: 0,
-                      explanation: 'Caching stores results of expensive operations for faster subsequent access.'
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              id: 'lvl-fallback-3-3',
-              name: 'Production Readiness',
-              type: 'Advanced',
-              status: 'locked',
-              lessons: [
-                {
-                  id: 'les-f3-3-learn',
-                  name: 'Deployment Best Practices',
-                  type: 'learn',
-                  xpReward: 20,
-                  status: 'locked',
-                  content: `### Deployment Best Practices
-
-Prepare your application for production deployment. Learn the essentials of running systems reliably.
-
-- **Environment variables**: Configure without code changes.
-- **Health checks**: Monitor system status.
-- **Logging**: Track operations and errors.`
-                },
-                {
-                  id: 'les-f3-3-quiz',
-                  name: 'Deployment Quiz',
-                  type: 'quiz',
-                  xpReward: 50,
-                  status: 'locked',
-                  content: 'Final deployment readiness check.',
-                  quizQuestions: [
-                    {
-                      id: 'q-f3-3',
-                      question: `Why use environment variables in production?`,
-                      options: [
-                        'To hardcode configuration',
-                        'To configure without code changes',
-                        'To make code less secure',
-                        'To complicate deployments'
-                      ],
-                      correctIndex: 1,
-                      explanation: 'Environment variables allow configuration changes without modifying code.'
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    };
-
+    const fallbackRoadmap = buildFallbackCurriculum(meta);
+    logCurriculumStats('AI-Fallback', fallbackRoadmap);
     return res.json(fallbackRoadmap);
   }
 });
+
+// Compact structured log of a generated curriculum's depth.
+function logCurriculumStats(tag: string, roadmap: any): void {
+  const phases = Array.isArray(roadmap?.phases) ? roadmap.phases : [];
+  const modules = phases.reduce((a: number, p: any) => a + (p.modules?.length || 0), 0);
+  const lessons = phases.reduce(
+    (a: number, p: any) => a + (p.modules || []).reduce((b: number, m: any) => b + (m.lessons?.length || 0), 0),
+    0
+  );
+  console.log(
+    `[${tag}] Phases: ${phases.length}, Modules: ${modules}, Lessons: ${lessons}, Resources: ${roadmap?.resources?.length || 0}, Projects: ${roadmap?.projects?.length || 0}`
+  );
+}
 
 app.post('/api/generate-projects', aiLimiter, requireAuth, async (req, res) => {
   const { goal, phases } = req.body;
@@ -1050,7 +1565,7 @@ Rules:
 `;
 
 try {
-     const response = await callOpenRouterChatCompletion(prompt, 0.7, true);
+     const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.7, asJSON: true });
      const parsed = cleanAndParseJSON(response, '{"projects":[]}');
      const projects = parsed.projects || [];
      return res.json({ projects });
@@ -1105,7 +1620,7 @@ Use clean formatting without markdown symbols like ** or ##.
 `;
 
     const prompt = `${systemInstruction}\n\nUser question: ${message}\n\nPrevious messages:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}`;
-    const responseText = await callOpenRouterChatCompletion(prompt, 0.5);
+    const responseText = await callOpenRouterChatCompletion(prompt, { temperature: 0.5 });
 
     res.writeHead(200, {
       'Content-Type': 'text/plain; charset=utf-8',
@@ -1191,7 +1706,7 @@ Concoct your response as a valid JSON object matching this structure:
 `;
 
 try {
-     const response = await callOpenRouterChatCompletion(prompt, 0.3, true);
+     const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.3, asJSON: true });
      const parsed = cleanAndParseJSON(response, '{}');
      return res.json(parsed);
 
@@ -1247,7 +1762,7 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 `;
 
 try {
-      const response = await callOpenRouterChatCompletion(prompt, 0.8, true);
+      const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.8, asJSON: true });
       const parsed = cleanAndParseJSON(response, '[]');
       // Cache successful response
       recCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
@@ -1320,7 +1835,7 @@ Output must be a JSON array of questions:
 `;
 
 try {
-      const response = await callOpenRouterChatCompletion(prompt, 0.7, true);
+      const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.7, asJSON: true });
       const parsed = cleanAndParseJSON(response, '[]');
       
       if (Array.isArray(parsed)) {
@@ -1407,7 +1922,7 @@ Output MUST be a valid JSON object matching this schema:
 `;
 
 try {
-     const response = await callOpenRouterChatCompletion(prompt, 0.6, true);
+     const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.6, asJSON: true });
      const parsed = cleanAndParseJSON(response, '{}');
      return res.json(parsed);
 
@@ -1451,7 +1966,7 @@ Level ${attemptNumber || 1} is requested. Keep hints educational, not giving awa
 `;
 
   try {
-    const response = await callOpenRouterChatCompletion(prompt, 0.5, true);
+    const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.5, asJSON: true });
     const parsed = cleanAndParseJSON(response, '{"hints":[],"hintCostXp":10}');
     
     if (!parsed.hints || !Array.isArray(parsed.hints)) {
