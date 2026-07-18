@@ -475,7 +475,7 @@ export default function App() {
         throw new Error("Server returned HTML or non-JSON content. The API may be offline.");
       }
       const data = await response.json();
-      setAiRecommendations(data);
+      setAiRecommendations(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Express API offline, recommendation request skipped:", err);
     } finally {
@@ -621,13 +621,20 @@ export default function App() {
         projects: data.projects || [],
       };
 
-await fetch('/api/roadmaps', {
+       // Reliable persistence: wait for the server to persist BEFORE updating UI
+       // state so a failed save never produces a phantom roadmap. Surface the
+       // error instead of silently ignoring it.
+       const persistResponse = await fetch('/api/roadmaps', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify(newRoadmap)
-       }).catch(err => console.warn('Failed to persist roadmap:', err));
+       });
+       if (!persistResponse.ok) {
+         const errBody = await persistResponse.json().catch(() => ({}));
+         throw new Error(errBody.error || `Failed to persist roadmap (HTTP ${persistResponse.status})`);
+       }
 
-       // Validate progression and fix if needed
+       // Validate progression and fix if needed (best-effort; does not gate persistence)
        try {
          const validationResponse = await fetch('/api/validate-progression', {
            method: 'POST',
@@ -643,8 +650,8 @@ await fetch('/api/roadmaps', {
        } catch (e) {
          console.warn('Could not validate progression:', e);
        }
-       
-       // Update state
+
+       // Update state only after successful persistence
       const updatedRoadmaps = [newRoadmap, ...roadmaps];
       setRoadmaps(updatedRoadmaps);
       setActiveRoadmapId(newRoadmap.id);

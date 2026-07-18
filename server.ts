@@ -80,8 +80,10 @@ import {
   upsertPhaseProject,
   recomputeRoadmapCounters,
   completeLessonForUser,
-  upsertUserLessonProgress,
-  getUserLessonProgress,
+  incrementLessonAttempts,
+  getLessonProgress,
+  getCurrentStreak,
+  getRoadmapProgressPercent,
   getRoadmapProgressSnapshot,
   upsertRoadmapState,
   getRoadmapState,
@@ -145,7 +147,7 @@ declare module 'express-session' {
   }
 }
 
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '4mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(session({
   store: sessionStore,
@@ -161,27 +163,48 @@ app.use(session({
   }
 }));
 
-const aiLimiter = rateLimit({
+// Rate limiter factory.
+//
+// Uses express-rate-limit's built-in in-memory store by default, which preserves
+// the original single-instance behaviour exactly. To support horizontal scaling,
+// a shared store (e.g. Redis) can be injected by assigning `RATE_LIMIT_STORE`
+// before this module is imported/evaluated — no other change required. When the
+// store is undefined the default memory store is used, so local development needs
+// no extra dependency and no Redis connection.
+//   // example (future): RATE_LIMIT_STORE = new RedisStore({ ... });
+let RATE_LIMIT_STORE: any | undefined;
+
+function createLimiter(opts: {
+  windowMs: number;
+  max: number;
+  message: { error: string };
+}): ReturnType<typeof rateLimit> {
+  return rateLimit({
+    windowMs: opts.windowMs,
+    max: opts.max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: opts.message,
+    ...(RATE_LIMIT_STORE ? { store: RATE_LIMIT_STORE } : {})
+  });
+}
+
+// Limiter options are unchanged; only the store resolution is now swappable.
+const aiLimiter = createLimiter({
   windowMs: 60 * 1000,
   max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
   message: { error: 'Too many requests, please slow down.' }
 });
 
-const authLimiter = rateLimit({
+const authLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
   message: { error: 'Too many authentication attempts. Please try again later.' }
 });
 
-const loginLimiter = rateLimit({
+const loginLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
   message: { error: 'Too many authentication attempts. Please try again later.' }
 });
 
@@ -312,9 +335,19 @@ const OPENROUTER_MODELS = [
   "nvidia/nemotron-3-super-120b-a12b:free",
   "meta-llama/llama-3.3-70b-instruct:free",
   "qwen/qwen3-next-80b-a3b-instruct:free",
-  "google/gemma-4-27b-it:free",
+  "google/gemma-2-27b-it:free",
   "tencent/hy3:free"
 ];
+
+// Models known NOT to support the `response_format: json_object` request param.
+// For JSON-mode prompts we drop that param (requesting JSON via the system
+// prompt instead) so these models still work for structured generation.
+const MODELS_WITHOUT_JSON_MODE = new Set(["tencent/hy3:free"]);
+
+function isJsonModeUnsupportedError(err: any): boolean {
+  const msg = (err?.message || '').toLowerCase();
+  return /response_format|json_object|response format|does not support/i.test(msg);
+}
 
 // Default per-request timeout. Curriculum generation is large, so callers can
 // raise this via the `timeoutMs` option to give slower free-tier models room.
@@ -342,9 +375,10 @@ async function callOpenRouterChatCompletion(
     ? 'You are a precise data generator. Output a single valid JSON object only, with no markdown fences, comments, or prose.'
     : 'You are a helpful AI assistant. Provide responses in markdown format with clear headings and bullet points.';
 
-  let lastError: Error | null = null;
-
-  for (const model of OPENROUTER_MODELS) {
+  // Some free models reject the `response_format: json_object` request param.
+  // When that happens we retry the SAME model as plain text (the system prompt
+  // still instructs strict JSON), so structured generation stays reliable.
+  const tryModel = async (model: string, useJsonFormat: boolean): Promise<string> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -356,7 +390,7 @@ async function callOpenRouterChatCompletion(
           { role: 'user', content: prompt }
         ]
       };
-      if (asJSON) body.response_format = { type: 'json_object' };
+      if (useJsonFormat) body.response_format = { type: 'json_object' };
       if (maxTokens) body.max_tokens = maxTokens;
 
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -381,13 +415,33 @@ async function callOpenRouterChatCompletion(
         throw new Error('OpenRouter returned an empty completion');
       }
       return content;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  let lastError: Error | null = null;
+
+  for (const model of OPENROUTER_MODELS) {
+    const wantsJsonFormat = asJSON && !MODELS_WITHOUT_JSON_MODE.has(model);
+    try {
+      const content = await tryModel(model, wantsJsonFormat);
+      return content;
     } catch (error: any) {
       lastError = error;
       const reason = error.name === 'AbortError' ? `timed out after ${Math.round(timeoutMs / 1000)}s` : error.message;
       console.warn(`[Model Fallback] Model ${model} failed:`, reason);
+      // Retry once without the json_object param if the model rejected it.
+      if (asJSON && wantsJsonFormat && isJsonModeUnsupportedError(error)) {
+        try {
+          const content = await tryModel(model, false);
+          return content;
+        } catch (retryErr: any) {
+          lastError = retryErr;
+          console.warn(`[Model Fallback] Model ${model} (plain-text retry) failed:`, retryErr.message);
+        }
+      }
       continue;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
@@ -2002,8 +2056,10 @@ function buildLessonMetadata(args: {
 // Short-lived in-memory content cache (read acceleration).
 //
 // The durable cache is `lesson_content` in the DB; this only avoids repeated DB
-// round-trips for hot lessons within a short window. It NEVER causes regeneration
-// and is invalidated on explicit regenerate.
+// round-trips for hot lessons. It is BOUNDED (max size) with automatic LRU-style
+// eviction and TTL expiry, so it cannot grow without limit. It NEVER causes
+// regeneration and is invalidated on explicit regenerate. Behaviour from the
+// caller's perspective is unchanged.
 // ---------------------------------------------------------------------------
 type LessonContentCacheEntry = {
   content: string;
@@ -2011,9 +2067,38 @@ type LessonContentCacheEntry = {
   contentStatus: string;
   generatedAt: string | null;
   timestamp: number;
+  lastUsed: number;
+  // Lightweight lesson metadata snapshot so the hot path can serve a cache hit
+  // without a second DB lookup (getLessonById). Contains only the fields the
+  // callers read from `result.lesson`.
+  lessonMeta: {
+    id: string;
+    title: string;
+    content_status: string;
+    generated_at: string | null;
+    learning_objectives: any;
+    skill_tags: any;
+    prerequisites: any;
+    estimated_minutes: any;
+    difficulty: any;
+  };
 };
-const lessonContentCache = new Map<string, LessonContentCacheEntry>();
+
+// Configurable limits.
 const LESSON_CONTENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const LESSON_CONTENT_CACHE_MAX = 500; // hard cap on in-memory entries
+
+const lessonContentCache = new Map<string, LessonContentCacheEntry>();
+
+function evictLessonContentCacheIfNeeded(): void {
+  if (lessonContentCache.size <= LESSON_CONTENT_CACHE_MAX) return;
+  // Evict the least-recently-used entries until back under the cap.
+  const entries = [...lessonContentCache.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+  const overflow = lessonContentCache.size - LESSON_CONTENT_CACHE_MAX;
+  for (let i = 0; i < overflow; i++) {
+    lessonContentCache.delete(entries[i][0]);
+  }
+}
 
 function getCachedLessonContent(lessonId: string): LessonContentCacheEntry | null {
   const entry = lessonContentCache.get(lessonId);
@@ -2022,11 +2107,36 @@ function getCachedLessonContent(lessonId: string): LessonContentCacheEntry | nul
     lessonContentCache.delete(lessonId);
     return null;
   }
+  // Refresh recency for LRU eviction.
+  entry.lastUsed = Date.now();
   return entry;
 }
 
-function setCachedLessonContent(lessonId: string, entry: Omit<LessonContentCacheEntry, 'timestamp'>): void {
-  lessonContentCache.set(lessonId, { ...entry, timestamp: Date.now() });
+function setCachedLessonContent(lessonId: string, entry: Omit<LessonContentCacheEntry, 'timestamp' | 'lastUsed'>): void {
+  const now = Date.now();
+  lessonContentCache.set(lessonId, { ...entry, timestamp: now, lastUsed: now });
+  evictLessonContentCacheIfNeeded();
+}
+
+// Explicitly drop a single entry (e.g., after completion / regenerate).
+function clearLessonContentCacheEntry(lessonId: string): void {
+  lessonContentCache.delete(lessonId);
+}
+
+// Project the subset of `lessons` columns that callers read off `result.lesson`,
+// so the in-memory cache can serve hits without re-querying the DB.
+function snapshotLessonMeta(lesson: any): LessonContentCacheEntry['lessonMeta'] {
+  return {
+    id: lesson.id,
+    title: lesson.title,
+    content_status: lesson.content_status,
+    generated_at: lesson.generated_at ?? null,
+    learning_objectives: lesson.learning_objectives,
+    skill_tags: lesson.skill_tags,
+    prerequisites: lesson.prerequisites,
+    estimated_minutes: lesson.estimated_minutes,
+    difficulty: lesson.difficulty
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -2041,14 +2151,9 @@ async function recordLessonOpened(
   ctx: { lessonId: string; moduleId: string; phaseId: string; roadmapId: string }
 ): Promise<string | null> {
   try {
-    await upsertUserLessonProgress({
-      ownerEmail,
-      roadmapId: ctx.roadmapId,
-      lessonId: ctx.lessonId,
-      moduleId: ctx.moduleId,
-      phaseId: ctx.phaseId,
-      attempts: 1 // GREATEST() semantics keep this as an "opened at least once" marker
-    });
+    // Accumulate open attempts (addition, not GREATEST) so repeated opens count.
+    // Completion state is intentionally untouched here.
+    await incrementLessonAttempts(ownerEmail, ctx.lessonId, ctx.moduleId, ctx.phaseId, ctx.roadmapId);
     return new Date().toISOString();
   } catch (err: any) {
     console.warn('[Lesson-Progress] failed to record open:', err?.message || err);
@@ -2089,22 +2194,20 @@ async function getOrGenerateLessonContent(
 } | null> {
   // Explicit regenerate always bypasses (and clears) the in-memory cache.
   if (opts.regenerate) {
-    lessonContentCache.delete(lessonId);
+    clearLessonContentCacheEntry(lessonId);
   } else {
     // Fast path: hot in-memory cache (avoids the DB round-trip for repeat reads).
     const hot = getCachedLessonContent(lessonId);
     if (hot) {
-      const lesson = await getLessonById(lessonId);
-      if (lesson) {
-        return {
-          lesson,
-          content: hot.content,
-          summary: hot.summary,
-          contentStatus: hot.contentStatus,
-          generatedAt: hot.generatedAt,
-          cached: true
-        };
-      }
+      // Serve from the in-memory snapshot — no DB round-trip required.
+      return {
+        lesson: hot.lessonMeta,
+        content: hot.content,
+        summary: hot.summary,
+        contentStatus: hot.contentStatus,
+        generatedAt: hot.generatedAt,
+        cached: true
+      };
     }
   }
 
@@ -2121,7 +2224,8 @@ async function getOrGenerateLessonContent(
       content: existing,
       summary: lesson.summary ?? null,
       contentStatus,
-      generatedAt
+      generatedAt,
+      lessonMeta: snapshotLessonMeta(lesson)
     });
     return {
       lesson,
@@ -2169,7 +2273,8 @@ async function getOrGenerateLessonContent(
     content: generated.markdown,
     summary: generated.summary,
     contentStatus: 'ready',
-    generatedAt
+    generatedAt,
+    lessonMeta: snapshotLessonMeta(lesson)
   });
 
   return {
@@ -3483,6 +3588,20 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
       throw new HttpError(400, 'Lesson does not belong to the provided roadmap');
     }
 
+    // Idempotency guard: if the lesson is already marked completed, do NOT award
+    // XP, streak, achievements, or stats again. Return success so the client stays
+    // consistent on refresh / duplicate clicks. Rewards are granted exactly once.
+    if (lessonCtx.status === 'completed') {
+      const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+      return {
+        xp: dbData?.xp || 0,
+        streak: await getCurrentStreak(userEmail),
+        completionPercent: await getRoadmapProgressPercent(lessonCtx.roadmap_id),
+        alreadyCompleted: true,
+        message: 'Lesson already completed.'
+      };
+    }
+
     // Server-authoritative XP: derive the reward from the lesson's own stored
     // xp_reward to prevent inflation (ignore any client-supplied xpEarned/xpReward).
     const xpValue = Number(lessonCtx.xp_reward) || 0;
@@ -3511,7 +3630,7 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     const completionPercent = counters.progressPercent;
 
     // Invalidate the hot content cache entry (status changed to completed).
-    lessonContentCache.delete(lessonId);
+    clearLessonContentCacheEntry(lessonId);
 
     // User-level XP + activity log still live on the `users` row (out of scope for
     // the roadmap normalization). Update them under the same lock.

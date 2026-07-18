@@ -266,6 +266,19 @@ function asArray(value: any): any[] {
   return Array.isArray(value) ? value : [];
 }
 
+// Serialize a value for a JSONB column. neon interprets a bare JS Array as a
+// Postgres array literal ({x,y}) which is INVALID JSON and fails to insert into
+// a JSONB column. Passing a JSON string instead makes neon treat it as JSON
+// text, which is what JSONB expects. Always safe (also handles objects/scalars).
+function jsonb(value: any): string {
+  if (value === undefined || value === null) return 'null';
+  if (typeof value === 'string') {
+    // Already a JSON string? validate; if not, wrap as a JSON string.
+    try { JSON.parse(value); return value; } catch { return JSON.stringify(value); }
+  }
+  return JSON.stringify(value);
+}
+
 // ---------------------------------------------------------------------------
 // Roadmaps
 // ---------------------------------------------------------------------------
@@ -354,7 +367,7 @@ export async function upsertPhase(phase: {
     INSERT INTO phases (id, roadmap_id, name, description, estimated_hours, skills_covered, xp_earned, status, order_index, updated_at)
     VALUES (
       ${phase.id}, ${phase.roadmapId}, ${phase.name}, ${phase.description ?? null},
-      ${phase.estimatedHours ?? null}, ${phase.skillsCovered ?? []}, ${phase.xpEarned ?? 0},
+      ${phase.estimatedHours ?? null}, ${jsonb(phase.skillsCovered ?? [])}, ${phase.xpEarned ?? 0},
       ${phase.status ?? 'current'}, ${phase.orderIndex ?? 0}, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -385,15 +398,14 @@ export async function upsertModule(module: {
 }): Promise<void> {
   await ensureRoadmapTables();
   await sql`
-    INSERT INTO modules (id, phase_id, roadmap_id, name, type, description, status, order_index, updated_at)
+    INSERT INTO modules (id, phase_id, roadmap_id, name, type, status, order_index, updated_at)
     VALUES (
       ${module.id}, ${module.phaseId}, ${module.roadmapId}, ${module.name},
-      ${module.type ?? null}, ${module.description ?? null}, ${module.status ?? 'current'}, ${module.orderIndex ?? 0}, NOW()
+      ${module.type ?? null}, ${module.status ?? 'current'}, ${module.orderIndex ?? 0}, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
       type = EXCLUDED.type,
-      description = EXCLUDED.description,
       status = EXCLUDED.status,
       order_index = EXCLUDED.order_index,
       updated_at = NOW()
@@ -432,8 +444,8 @@ export async function upsertLesson(lesson: {
     VALUES (
       ${lesson.id}, ${lesson.moduleId}, ${lesson.phaseId}, ${lesson.roadmapId}, ${lesson.title},
       ${lesson.description ?? null}, ${lesson.type ?? 'learn'}, ${lesson.xpReward ?? 0},
-      ${lesson.status ?? 'locked'}, ${lesson.learningObjectives ?? []}, ${lesson.prerequisites ?? []},
-      ${lesson.difficulty ?? null}, ${lesson.estimatedMinutes ?? null}, ${lesson.skillTags ?? []},
+      ${lesson.status ?? 'locked'}, ${jsonb(lesson.learningObjectives ?? [])}, ${jsonb(lesson.prerequisites ?? [])},
+      ${lesson.difficulty ?? null}, ${lesson.estimatedMinutes ?? null}, ${jsonb(lesson.skillTags ?? [])},
       ${lesson.contentStatus ?? 'pending'}, ${lesson.orderIndex ?? 0}, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -486,8 +498,8 @@ export async function upsertLessonContent(content: {
       lesson_id, markdown_content, worked_examples, exercises, summary, model_used, generated_at, updated_at
     )
     VALUES (
-      ${content.lessonId}, ${content.markdownContent ?? null}, ${content.workedExamples ?? []},
-      ${content.exercises ?? []}, ${content.summary ?? null}, ${content.modelUsed ?? null},
+      ${content.lessonId}, ${content.markdownContent ?? null}, ${jsonb(content.workedExamples ?? [])},
+      ${jsonb(content.exercises ?? [])}, ${content.summary ?? null}, ${content.modelUsed ?? null},
       ${content.generatedAt ?? nowIso()}, NOW()
     )
     ON CONFLICT (lesson_id) DO UPDATE SET
@@ -520,7 +532,7 @@ export async function upsertQuiz(quiz: {
     INSERT INTO quizzes (id, lesson_id, module_id, phase_id, roadmap_id, title, questions, order_index, updated_at)
     VALUES (
       ${quiz.id}, ${quiz.lessonId}, ${quiz.moduleId}, ${quiz.phaseId}, ${quiz.roadmapId},
-      ${quiz.title}, ${quiz.questions}, ${quiz.orderIndex ?? 0}, NOW()
+      ${quiz.title}, ${jsonb(quiz.questions ?? [])}, ${quiz.orderIndex ?? 0}, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
       lesson_id = EXCLUDED.lesson_id,
@@ -642,8 +654,8 @@ export async function upsertPhaseProject(project: {
     INSERT INTO phase_projects (id, roadmap_id, phase_id, title, difficulty, description, tech_stack, features, github_url, progress, order_index, updated_at)
     VALUES (
       ${project.id}, ${project.roadmapId}, ${project.phaseId ?? null}, ${project.title},
-      ${project.difficulty ?? 'beginner'}, ${project.description ?? null}, ${project.techStack ?? []},
-      ${project.features ?? []}, ${project.githubUrl ?? null}, ${project.progress ?? 0},
+      ${project.difficulty ?? 'beginner'}, ${project.description ?? null}, ${jsonb(project.techStack ?? [])},
+      ${jsonb(project.features ?? [])}, ${project.githubUrl ?? null}, ${project.progress ?? 0},
       ${project.orderIndex ?? 0}, NOW()
     )
     ON CONFLICT (id) DO UPDATE SET
@@ -702,6 +714,33 @@ export async function upsertUserLessonProgress(progress: {
   `;
 }
 
+// Increment the open-attempt counter for a lesson without touching completion
+// state. Uses addition (not GREATEST) so repeated opens accumulate correctly.
+// Idempotent across repeated migrations (a missing row starts at 0 then +1).
+export async function incrementLessonAttempts(
+  ownerEmail: string,
+  lessonId: string,
+  moduleId: string,
+  phaseId: string,
+  roadmapId: string
+): Promise<void> {
+  await ensureRoadmapTables();
+  const id = `${ownerEmail.toLowerCase()}::${lessonId}`;
+  await sql`
+    INSERT INTO user_lesson_progress (
+      id, owner_email, roadmap_id, lesson_id, module_id, phase_id,
+      completed, attempts, updated_at
+    )
+    VALUES (
+      ${id}, ${ownerEmail.toLowerCase()}, ${roadmapId}, ${lessonId},
+      ${moduleId}, ${phaseId}, false, 1, NOW()
+    )
+    ON CONFLICT (owner_email, lesson_id) DO UPDATE SET
+      attempts = user_lesson_progress.attempts + 1,
+      updated_at = NOW()
+  `;
+}
+
 export async function getUserLessonProgress(
   ownerEmail: string,
   roadmapId: string
@@ -712,6 +751,41 @@ export async function getUserLessonProgress(
     WHERE owner_email = ${ownerEmail.toLowerCase()} AND roadmap_id = ${roadmapId}
     ORDER BY updated_at DESC
   `;
+}
+
+// Fetch a single user's progress row for one lesson (used by the idempotent
+// completion check). Returns null when no row exists yet.
+export async function getLessonProgress(
+  ownerEmail: string,
+  lessonId: string
+): Promise<any | null> {
+  await ensureRoadmapTables();
+  const rows = await sql`
+    SELECT * FROM user_lesson_progress
+    WHERE owner_email = ${ownerEmail.toLowerCase()} AND lesson_id = ${lessonId}
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+// Read the user's current streak WITHOUT mutating last_active_date. Used to
+// report streak in idempotent (already-completed) completion responses.
+export async function getCurrentStreak(ownerEmail: string): Promise<number> {
+  await ensureRoadmapTables();
+  const result = await sql`
+    SELECT streak FROM users WHERE email = ${ownerEmail.toLowerCase()} LIMIT 1
+  `;
+  return result[0]?.streak ?? 0;
+}
+
+// Recompute and return a roadmap's completion percentage from lesson statuses.
+// Read-only; used by the idempotent completion response.
+export async function getRoadmapProgressPercent(roadmapId: string): Promise<number> {
+  await ensureRoadmapTables();
+  const lessonRows = await sql`SELECT status FROM lessons WHERE roadmap_id = ${roadmapId}`;
+  const totalLessons = lessonRows.length;
+  const completedLessons = lessonRows.filter((l: any) => l.status === 'completed').length;
+  return totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -931,10 +1005,13 @@ export async function migrateRoadmapJsonToTables(
         }
       }
 
-      // Resources that belong to this module (new curriculum shape).
-      for (const resource of asArray(level.resources)) {
+      // Resources that belong to this module (new curriculum shape). Deterministic
+      // IDs (res-{moduleId}-{index}) so re-migration never duplicates rows.
+      const modResources = asArray(level.resources);
+      for (let resIdx = 0; resIdx < modResources.length; resIdx++) {
+        const resource = modResources[resIdx];
         await upsertResource({
-          id: resource.id || `res-${moduleId}-${Math.random().toString(36).slice(2, 8)}`,
+          id: resource.id || `res-${moduleId}-${resIdx + 1}`,
           roadmapId,
           phaseId,
           moduleId,
@@ -949,22 +1026,22 @@ export async function migrateRoadmapJsonToTables(
     }
 
     // Projects attached to this phase (new curriculum shape prefers phase.projects).
+    // Deterministic IDs (proj-{phaseId}-{index}) so re-migration never duplicates.
     const phaseProjects = asArray(phase.projects);
-    if (phaseProjects.length > 0) {
-      for (const project of phaseProjects) {
-        await upsertPhaseProject({
-          id: project.id || `proj-${phaseId}-${Math.random().toString(36).slice(2, 8)}`,
-          roadmapId,
-          phaseId,
-          title: project.title || 'Project',
-          difficulty: project.difficulty ?? 'beginner',
-          description: project.description ?? null,
-          techStack: asTextArray(project.techStack),
-          features: asTextArray(project.features),
-          githubUrl: project.githubUrl ?? null,
-          progress: typeof project.progress === 'number' ? project.progress : 0
-        });
-      }
+    for (let projIdx = 0; projIdx < phaseProjects.length; projIdx++) {
+      const project = phaseProjects[projIdx];
+      await upsertPhaseProject({
+        id: project.id || `proj-${phaseId}-${projIdx + 1}`,
+        roadmapId,
+        phaseId,
+        title: project.title || 'Project',
+        difficulty: project.difficulty ?? 'beginner',
+        description: project.description ?? null,
+        techStack: asTextArray(project.techStack),
+        features: asTextArray(project.features),
+        githubUrl: project.githubUrl ?? null,
+        progress: typeof project.progress === 'number' ? project.progress : 0
+      });
     }
   }
 
@@ -978,14 +1055,16 @@ export async function migrateRoadmapJsonToTables(
       }
     }
   }
-  for (const resource of asArray(jsonRoadmap.resources)) {
+  const topResources = asArray(jsonRoadmap.resources);
+  for (let rIdx = 0; rIdx < topResources.length; rIdx++) {
+    const resource = topResources[rIdx];
     if (resource.id && existingResourceIds.has(resource.id)) continue;
     const resPhaseId =
       resource.phaseId && phases.some((p: any) => p.id === resource.phaseId)
         ? resource.phaseId
         : null;
     await upsertResource({
-      id: resource.id || `res-${roadmapId}-${Math.random().toString(36).slice(2, 8)}`,
+      id: resource.id || `res-${roadmapId}-top-${rIdx + 1}`,
       roadmapId,
       phaseId: resPhaseId,
       moduleId: null,
@@ -999,9 +1078,11 @@ export async function migrateRoadmapJsonToTables(
   }
 
   if (!phases.some((p: any) => (p.projects || []).length > 0)) {
-    for (const project of asArray(jsonRoadmap.projects)) {
+    const topProjects = asArray(jsonRoadmap.projects);
+    for (let pIdx = 0; pIdx < topProjects.length; pIdx++) {
+      const project = topProjects[pIdx];
       await upsertPhaseProject({
-        id: project.id || `proj-${roadmapId}-${Math.random().toString(36).slice(2, 8)}`,
+        id: project.id || `proj-${roadmapId}-top-${pIdx + 1}`,
         roadmapId,
         phaseId: null,
         title: project.title || 'Project',
@@ -1297,10 +1378,16 @@ export async function completeLessonForUser(
 }
 
 // ---------------------------------------------------------------------------
-// Unlock logic: after a lesson completes, mark the next locked lesson in the
-// same module as available (mirrors the legacy JSONB unlock behavior the
-// frontend relies on). Also promotes module/phase status so the reconstructed
-// nested shape stays internally consistent. Deterministic, no N+1.
+// Unlock logic: after a lesson completes, walk the full progression chain so
+// the next available item is always reachable. Idempotent (only flips
+// 'locked' -> 'available'; never double-awards and never re-locks).
+//
+//   lesson (within module) -> first lesson of next module
+//                          -> first module of next phase
+//                          -> roadmap marked completed when all lessons done
+//
+// Module/phase status is promoted to 'current' so the reconstructed nested
+// shape stays internally consistent. Deterministic, no N+1.
 // ---------------------------------------------------------------------------
 
 export async function unlockNextLesson(
@@ -1309,34 +1396,116 @@ export async function unlockNextLesson(
 ): Promise<void> {
   await ensureRoadmapTables();
 
-  // Next locked lesson by order within the same module.
-  const next = await sql`
+  // Context for the just-completed lesson.
+  const ctxRows = await sql`
+    SELECT l.order_index, m.phase_id, m.roadmap_id
+    FROM lessons l
+    JOIN modules m ON m.id = l.module_id
+    WHERE l.id = ${lessonId}
+    LIMIT 1
+  `;
+  if (!ctxRows[0]) return;
+  const { order_index: lessonOrder, phase_id: phaseId, roadmap_id: roadmapId } = ctxRows[0];
+
+  // 1) Next locked lesson within the SAME module.
+  const nextInModule = await sql`
     SELECT id FROM lessons
     WHERE module_id = ${moduleId}
       AND status = 'locked'
-      AND order_index > (SELECT COALESCE(order_index, 0) FROM lessons WHERE id = ${lessonId})
+      AND order_index > ${lessonOrder ?? 0}
     ORDER BY order_index ASC
     LIMIT 1
   `;
-  if (next[0]) {
-    await updateLessonStatus(next[0].id, 'available');
+  if (nextInModule[0]) {
+    await updateLessonStatus(nextInModule[0].id, 'available');
+    // Same-module unlock is sufficient; nothing further to open.
+    await promoteContainerStatuses(moduleId, phaseId, roadmapId);
+    return;
   }
 
-  // Promote module status to current if it isn't already completed.
-  await sql`
-    UPDATE modules SET status = 'current', updated_at = NOW()
-    WHERE id = ${moduleId} AND status = 'locked'
+  // 2) This was the last lesson of the module. Unlock the first lesson of the
+  //    next module (by order) in the same phase.
+  const moduleRows = await sql`
+    SELECT id, phase_id, roadmap_id, order_index
+    FROM modules WHERE id = ${moduleId} LIMIT 1
   `;
-
-  const moduleRows = await sql`SELECT phase_id, roadmap_id FROM modules WHERE id = ${moduleId}`;
   if (moduleRows[0]) {
-    const { phase_id: phaseId, roadmap_id: roadmapId } = moduleRows[0];
-    await sql`
-      UPDATE phases SET status = 'current', updated_at = NOW()
-      WHERE id = ${phaseId} AND status = 'locked'
+    const mod = moduleRows[0];
+    const nextModule = await sql`
+      SELECT id FROM modules
+      WHERE phase_id = ${mod.phase_id}
+        AND order_index > ${mod.order_index ?? 0}
+      ORDER BY order_index ASC
+      LIMIT 1
     `;
-    void roadmapId;
+    if (nextModule[0]) {
+      const firstLesson = await sql`
+        SELECT id FROM lessons
+        WHERE module_id = ${nextModule[0].id} AND status = 'locked'
+        ORDER BY order_index ASC
+        LIMIT 1
+      `;
+      if (firstLesson[0]) {
+        await updateLessonStatus(firstLesson[0].id, 'available');
+      }
+      await promoteContainerStatuses(nextModule[0].id, mod.phase_id, mod.roadmap_id);
+      return;
+    }
+
+    // 3) This was the last module of the phase. Unlock the first module of the
+    //    next phase (by order), and its first lesson.
+    const nextPhase = await sql`
+      SELECT id, roadmap_id, order_index
+      FROM phases
+      WHERE roadmap_id = ${mod.roadmap_id}
+        AND order_index > ${mod.order_index ?? 0}
+      ORDER BY order_index ASC
+      LIMIT 1
+    `;
+    if (nextPhase[0]) {
+      const firstModule = await sql`
+        SELECT id FROM modules
+        WHERE phase_id = ${nextPhase[0].id}
+        ORDER BY order_index ASC
+        LIMIT 1
+      `;
+      if (firstModule[0]) {
+        const firstLesson = await sql`
+          SELECT id FROM lessons
+          WHERE module_id = ${firstModule[0].id} AND status = 'locked'
+          ORDER BY order_index ASC
+          LIMIT 1
+        `;
+        if (firstLesson[0]) {
+          await updateLessonStatus(firstLesson[0].id, 'available');
+        }
+        await promoteContainerStatuses(firstModule[0].id, nextPhase[0].id, nextPhase[0].roadmap_id);
+      }
+      return;
+    }
+
+    // 4) Last module of last phase -> roadmap complete (if all lessons done).
+    const lessonRows = await sql`SELECT status FROM lessons WHERE roadmap_id = ${mod.roadmap_id}`;
+    const allDone = lessonRows.length > 0 && lessonRows.every((l: any) => l.status === 'completed');
+    if (allDone) {
+      await sql`
+        UPDATE roadmaps SET status = 'completed', updated_at = NOW()
+        WHERE id = ${mod.roadmap_id}
+      `;
+    }
+    await promoteContainerStatuses(mod.id, mod.phase_id, mod.roadmap_id);
   }
+}
+
+// Promote module/phase containers from 'locked' to 'current' (idempotent).
+async function promoteContainerStatuses(
+  moduleId: string,
+  phaseId: string,
+  roadmapId: string
+): Promise<void> {
+  await sql`UPDATE modules SET status = 'current', updated_at = NOW() WHERE id = ${moduleId} AND status = 'locked'`;
+  await sql`UPDATE phases SET status = 'current', updated_at = NOW() WHERE id = ${phaseId} AND status = 'locked'`;
+  void roadmapId;
 }
 
 // ---------------------------------------------------------------------------

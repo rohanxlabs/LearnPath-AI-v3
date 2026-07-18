@@ -49,7 +49,8 @@ function walkLessons(roadmap: Roadmap, fn: (ctx: LessonContext) => void) {
   }
 }
 
-export function getAllLessonsInOrder(roadmap: Roadmap): LessonContext[] {
+export function getAllLessonsInOrder(roadmap: Roadmap | null): LessonContext[] {
+  if (!roadmap) return [];
   const items: LessonContext[] = [];
   walkLessons(roadmap, (ctx) => items.push(ctx));
   return items;
@@ -102,12 +103,12 @@ export function computeRoadmapStats(roadmap: Roadmap | null): RoadmapStats {
   };
 }
 
-export function findCurrentLesson(roadmap: Roadmap): LessonContext | null {
+export function findCurrentLesson(roadmap: Roadmap | null): LessonContext | null {
   const ordered = getAllLessonsInOrder(roadmap);
   return ordered.find((ctx) => ctx.lesson.status === 'available') ?? null;
 }
 
-export function findNextUpLesson(roadmap: Roadmap): LessonContext | null {
+export function findNextUpLesson(roadmap: Roadmap | null): LessonContext | null {
   const ordered = getAllLessonsInOrder(roadmap);
   const currentIdx = ordered.findIndex((ctx) => ctx.lesson.status === 'available');
   if (currentIdx === -1) {
@@ -118,7 +119,8 @@ export function findNextUpLesson(roadmap: Roadmap): LessonContext | null {
   );
 }
 
-export function findCurrentModule(roadmap: Roadmap): { phase: Phase; level: Level } | null {
+export function findCurrentModule(roadmap: Roadmap | null): { phase: Phase; level: Level } | null {
+  if (!roadmap) return null;
   const current = findCurrentLesson(roadmap);
   if (current) return { phase: current.phase, level: current.level };
 
@@ -401,7 +403,7 @@ export function validateRoadmapProgression(roadmap: Roadmap | null): Progression
   };
 }
 
-export function unlockNextAvailableLesson(roadmap: Roadmap): { updatedRoadmap: Roadmap; unlocked: boolean } {
+export function unlockNextAvailableLesson(roadmap: Roadmap | null): { updatedRoadmap: Roadmap; unlocked: boolean } {
   if (!roadmap) {
     return { updatedRoadmap: {} as Roadmap, unlocked: false };
   }

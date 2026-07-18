@@ -172,21 +172,21 @@ export function HomeView({
   );
   const todaysTasks = useMemo(() => deriveTodaysTasks(activeRoadmap), [activeRoadmap]);
   const unlockedAchievements = useMemo(
-    () => achievements.filter((a) => a.unlocked),
+    () => Array.isArray(achievements) ? achievements.filter((a) => a.unlocked) : [],
     [achievements],
   );
 
   const displayInsights =
     progressInsights.length > 0
       ? progressInsights
-      : aiRecommendations.slice(0, 2).map((rec) => ({
+      : Array.isArray(aiRecommendations) ? aiRecommendations.slice(0, 2).map((rec) => ({
           id: rec.id,
           title: rec.title,
           description: rec.description,
           xpReward: rec.xpReward,
           category: rec.category,
           difficulty: rec.difficulty,
-        }));
+        })) : [];
 
   const showActivity = hasLearningActivity(profile, stats);
   const roadmapTitle = activeRoadmap?.goal ?? null;
