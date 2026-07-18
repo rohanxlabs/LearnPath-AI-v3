@@ -69,6 +69,8 @@ import {
   migrateRoadmapJsonToTables,
   reconstructRoadmapJson,
   findLessonContext,
+  getLessonById,
+  upsertLessonContent,
   deleteRoadmap,
   createRoadmapFromJson,
   getUserRoadmapsReconstructed,
@@ -78,6 +80,8 @@ import {
   upsertPhaseProject,
   recomputeRoadmapCounters,
   completeLessonForUser,
+  upsertUserLessonProgress,
+  getUserLessonProgress,
   getRoadmapProgressSnapshot,
   upsertRoadmapState,
   getRoadmapState,
@@ -1530,6 +1534,880 @@ function logCurriculumStats(tag: string, roadmap: any): void {
   );
 }
 
+// ===========================================================================
+// LESSON GENERATION SYSTEM
+//
+// Roadmaps store lesson METADATA only. Full lesson content (premium-course-style
+// Markdown) is generated lazily the first time a student opens a lesson, then
+// cached in the `lesson_content` table. Subsequent opens reuse the cache; content
+// is only regenerated when explicitly requested.
+//
+// Flow: open lesson -> check lesson_content -> exists? return cached : generate,
+// save, mark content_status='ready', return.
+//
+// Does NOT generate quizzes or assignments (later phases).
+// ===========================================================================
+
+// Detect the pedagogical subject family so the prompt can request the right
+// artifacts (code + debugging for programming; formulas + derivations for math;
+// definitions + analogies for theory). Heuristic over the lesson metadata.
+type SubjectKind = 'programming' | 'mathematics' | 'theory';
+
+const PROGRAMMING_HINTS = [
+  'python', 'javascript', 'typescript', 'java', 'c++', 'cpp', 'c#', 'go', 'rust', 'sql', 'react',
+  'node', 'html', 'css', 'api', 'algorithm', 'data structure', 'datastructure', 'oop', 'function',
+  'class', 'code', 'coding', 'program', 'framework', 'git', 'database', 'backend', 'frontend',
+  'devops', 'docker', 'kubernetes', 'ml', 'machine learning', 'neural', 'tensorflow', 'pytorch',
+  'pandas', 'numpy', 'regex', 'compiler', 'recursion', 'array', 'pointer', 'thread', 'async'
+];
+const MATH_HINTS = [
+  'math', 'algebra', 'calculus', 'geometry', 'trigonometry', 'probability', 'statistics',
+  'derivative', 'integral', 'matrix', 'matrices', 'vector', 'equation', 'theorem', 'proof',
+  'linear algebra', 'discrete', 'combinatorics', 'number theory', 'differential', 'limit', 'series'
+];
+
+function detectSubjectKind(lesson: {
+  title?: string;
+  description?: string;
+  skillTags?: string[];
+  goal?: string;
+}): SubjectKind {
+  const hay = [
+    lesson.title || '',
+    lesson.description || '',
+    (lesson.skillTags || []).join(' '),
+    lesson.goal || ''
+  ].join(' ').toLowerCase();
+
+  const hits = (arr: string[]) => arr.reduce((n, w) => (hay.includes(w) ? n + 1 : n), 0);
+  const progScore = hits(PROGRAMMING_HINTS);
+  const mathScore = hits(MATH_HINTS);
+
+  if (progScore >= mathScore && progScore > 0) return 'programming';
+  if (mathScore > progScore) return 'mathematics';
+  return 'theory';
+}
+
+// Subject-specific instruction block appended to the base prompt. Kept concise to
+// stay within free-tier context/token budgets while pinning the required artifacts.
+function subjectInstructions(kind: SubjectKind): string {
+  switch (kind) {
+    case 'programming':
+      return `This is a PROGRAMMING lesson. Include: clear explanations, correct syntax, and TIERED code examples in "Worked Examples" — a SIMPLE example, an INTERMEDIATE example, and a REAL-WORLD example — each as a complete runnable fenced code block WITH its expected OUTPUT shown (as a fenced \`text\` block or comment). Add at least one Markdown/ASCII diagram (flowchart, tree, or architecture) using a fenced \`text\` block to illustrate flow or structure. In "Common Mistakes" include real common bugs and concrete debugging tips. In the practice part of "Practical Examples", add a CHALLENGE exercise (harder, open-ended).`;
+    case 'mathematics':
+      return `This is a MATHEMATICS lesson. Include: precise definitions; formulas inline with backticks or in fenced blocks; at least one step-by-step DERIVATION; fully worked numeric examples (simple then harder); and a diagram or comparison TABLE where it clarifies relationships. In "Summary", list the Important Formulas explicitly.`;
+    default:
+      return `This is a THEORY/CONCEPTUAL lesson. Include: crisp definitions; an intuitive real-world ANALOGY for each core concept; concrete real-world applications; and comparison TABLES for related concepts. Use a Markdown/ASCII diagram (e.g. a timeline or flowchart in a fenced \`text\` block) where it aids understanding.`;
+  }
+}
+
+// The 11 mandatory sections every lesson must contain, in order.
+const LESSON_SECTIONS = [
+  'Lesson Introduction',
+  'Learning Objectives',
+  'Core Concepts',
+  'Step-by-step Explanation',
+  'Worked Examples',
+  'Practical Examples',
+  'Common Mistakes',
+  'Best Practices',
+  'Summary',
+  'Key Takeaways',
+  'Next Lesson Preview'
+] as const;
+
+// Build a compact, high-signal prompt optimized for free-tier OpenRouter models.
+// It pins the exact section headings + ordering so parsing/validation is reliable,
+// while requesting the premium-course enrichments (metadata header, inline
+// knowledge checks, Markdown diagrams, tiered code examples, a full practice
+// section, and an interview-ready summary).
+function buildLessonPrompt(ctx: {
+  title: string;
+  description?: string;
+  difficulty?: string;
+  estimatedMinutes?: number;
+  learningObjectives?: string[];
+  skillTags?: string[];
+  prerequisiteNames?: string[];
+  goal?: string;
+  moduleName?: string;
+  phaseName?: string;
+  nextLessonName?: string;
+  subject: SubjectKind;
+}): string {
+  const objectives = (ctx.learningObjectives || []).filter(Boolean);
+  const tags = (ctx.skillTags || []).filter(Boolean);
+  const prereqs = (ctx.prerequisiteNames || []).filter(Boolean);
+  const nextPreview = ctx.nextLessonName
+    ? `The next lesson is "${ctx.nextLessonName}"; preview how it builds on this one.`
+    : `Preview what a logical next step after this lesson would be.`;
+  const interviewLine = ctx.subject === 'theory'
+    ? `If this topic is commonly asked in interviews, add a short "Common Interview Questions" list.`
+    : `Add a short "Common Interview Questions" list (2-4 questions) since this topic is interview-relevant.`;
+
+  return `You are an expert instructor writing ONE complete, self-contained, PREMIUM online-course lesson.
+
+LESSON: "${sanitizeForPrompt(ctx.title, 160)}"
+${ctx.goal ? `COURSE GOAL: "${sanitizeForPrompt(ctx.goal, 160)}"` : ''}
+${ctx.moduleName ? `MODULE: "${sanitizeForPrompt(ctx.moduleName, 120)}"` : ''}
+${ctx.difficulty ? `LEVEL: ${sanitizeForPrompt(ctx.difficulty, 20)}` : ''}${ctx.estimatedMinutes ? ` | TARGET LENGTH: a ${ctx.estimatedMinutes}-minute read` : ''}
+${ctx.description ? `WHAT THE LEARNER WILL DO: ${sanitizeForPrompt(ctx.description, 240)}` : ''}
+${objectives.length ? `OBJECTIVES TO COVER:\n${objectives.map((o) => `- ${sanitizeForPrompt(o, 120)}`).join('\n')}` : ''}
+${tags.length ? `SKILLS COVERED: ${tags.map((t) => sanitizeForPrompt(t, 40)).join(', ')}` : ''}
+${prereqs.length ? `PREREQUISITES: ${prereqs.map((p) => sanitizeForPrompt(p, 80)).join(', ')}` : ''}
+
+${subjectInstructions(ctx.subject)}
+
+WRITING RULES:
+- Rich, accurate, NON-repetitive educational Markdown. Explain the "why", not just the "what". No shallow filler paragraphs.
+- Use ## headings, ### sub-headings, bullet lists, and TABLES where they aid clarity (e.g. comparison charts).
+- Use fenced code blocks with a language tag where relevant; use fenced \`text\` blocks for ASCII diagrams (flowcharts, trees, timelines, architecture). NEVER use images.
+- At 2-3 natural stopping points, insert an inline KNOWLEDGE CHECK as a blockquote to make the reader pause and think, e.g.:
+  > 🧠 **Knowledge Check:** What do you think happens if ...? / Can you predict the output of ...?
+  These are reflection checkpoints, NOT graded quizzes — do not provide multiple-choice options.
+- Do NOT include graded quizzes or assignments.
+
+OUTPUT FORMAT — return Markdown ONLY (no preamble, no JSON, no code fence around the whole document). Begin the document with this metadata header exactly (fill in real values), then the 11 sections:
+
+**Estimated Study Time:** ~${ctx.estimatedMinutes || 20} min | **Difficulty:** ${ctx.difficulty || 'beginner'}
+**Prerequisites:** ${prereqs.length ? prereqs.join(', ') : 'None'}
+**Skills Covered:** ${tags.length ? tags.join(', ') : 'core concepts'}
+
+Then use EXACTLY these 11 sections, in order, each as a level-2 heading:
+
+## 1. Lesson Introduction
+## 2. Learning Objectives
+(Restate the objectives as a checklist using "- [ ] objective" so learners can tick them off.)
+## 3. Core Concepts
+## 4. Step-by-step Explanation
+## 5. Worked Examples
+## 6. Practical Examples
+(Include four labelled sub-parts: "### Quick Practice", "### Mini Challenge", "### Thinking Question", "### Real-World Application".)
+## 7. Common Mistakes
+## 8. Best Practices
+## 9. Summary
+(Include "### Key Points", "### Important Concepts"${ctx.subject === 'mathematics' ? ', "### Important Formulas"' : ''}, and ${interviewLine})
+## 10. Key Takeaways
+## 11. Next Lesson Preview
+
+For "Next Lesson Preview": ${nextPreview}
+Begin now with the metadata header, then "## 1. Lesson Introduction".`;
+}
+
+// Validate that generated content is real, well-formed lesson Markdown. Returns
+// the number of mandatory sections detected so callers can gauge completeness.
+function scoreLessonMarkdown(markdown: string): { sectionsFound: number; ok: boolean } {
+  if (!markdown || markdown.trim().length < 400) return { sectionsFound: 0, ok: false };
+  const lower = markdown.toLowerCase();
+  let sectionsFound = 0;
+  for (const section of LESSON_SECTIONS) {
+    // Match the section heading regardless of numbering ("## 3. Core Concepts"
+    // or "## Core Concepts").
+    const needle = section.toLowerCase();
+    if (lower.includes(needle)) sectionsFound++;
+  }
+  // Require the bulk of sections to be present to count as a valid lesson.
+  return { sectionsFound, ok: sectionsFound >= 8 };
+}
+
+// Strip any stray wrapping code fence and normalise leading/trailing whitespace.
+function cleanLessonMarkdown(raw: string): string {
+  let md = (raw || '').trim();
+  if (md.startsWith('```')) {
+    md = md.replace(/^```(?:markdown|md)?\s*/i, '').replace(/\s*```$/, '').trim();
+  }
+  return md;
+}
+
+// A deterministic, no-AI fallback lesson so the student is never blocked when the
+// model is unavailable. It is clearly structured (premium layout) and honest about
+// being a stub that will be regenerated.
+function buildFallbackLessonMarkdown(ctx: {
+  title: string;
+  description?: string;
+  difficulty?: string;
+  estimatedMinutes?: number;
+  learningObjectives?: string[];
+  skillTags?: string[];
+  prerequisiteNames?: string[];
+  nextLessonName?: string;
+}): string {
+  const title = ctx.title || 'This Lesson';
+  const objectives = (ctx.learningObjectives || []).filter(Boolean);
+  const tags = (ctx.skillTags || []).filter(Boolean);
+  const prereqs = (ctx.prerequisiteNames || []).filter(Boolean);
+  const checklist = objectives.length
+    ? objectives.map((o) => `- [ ] ${o}`).join('\n')
+    : `- [ ] Understand the core ideas behind ${title}\n- [ ] Apply ${title} in a practical scenario`;
+
+  return `**Estimated Study Time:** ~${ctx.estimatedMinutes || 20} min | **Difficulty:** ${ctx.difficulty || 'beginner'}
+**Prerequisites:** ${prereqs.length ? prereqs.join(', ') : 'None'}
+**Skills Covered:** ${tags.length ? tags.join(', ') : 'core concepts'}
+
+## 1. Lesson Introduction
+
+Welcome to **${title}**. ${ctx.description || `This lesson introduces the essential ideas of ${title} and shows how to apply them.`}
+
+> Note: A richer, AI-authored version of this lesson will be generated automatically the next time it is opened. This is a structured starter outline.
+
+## 2. Learning Objectives
+
+By the end of this lesson you should be able to:
+
+${checklist}
+
+## 3. Core Concepts
+
+${tags.length ? `The key topics for this lesson are: ${tags.join(', ')}.` : `This lesson covers the foundational concepts of ${title}.`}
+
+> 🧠 **Knowledge Check:** Before continuing, how would you explain ${title} in one sentence to a friend?
+
+## 4. Step-by-step Explanation
+
+1. Review the objectives above.
+2. Study each core concept in order.
+3. Work through the examples and reproduce them yourself.
+
+## 5. Worked Examples
+
+A worked example will walk through applying ${title} step by step.
+
+## 6. Practical Examples
+
+### Quick Practice
+Try a small exercise applying ${title}.
+
+### Mini Challenge
+Extend the quick practice with one additional constraint.
+
+### Thinking Question
+Why does ${title} matter, and when would you avoid it?
+
+### Real-World Application
+Describe a real scenario where ${title} is used in practice.
+
+## 7. Common Mistakes
+
+- Rushing past the fundamentals before practising.
+- Skipping the examples instead of reproducing them.
+
+## 8. Best Practices
+
+- Practise actively rather than reading passively.
+- Connect new ideas to what you already know.
+
+## 9. Summary
+
+### Key Points
+- ${title} is a building block for later lessons.
+
+### Important Concepts
+- ${tags.length ? tags.join(', ') : `the fundamentals of ${title}`}
+
+## 10. Key Takeaways
+
+- ${title} is a building block for later lessons.
+- Active practice is the fastest route to mastery.
+
+## 11. Next Lesson Preview
+
+${ctx.nextLessonName ? `Next up: **${ctx.nextLessonName}**, which builds directly on what you learned here.` : `The next lesson will build on these ideas.`}`;
+}
+
+// In-flight generation guard: if two requests open the same lesson simultaneously,
+// the second awaits the first instead of triggering a duplicate model call.
+const lessonGenerationInFlight = new Map<string, Promise<{ markdown: string; summary: string | null; modelUsed: string }>>();
+
+// Core generation routine. Builds the prompt, calls the model with retry/fallback,
+// validates the Markdown, and returns the content to persist. Never throws for
+// content-quality reasons — it degrades to the fallback lesson instead.
+async function generateLessonContent(ctx: {
+  lessonId: string;
+  title: string;
+  description?: string;
+  difficulty?: string;
+  estimatedMinutes?: number;
+  learningObjectives?: string[];
+  skillTags?: string[];
+  prerequisiteNames?: string[];
+  goal?: string;
+  moduleName?: string;
+  phaseName?: string;
+  nextLessonName?: string;
+}): Promise<{ markdown: string; summary: string | null; modelUsed: string }> {
+  const subject = detectSubjectKind(ctx);
+  const prompt = buildLessonPrompt({ ...ctx, subject });
+
+  const MAX_ATTEMPTS = 2;
+  let bestMarkdown = '';
+  let bestSections = -1;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await callOpenRouterChatCompletion(prompt, {
+        temperature: 0.6,
+        asJSON: false,
+        timeoutMs: 35000,
+        maxTokens: 4500
+      });
+      const md = cleanLessonMarkdown(response);
+      const { sectionsFound, ok } = scoreLessonMarkdown(md);
+      if (sectionsFound > bestSections) {
+        bestSections = sectionsFound;
+        bestMarkdown = md;
+      }
+      if (ok) {
+        const summary = extractLessonSummary(md);
+        console.log(`[Lesson-Gen] ${ctx.lessonId} generated (${subject}, ${sectionsFound}/11 sections, attempt ${attempt + 1}).`);
+        return { markdown: md, summary, modelUsed: OPENROUTER_MODELS[0] };
+      }
+      console.warn(`[Lesson-Gen] ${ctx.lessonId} attempt ${attempt + 1} incomplete (${sectionsFound}/11 sections).`);
+    } catch (err: any) {
+      console.warn(`[Lesson-Gen] ${ctx.lessonId} attempt ${attempt + 1} failed:`, err.message);
+    }
+  }
+
+  // Accept the best partial result if it is reasonably complete; otherwise fall back.
+  if (bestSections >= 6 && bestMarkdown) {
+    console.warn(`[Lesson-Gen] ${ctx.lessonId} using best partial content (${bestSections}/11 sections).`);
+    return { markdown: bestMarkdown, summary: extractLessonSummary(bestMarkdown), modelUsed: OPENROUTER_MODELS[0] };
+  }
+
+  console.warn(`[Lesson-Gen] ${ctx.lessonId} falling back to offline lesson template.`);
+  const fallback = buildFallbackLessonMarkdown(ctx);
+  return { markdown: fallback, summary: extractLessonSummary(fallback), modelUsed: 'offline-fallback' };
+}
+
+// Derive a short plain-text summary from the lesson's introduction/summary section.
+function extractLessonSummary(markdown: string): string | null {
+  if (!markdown) return null;
+  // Prefer the Summary section; fall back to the Introduction.
+  const grab = (heading: RegExp): string | null => {
+    const match = markdown.match(heading);
+    if (!match) return null;
+    const start = match.index! + match[0].length;
+    const rest = markdown.slice(start);
+    const end = rest.search(/\n##\s/);
+    const body = (end === -1 ? rest : rest.slice(0, end)).trim();
+    const text = body.replace(/[#*`>_-]/g, '').replace(/\s+/g, ' ').trim();
+    return text ? text.slice(0, 300) : null;
+  };
+  return grab(/##\s*\d*\.?\s*Summary/i) || grab(/##\s*\d*\.?\s*Lesson Introduction/i) || null;
+}
+
+// ---------------------------------------------------------------------------
+// Premium lesson metadata + structure helpers
+// ---------------------------------------------------------------------------
+
+// Structured metadata describing a lesson (surfaced to the client and reused by
+// future systems: quizzes/flashcards/mentor/revision). Purely additive — derived
+// from existing lesson columns + generated content; no schema change.
+interface LessonMetadata {
+  lessonId: string;
+  title: string;
+  estimatedMinutes: number;
+  difficulty: string;
+  subject: SubjectKind;
+  prerequisites: string[];        // human-readable prerequisite lesson names
+  skillsCovered: string[];
+  learningObjectives: string[];
+  completionChecklist: string[];  // actionable "did you..." items derived from objectives
+  sectionAnchors: string[];       // ordered section slugs present in the content
+  hasKnowledgeChecks: boolean;
+  hasCodeExamples: boolean;
+  hasDiagrams: boolean;
+  generatedAt: string | null;
+  lastOpenedAt: string | null;
+  contentStatus: string;
+}
+
+// Slugify a heading into a stable anchor id (for future deep-linking / attaching
+// quizzes & flashcards to specific sections).
+function slugifyHeading(heading: string): string {
+  return heading
+    .toLowerCase()
+    .replace(/^\d+\.\s*/, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// Extract the ordered level-2 section anchors present in the markdown.
+function extractSectionAnchors(markdown: string): string[] {
+  const anchors: string[] = [];
+  const re = /^##\s+(.+)$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(markdown)) !== null) {
+    const slug = slugifyHeading(match[1].trim());
+    if (slug) anchors.push(slug);
+  }
+  return anchors;
+}
+
+// Turn learning objectives into a lightweight completion checklist. Prefers any
+// "- [ ] ..." items the model already emitted; otherwise derives from objectives.
+function buildCompletionChecklist(markdown: string, objectives: string[]): string[] {
+  const checkboxRe = /^\s*-\s*\[[ x]\]\s*(.+)$/gim;
+  const found: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = checkboxRe.exec(markdown)) !== null) {
+    const item = m[1].trim();
+    if (item) found.push(item);
+  }
+  if (found.length) return Array.from(new Set(found)).slice(0, 12);
+  return (objectives || [])
+    .filter(Boolean)
+    .map((o) => o.trim())
+    .slice(0, 12);
+}
+
+// Assemble the structured metadata object for a lesson from its row + content.
+function buildLessonMetadata(args: {
+  lessonRow: any;
+  content: string;
+  prerequisiteNames: string[];
+  generatedAt: string | null;
+  lastOpenedAt: string | null;
+  contentStatus: string;
+}): LessonMetadata {
+  const { lessonRow, content, prerequisiteNames, generatedAt, lastOpenedAt, contentStatus } = args;
+  const objectives = Array.isArray(lessonRow.learning_objectives) ? lessonRow.learning_objectives : [];
+  const skillTags = Array.isArray(lessonRow.skill_tags) ? lessonRow.skill_tags : [];
+  const subject = detectSubjectKind({
+    title: lessonRow.title,
+    description: lessonRow.description ?? undefined,
+    skillTags
+  });
+
+  return {
+    lessonId: lessonRow.id,
+    title: lessonRow.title,
+    estimatedMinutes: Number(lessonRow.estimated_minutes) || 20,
+    difficulty: lessonRow.difficulty || 'beginner',
+    subject,
+    prerequisites: prerequisiteNames,
+    skillsCovered: skillTags,
+    learningObjectives: objectives,
+    completionChecklist: buildCompletionChecklist(content, objectives),
+    sectionAnchors: extractSectionAnchors(content),
+    hasKnowledgeChecks: /knowledge check/i.test(content),
+    hasCodeExamples: /```[a-z]/i.test(content),
+    hasDiagrams: /```text|```mermaid|┌|└|──|->|─►/i.test(content),
+    generatedAt,
+    lastOpenedAt,
+    contentStatus
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Short-lived in-memory content cache (read acceleration).
+//
+// The durable cache is `lesson_content` in the DB; this only avoids repeated DB
+// round-trips for hot lessons within a short window. It NEVER causes regeneration
+// and is invalidated on explicit regenerate.
+// ---------------------------------------------------------------------------
+type LessonContentCacheEntry = {
+  content: string;
+  summary: string | null;
+  contentStatus: string;
+  generatedAt: string | null;
+  timestamp: number;
+};
+const lessonContentCache = new Map<string, LessonContentCacheEntry>();
+const LESSON_CONTENT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedLessonContent(lessonId: string): LessonContentCacheEntry | null {
+  const entry = lessonContentCache.get(lessonId);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > LESSON_CONTENT_CACHE_TTL) {
+    lessonContentCache.delete(lessonId);
+    return null;
+  }
+  return entry;
+}
+
+function setCachedLessonContent(lessonId: string, entry: Omit<LessonContentCacheEntry, 'timestamp'>): void {
+  lessonContentCache.set(lessonId, { ...entry, timestamp: Date.now() });
+}
+
+// ---------------------------------------------------------------------------
+// Automatic progress tracking (existing columns only — no schema change).
+//
+// Records a lesson "open" against the user: bumps attempts (used as an open
+// counter) and touches updated_at (used as "last opened"). Study minutes and
+// completion are handled by the existing completion flow.
+// ---------------------------------------------------------------------------
+async function recordLessonOpened(
+  ownerEmail: string,
+  ctx: { lessonId: string; moduleId: string; phaseId: string; roadmapId: string }
+): Promise<string | null> {
+  try {
+    await upsertUserLessonProgress({
+      ownerEmail,
+      roadmapId: ctx.roadmapId,
+      lessonId: ctx.lessonId,
+      moduleId: ctx.moduleId,
+      phaseId: ctx.phaseId,
+      attempts: 1 // GREATEST() semantics keep this as an "opened at least once" marker
+    });
+    return new Date().toISOString();
+  } catch (err: any) {
+    console.warn('[Lesson-Progress] failed to record open:', err?.message || err);
+    return null;
+  }
+}
+
+// Look up the user's last-opened timestamp for a lesson from progress (updated_at).
+async function getLessonLastOpened(ownerEmail: string, lessonId: string): Promise<string | null> {
+  try {
+    const rows = await sql`
+      SELECT updated_at FROM user_lesson_progress
+      WHERE owner_email = ${ownerEmail.toLowerCase()} AND lesson_id = ${lessonId}
+      LIMIT 1
+    `;
+    return rows[0]?.updated_at ? new Date(rows[0].updated_at).toISOString() : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Retrieve a lesson's content, generating and caching it on first access.
+ *
+ * @returns the lesson row (metadata) plus resolved markdown content + summary,
+ *          and whether it was served from cache.
+ */
+async function getOrGenerateLessonContent(
+  lessonId: string,
+  opts: { regenerate?: boolean } = {}
+): Promise<{
+  lesson: any;
+  content: string;
+  summary: string | null;
+  contentStatus: string;
+  generatedAt: string | null;
+  cached: boolean;
+} | null> {
+  // Explicit regenerate always bypasses (and clears) the in-memory cache.
+  if (opts.regenerate) {
+    lessonContentCache.delete(lessonId);
+  } else {
+    // Fast path: hot in-memory cache (avoids the DB round-trip for repeat reads).
+    const hot = getCachedLessonContent(lessonId);
+    if (hot) {
+      const lesson = await getLessonById(lessonId);
+      if (lesson) {
+        return {
+          lesson,
+          content: hot.content,
+          summary: hot.summary,
+          contentStatus: hot.contentStatus,
+          generatedAt: hot.generatedAt,
+          cached: true
+        };
+      }
+    }
+  }
+
+  const lesson = await getLessonById(lessonId);
+  if (!lesson) return null;
+
+  const existing = lesson.markdown_content;
+
+  // Durable cache hit: return stored content unless regeneration is requested.
+  if (!opts.regenerate && existing && String(existing).trim().length > 0) {
+    const generatedAt = lesson.generated_at ? new Date(lesson.generated_at).toISOString() : null;
+    const contentStatus = lesson.content_status || 'ready';
+    setCachedLessonContent(lessonId, {
+      content: existing,
+      summary: lesson.summary ?? null,
+      contentStatus,
+      generatedAt
+    });
+    return {
+      lesson,
+      content: existing,
+      summary: lesson.summary ?? null,
+      contentStatus,
+      generatedAt,
+      cached: true
+    };
+  }
+
+  // De-duplicate concurrent first-opens of the same lesson.
+  const generatedAt = new Date().toISOString();
+  let inflight = lessonGenerationInFlight.get(lessonId);
+  if (!inflight) {
+    inflight = (async () => {
+      // Pull relational context (module/phase/roadmap + goal + neighbours).
+      const ctx = await buildLessonGenerationContext(lessonId, lesson);
+      // Mark as generating so the UI/other requests can reflect the state.
+      try { await markLessonContentStatus(lessonId, 'generating'); } catch (_) {}
+      const generated = await generateLessonContent(ctx);
+      await upsertLessonContent({
+        lessonId,
+        markdownContent: generated.markdown,
+        summary: generated.summary,
+        modelUsed: generated.modelUsed,
+        generatedAt
+      });
+      await markLessonContentStatus(lessonId, 'ready');
+      return generated;
+    })();
+    lessonGenerationInFlight.set(lessonId, inflight);
+    inflight.finally(() => lessonGenerationInFlight.delete(lessonId));
+  }
+
+  let generated: { markdown: string; summary: string | null; modelUsed: string };
+  try {
+    generated = await inflight;
+  } catch (err) {
+    lessonGenerationInFlight.delete(lessonId);
+    throw err;
+  }
+
+  setCachedLessonContent(lessonId, {
+    content: generated.markdown,
+    summary: generated.summary,
+    contentStatus: 'ready',
+    generatedAt
+  });
+
+  return {
+    lesson,
+    content: generated.markdown,
+    summary: generated.summary,
+    contentStatus: 'ready',
+    generatedAt,
+    cached: false
+  };
+}
+
+// Assemble the full generation context for a lesson: its own metadata plus the
+// owning module/phase/roadmap goal and the immediately following lesson (for the
+// "Next Lesson Preview" section).
+async function buildLessonGenerationContext(lessonId: string, lessonRow: any): Promise<{
+  lessonId: string;
+  title: string;
+  description?: string;
+  difficulty?: string;
+  estimatedMinutes?: number;
+  learningObjectives?: string[];
+  skillTags?: string[];
+  prerequisiteNames?: string[];
+  goal?: string;
+  moduleName?: string;
+  phaseName?: string;
+  nextLessonName?: string;
+}> {
+  const meta = await sql`
+    SELECT
+      roadmaps.goal AS goal,
+      modules.name AS module_name,
+      phases.name AS phase_name,
+      lessons.order_index AS order_index,
+      lessons.module_id AS module_id
+    FROM lessons
+    JOIN modules ON modules.id = lessons.module_id
+    JOIN phases ON phases.id = modules.phase_id
+    JOIN roadmaps ON roadmaps.id = modules.roadmap_id
+    WHERE lessons.id = ${lessonId}
+    LIMIT 1
+  `;
+  const m = meta[0] || {};
+
+  // Next lesson (same module, next order index) for the preview section.
+  let nextLessonName: string | undefined;
+  if (m.module_id != null && m.order_index != null) {
+    const nextRows = await sql`
+      SELECT title FROM lessons
+      WHERE module_id = ${m.module_id} AND order_index > ${m.order_index}
+      ORDER BY order_index ASC
+      LIMIT 1
+    `;
+    nextLessonName = nextRows[0]?.title || undefined;
+  }
+
+  // Resolve prerequisite lesson IDs to human-readable titles for the header.
+  const prereqIds = Array.isArray(lessonRow.prerequisites) ? lessonRow.prerequisites.filter(Boolean) : [];
+  const prerequisiteNames = await resolveLessonNames(prereqIds);
+
+  return {
+    lessonId,
+    title: lessonRow.title,
+    description: lessonRow.description ?? undefined,
+    difficulty: lessonRow.difficulty ?? undefined,
+    estimatedMinutes: lessonRow.estimated_minutes ?? undefined,
+    learningObjectives: Array.isArray(lessonRow.learning_objectives) ? lessonRow.learning_objectives : [],
+    skillTags: Array.isArray(lessonRow.skill_tags) ? lessonRow.skill_tags : [],
+    prerequisiteNames,
+    goal: m.goal ?? undefined,
+    moduleName: m.module_name ?? undefined,
+    phaseName: m.phase_name ?? undefined,
+    nextLessonName
+  };
+}
+
+// Resolve a list of lesson IDs to their titles (order-preserving, missing ids
+// dropped). Used to render prerequisites as names instead of opaque ids.
+async function resolveLessonNames(lessonIds: string[]): Promise<string[]> {
+  const ids = (lessonIds || []).filter(Boolean);
+  if (ids.length === 0) return [];
+  const rows = await sql`SELECT id, title FROM lessons WHERE id = ANY(${ids})`;
+  const byId = new Map<string, string>(rows.map((r: any) => [r.id, r.title]));
+  return ids.map((id) => byId.get(id)).filter((n): n is string => !!n);
+}
+
+// Update only the lesson's content_status without touching learning status.
+async function markLessonContentStatus(lessonId: string, status: string): Promise<void> {
+  await sql`UPDATE lessons SET content_status = ${status}, updated_at = NOW() WHERE id = ${lessonId}`;
+}
+
+// API: Lesson content generation / retrieval (lazy, cached).
+//
+// GET  returns cached content, generating it on first access.
+// POST forces regeneration when `regenerate: true` (or ?regenerate=true).
+
+// Assemble the full premium lesson payload: content + summary + structured
+// metadata + progress timestamps, and record the "open" for progress tracking.
+// Shared by the lesson endpoints and the topic endpoint so behaviour is uniform.
+async function assembleLessonResponse(
+  ownerEmail: string,
+  result: {
+    lesson: any;
+    content: string;
+    summary: string | null;
+    contentStatus: string;
+    generatedAt: string | null;
+    cached: boolean;
+  }
+): Promise<any> {
+  const lessonRow = result.lesson;
+
+  // Resolve prerequisite names (cheap; ids already on the row).
+  const prereqIds = Array.isArray(lessonRow.prerequisites) ? lessonRow.prerequisites : [];
+  const prerequisiteNames = await resolveLessonNames(prereqIds);
+
+  // Record this open + fetch last-opened, using the lesson's own relational
+  // context. Non-fatal on failure so content still returns.
+  let lastOpenedAt: string | null = null;
+  try {
+    const ctx = await findLessonContext(lessonRow.id);
+    if (ctx) {
+      lastOpenedAt =
+        (await recordLessonOpened(ownerEmail, {
+          lessonId: lessonRow.id,
+          moduleId: ctx.module_id,
+          phaseId: ctx.phase_id,
+          roadmapId: ctx.roadmap_id
+        })) || (await getLessonLastOpened(ownerEmail, lessonRow.id));
+    }
+  } catch (_) {
+    /* tracking is best-effort */
+  }
+
+  const metadata = buildLessonMetadata({
+    lessonRow,
+    content: result.content,
+    prerequisiteNames,
+    generatedAt: result.generatedAt,
+    lastOpenedAt,
+    contentStatus: result.contentStatus
+  });
+
+  return {
+    lessonId: lessonRow.id,
+    name: lessonRow.title,
+    content: result.content,
+    summary: result.summary,
+    contentStatus: result.contentStatus,
+    cached: result.cached,
+    metadata
+  };
+}
+
+app.get('/api/lessons/:lessonId/content', requireAuth, async (req, res) => {
+  const { lessonId } = req.params;
+  const userEmail = req.session.userEmail!;
+  try {
+    const result = await getOrGenerateLessonContent(lessonId);
+    if (!result) return res.status(404).json({ error: 'Lesson not found' });
+    const payload = await assembleLessonResponse(userEmail, result);
+    return res.json(payload);
+  } catch (error: any) {
+    console.error('[Lesson-Gen] content retrieval error:', error?.message || error);
+    return res.status(500).json({ error: 'Failed to load lesson content' });
+  }
+});
+
+app.post('/api/lessons/:lessonId/generate', aiLimiter, requireAuth, async (req, res) => {
+  const { lessonId } = req.params;
+  const userEmail = req.session.userEmail!;
+  const regenerate = req.body?.regenerate === true || req.query?.regenerate === 'true';
+  try {
+    const result = await getOrGenerateLessonContent(lessonId, { regenerate });
+    if (!result) return res.status(404).json({ error: 'Lesson not found' });
+    const payload = await assembleLessonResponse(userEmail, result);
+    return res.json({ ...payload, regenerated: regenerate && !result.cached });
+  } catch (error: any) {
+    console.error('[Lesson-Gen] generation error:', error?.message || error);
+    return res.status(500).json({ error: 'Failed to generate lesson content' });
+  }
+});
+
+// API: Read-only lesson metadata + user progress (does NOT generate content).
+//
+// Lightweight endpoint for lesson headers, lists, and future systems
+// (quizzes/flashcards/mentor/revision) that need lesson metadata without paying
+// the generation cost. Returns whether content is already generated/cached.
+app.get('/api/lessons/:lessonId/meta', requireAuth, async (req, res) => {
+  const { lessonId } = req.params;
+  const userEmail = req.session.userEmail!;
+  try {
+    const lesson = await getLessonById(lessonId);
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+
+    const prerequisiteNames = await resolveLessonNames(
+      Array.isArray(lesson.prerequisites) ? lesson.prerequisites : []
+    );
+    const generatedAt = lesson.generated_at ? new Date(lesson.generated_at).toISOString() : null;
+    const hasContent = !!(lesson.markdown_content && String(lesson.markdown_content).trim().length > 0);
+    const lastOpenedAt = await getLessonLastOpened(userEmail, lessonId);
+
+    // Metadata WITHOUT triggering generation (content may be empty here).
+    const metadata = buildLessonMetadata({
+      lessonRow: lesson,
+      content: hasContent ? lesson.markdown_content : '',
+      prerequisiteNames,
+      generatedAt,
+      lastOpenedAt,
+      contentStatus: lesson.content_status || 'pending'
+    });
+
+    // Per-user progress (completion, study minutes) from existing columns.
+    let progress: { completed: boolean; studyMinutes: number; completedAt: string | null } = {
+      completed: false, studyMinutes: 0, completedAt: null
+    };
+    try {
+      const rows = await sql`
+        SELECT completed, study_minutes, completed_at FROM user_lesson_progress
+        WHERE owner_email = ${userEmail.toLowerCase()} AND lesson_id = ${lessonId} LIMIT 1
+      `;
+      if (rows[0]) {
+        progress = {
+          completed: !!rows[0].completed,
+          studyMinutes: Number(rows[0].study_minutes) || 0,
+          completedAt: rows[0].completed_at ? new Date(rows[0].completed_at).toISOString() : null
+        };
+      }
+    } catch (_) { /* best-effort */ }
+
+    return res.json({ lessonId, name: lesson.title, hasContent, metadata, progress });
+  } catch (error: any) {
+    console.error('[Lesson-Gen] meta retrieval error:', error?.message || error);
+    return res.status(500).json({ error: 'Failed to load lesson metadata' });
+  }
+});
+
 app.post('/api/generate-projects', aiLimiter, requireAuth, async (req, res) => {
   const { goal, phases } = req.body;
 
@@ -2049,18 +2927,65 @@ app.get('/api/topics/:topicId', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Topic not found' });
     }
 
-    // Pull cached summary/content from lesson_content if present.
-    const content = await sql`
-      SELECT markdown_content, summary FROM lesson_content WHERE lesson_id = ${topicId}
-    `;
-    const row = content[0];
+    // Lazily generate + cache full lesson content on first open (idempotent;
+    // returns cached content on subsequent opens). Degrades gracefully to empty
+    // content if generation fails so the topic view still renders.
+    let markdownContent = '';
+    let summary: string | null = null;
+    let generatedAt: string | null = null;
+    let contentStatus: string = lesson.content_status || 'pending';
+    try {
+      const generated = await getOrGenerateLessonContent(topicId);
+      if (generated) {
+        markdownContent = generated.content || '';
+        summary = generated.summary;
+        generatedAt = generated.generatedAt;
+        contentStatus = generated.contentStatus;
+      }
+    } catch (genErr: any) {
+      console.warn('[Lesson-Gen] topic content generation failed, serving metadata only:', genErr?.message || genErr);
+    }
 
-    // Generate AI summary if not cached
-    let summary = row?.summary;
+    // Record the open for progress tracking (best-effort, existing columns only).
+    let lastOpenedAt: string | null = null;
+    try {
+      lastOpenedAt =
+        (await recordLessonOpened(userEmail, {
+          lessonId: lesson.id,
+          moduleId: lesson.module_id,
+          phaseId: lesson.phase_id,
+          roadmapId: lesson.roadmap_id
+        })) || (await getLessonLastOpened(userEmail, lesson.id));
+    } catch (_) {
+      /* best-effort */
+    }
+
+    // Fallback summary if none was produced.
     if (!summary) {
       const name = lesson.title;
       summary = `### ${name}\n\n**Key Concepts:**\n- Core principles of ${name.toLowerCase()}\n- Practical applications and examples\n\n**Common Mistakes:**\n- Misunderstanding basic concepts\n- Forgetting syntax details`;
     }
+
+    const objectives = Array.isArray(lesson.learning_objectives) && lesson.learning_objectives.length
+      ? lesson.learning_objectives
+      : [
+          `Understand ${lesson.title.toLowerCase()} fundamentals`,
+          `Apply concepts in practical scenarios`,
+          `Complete exercises to reinforce learning`
+        ];
+
+    const prerequisiteNames = await resolveLessonNames(
+      Array.isArray(lesson.prerequisites) ? lesson.prerequisites : []
+    );
+
+    const metadata = buildLessonMetadata({
+      lessonRow: lesson,
+      content: markdownContent,
+      prerequisiteNames,
+      generatedAt,
+      lastOpenedAt,
+      contentStatus
+    });
 
     const topic = {
       id: lesson.id,
@@ -2070,16 +2995,19 @@ app.get('/api/topics/:topicId', requireAuth, async (req, res) => {
       levelId: lesson.module_id,
       status: lesson.status,
       xpReward: lesson.xp_reward,
-      content: row?.markdown_content || '',
+      content: markdownContent,
       summary,
-      objectives: Array.isArray(lesson.learning_objectives) && lesson.learning_objectives.length
-        ? lesson.learning_objectives
-        : [
-            `Understand ${lesson.title.toLowerCase()} fundamentals`,
-            `Apply concepts in practical scenarios`,
-            `Complete exercises to reinforce learning`
-          ],
-      estimatedTime: lesson.estimated_minutes ?? lesson.xp_reward ?? 15
+      objectives,
+      estimatedTime: lesson.estimated_minutes ?? lesson.xp_reward ?? 15,
+      // Premium metadata (additive; existing UI ignores unknown fields).
+      difficulty: metadata.difficulty,
+      skillsCovered: metadata.skillsCovered,
+      prerequisites: metadata.prerequisites,
+      completionChecklist: metadata.completionChecklist,
+      contentStatus,
+      generatedAt,
+      lastOpenedAt,
+      metadata
     };
 
     return res.json({ topic });
@@ -2563,6 +3491,14 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     }
 
     // Record completion in the normalized progress table + recompute roadmap counters.
+    // Study time: prefer a client-supplied value, otherwise auto-attribute the
+    // lesson's estimated minutes so time-on-task is tracked without frontend changes.
+    const clientStudyMinutes = Number((req.body as any)?.studyMinutes);
+    const autoStudyMinutes = Number(lessonCtx.estimated_minutes) || 0;
+    const studyMinutes = Number.isFinite(clientStudyMinutes) && clientStudyMinutes > 0
+      ? Math.min(clientStudyMinutes, 600)
+      : autoStudyMinutes;
+
     const counters = await completeLessonForUser(
       userEmail,
       lessonId,
@@ -2570,9 +3506,12 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
       lessonCtx.phase_id,
       lessonCtx.roadmap_id,
       null,
-      0
+      studyMinutes
     );
     const completionPercent = counters.progressPercent;
+
+    // Invalidate the hot content cache entry (status changed to completed).
+    lessonContentCache.delete(lessonId);
 
     // User-level XP + activity log still live on the `users` row (out of scope for
     // the roadmap normalization). Update them under the same lock.
