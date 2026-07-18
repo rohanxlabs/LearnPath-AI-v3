@@ -339,7 +339,7 @@ const QuizCard = ({ quiz, onStartQuiz }) => (
       <div className="space-y-2 pt-3 border-t border-white/10">
         <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Recommended Prep</h4>
         <div className="space-y-2">
-          {getQuizRecommendations(quiz.quizId, quiz.quizName).slice(0, 2).map(res => <PrepResource key={res.id} resource={res} />)}
+          {Array.isArray(getQuizRecommendations(quiz.quizId, quiz.quizName)) ? getQuizRecommendations(quiz.quizId, quiz.quizName).slice(0, 2).map(res => <PrepResource key={res.id} resource={res} />) : []}
         </div>
       </div>
     </div>

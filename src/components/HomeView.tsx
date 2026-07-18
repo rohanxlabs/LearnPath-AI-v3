@@ -760,7 +760,7 @@ export function HomeView({
       {/* SECTION 7 — Achievements */}
       <motion.section {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.24 }}>
         <SectionHeader icon={Award} title="Achievements" subtitle="Earned from your learning activity" />
-        {unlockedAchievements.length > 0 ? (
+        {Array.isArray(unlockedAchievements) && unlockedAchievements.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {unlockedAchievements.slice(0, 6).map((achievement) => (
               <GlassCard key={achievement.id} tint="glass-card-orange" className="p-4">

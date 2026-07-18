@@ -137,8 +137,11 @@ try {
 
 const isProduction = process.env.NODE_ENV === 'production';
 
-if (!process.env.SESSION_SECRET) {
-  throw new Error('SESSION_SECRET is required');
+// Validate all required environment variables on startup
+const requiredEnvVars = ['DATABASE_URL', 'SESSION_SECRET', 'OPENROUTER_API_KEY'];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+  throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}. Please check your .env file.`);
 }
 
 declare module 'express-session' {
@@ -332,17 +335,19 @@ function sanitizeForPrompt(input: string | number | undefined | null, maxLength:
 }
 
 const OPENROUTER_MODELS = [
+  "openrouter/free",
   "nvidia/nemotron-3-super-120b-a12b:free",
   "meta-llama/llama-3.3-70b-instruct:free",
   "qwen/qwen3-next-80b-a3b-instruct:free",
   "google/gemma-2-27b-it:free",
-  "tencent/hy3:free"
+  "tencent/hy3:free",
+  "openrouter/free"
 ];
 
 // Models known NOT to support the `response_format: json_object` request param.
 // For JSON-mode prompts we drop that param (requesting JSON via the system
 // prompt instead) so these models still work for structured generation.
-const MODELS_WITHOUT_JSON_MODE = new Set(["tencent/hy3:free"]);
+const MODELS_WITHOUT_JSON_MODE = new Set(["tencent/hy3:free", "openrouter/free"]);
 
 function isJsonModeUnsupportedError(err: any): boolean {
   const msg = (err?.message || '').toLowerCase();

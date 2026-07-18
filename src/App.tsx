@@ -6,6 +6,7 @@ import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigat
 import { AchievementCard, NotificationCard } from './components/Cards';
 import { HomeView } from './components/HomeView';
 import { SplashScreen } from './components/SplashScreen';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion } from 'motion/react';
 
 // Route-level code splitting: each tab/view below is only fetched the first
@@ -52,11 +53,11 @@ function TabFallback() {
   return (
     <div className="flex items-center justify-center py-24">
       <div className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
-    </div>
-  );
-}
+      </div>
+    );
+   }
 
-const DEFAULT_AVATAR =
+  const DEFAULT_AVATAR =
   'data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" rx="64" fill="%238b5cf6"/%3E%3Ccircle cx="64" cy="48" r="22" fill="white" opacity=".9"/%3E%3Cpath d="M28 112c7-22 20-33 36-33s29 11 36 33" fill="white" opacity=".9"/%3E%3C/svg%3E';
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -1519,25 +1520,26 @@ export default function App() {
     : null;
 
   return (
-    <div className={`min-h-screen pb-20 ${themeClass} transition-colors duration-300 relative select-none`} style={customBackground}>
-      {/* 1. Header component */}
-      <MobileHeader
-        profile={profile}
-        notifications={notifications}
-        onTabChange={(tab) => {
-          setActiveTab(tab);
-          setActiveLesson(null);
-        }}
-        onNotificationsClick={() => {
-          setActiveTab('notifications');
-          setActiveLesson(null);
-        }}
-        onUpgradeClick={() => {
-          setActiveTab('profile');
-          setActiveLesson(null);
-        }}
-        onOpenDrawer={() => setIsSidebarOpen(true)}
-      />
+    <ErrorBoundary>
+      <div className={`min-h-screen pb-20 ${themeClass} transition-colors duration-300 relative select-none`} style={customBackground}>
+        {/* 1. Header component */}
+        <MobileHeader
+          profile={profile}
+          notifications={notifications}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            setActiveLesson(null);
+          }}
+          onNotificationsClick={() => {
+            setActiveTab('notifications');
+            setActiveLesson(null);
+          }}
+          onUpgradeClick={() => {
+            setActiveTab('profile');
+            setActiveLesson(null);
+          }}
+          onOpenDrawer={() => setIsSidebarOpen(true)}
+        />
 
       {/* 2. SideDrawer sidebar details */}
       <SideDrawer
@@ -1687,5 +1689,6 @@ export default function App() {
         </Suspense>
       )}
     </div>
+    </ErrorBoundary>
   );
 }
