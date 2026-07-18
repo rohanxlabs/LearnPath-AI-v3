@@ -2,35 +2,40 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { BarChart, BrainCircuit, Calendar, Check, Eye, GitBranch, Lightbulb, LineChart, Radar, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Roadmap, UserProfile } from '../types';
-import { generateInsightsData } from '../lib/insights';
+import { generateInsightsData, ActivityLog } from '../lib/insights';
 
 import { LearningVelocityChart } from './charts/LearningVelocityChart';
 import { WeeklyReportChart } from './charts/WeeklyReportChart';
 import { SkillRadarChart } from './charts/SkillRadarChart';
 import { SkeletonStatGrid, LoadingSpinner, SkeletonChart } from './Skeleton';
 
-// Placeholder components for charts - we will create these next
-const PlaceholderChart = ({ name }: { name: string }) => (
-  <div className="flex h-full min-h-[200px] w-full items-center justify-center rounded-lg bg-black/20 border border-white/10">
-    <p className="text-sm text-zinc-400">{name} Visualization</p>
+// Shown instead of a chart when there isn't enough real activity history yet —
+// honest empty state rather than a fabricated trend line.
+const NoHistoryYet = ({ label }: { label: string }) => (
+  <div className="flex h-full min-h-[200px] w-full flex-col items-center justify-center gap-1.5 rounded-lg bg-black/20 border border-white/10 text-center px-4">
+    <p className="text-sm text-zinc-400">Not enough history yet to show {label}.</p>
+    <p className="text-xs text-zinc-500">This builds up as you complete lessons — check back after a few study sessions.</p>
   </div>
 );
 
 interface AIInsightsTabProps {
   roadmap: Roadmap;
   profile: UserProfile; // We'll receive the real profile object here
+  activityLog: ActivityLog;
 }
 
-export function AIInsightsTab({ roadmap, profile }: AIInsightsTabProps) {
-  // NOTE: The data generation will eventually come from a backend API call
+export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const insightsData = useMemo(() => generateInsightsData(roadmap, profile), [roadmap, profile]);
+  const insightsData = useMemo(
+    () => generateInsightsData(roadmap, profile, activityLog),
+    [roadmap, profile, activityLog]
+  );
 
   useEffect(() => {
     // Simulate loading delay for better UX
     const timer = setTimeout(() => setIsLoading(false), 300);
     return () => clearTimeout(timer);
-  }, [roadmap, profile]);
+  }, [roadmap, profile, activityLog]);
 
   const StatCard = ({ icon, title, value, change }: { icon: React.ReactNode, title: string, value: string, change?: string }) => (
     <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col justify-between">
@@ -78,9 +83,9 @@ export function AIInsightsTab({ roadmap, profile }: AIInsightsTabProps) {
         transition={{ duration: 0.5 }}
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
       >
-        <StatCard icon={<TrendingUp size={20} />} title="Total XP" value={insightsData.weeklyReports[0].xpGained.toString()} />
-        <StatCard icon={<Check size={20} />} title="Lessons Completed" value={insightsData.weeklyReports[0].lessonsCompleted.toString()} />
-        <StatCard icon={<GitBranch size={20} />} title="Projects Completed" value={insightsData.weeklyReports[0].projectsCompleted.toString()} />
+        <StatCard icon={<TrendingUp size={20} />} title="Total XP" value={(profile.xp || 0).toString()} />
+        <StatCard icon={<Check size={20} />} title="Lessons Completed" value={(profile.completedLessonIds?.length || 0).toString()} />
+        <StatCard icon={<GitBranch size={20} />} title="Projects Completed" value={((roadmap.projects || []).filter((p: any) => (p.progress || 0) >= 100).length).toString()} />
         <StatCard icon={<Calendar size={20} />} title="Est. Completion" value={insightsData.predictedCompletionDate ? insightsData.predictedCompletionDate.toLocaleDateString() : 'N/A'} />
       </motion.div>
 
@@ -92,14 +97,18 @@ export function AIInsightsTab({ roadmap, profile }: AIInsightsTabProps) {
               <LineChart size={20} className="text-violet-400" />
               Learning Velocity
             </h3>
-            <LearningVelocityChart data={insightsData.learningVelocity} />
+            {insightsData.hasActivityHistory
+              ? <LearningVelocityChart data={insightsData.learningVelocity} />
+              : <NoHistoryYet label="daily learning velocity" />}
           </div>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
               <BarChart size={20} className="text-violet-400" />
               Weekly Activity
             </h3>
-            <WeeklyReportChart data={insightsData.weeklyReports} />
+            {insightsData.weeklyReports.length > 0
+              ? <WeeklyReportChart data={insightsData.weeklyReports} />
+              : <NoHistoryYet label="weekly activity" />}
           </div>
         </div>
 

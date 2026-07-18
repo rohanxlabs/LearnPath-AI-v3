@@ -1,4 +1,4 @@
-import { Roadmap, CuratedResource } from '../types';
+import { Roadmap, CuratedResource, Phase } from '../types';
 
 /**
  * Highly realistic learning resources indexed by relevant topics.
@@ -302,6 +302,33 @@ export const COMPREHENSIVE_RECOMMENDATIONS: Record<string, CuratedResource[]> = 
 };
 
 /**
+ * Maps curated resource buckets to the keywords that identify a phase as
+ * belonging to that topic. Used because AI-generated roadmaps assign phases
+ * ids like "ph-1", "ph-2" — they never match the curated bucket keys
+ * (foundations, python, math-ai, ...) by id, so matching has to go by what
+ * the phase is actually about (name + listed skills) instead.
+ */
+const TOPIC_KEYWORDS: Record<string, string[]> = {
+  foundations: ['foundation', 'neural network', 'deep learning basics', 'backpropagation', 'intro to ai', 'ai fundamentals'],
+  python: ['python', 'numpy', 'pandas'],
+  'math-ai': ['math', 'linear algebra', 'calculus', 'statistics', 'probability'],
+  'llm-fund': ['llm', 'large language model', 'transformer', 'attention', 'tokeniz', 'gpt'],
+  'ai-agents': ['agent', 'agentic', 'tool use', 'tool calling', 'autonomous'],
+  'applied-ai': ['applied', 'deployment', 'production', 'mlops', 'inference'],
+  'mcp-protocols': ['mcp', 'model context protocol'],
+};
+
+function matchTopicBucket(phase: Phase): string | null {
+  const haystack = [phase.name, ...(phase.skillsCovered || [])].join(' ').toLowerCase();
+  for (const [bucketKey, keywords] of Object.entries(TOPIC_KEYWORDS)) {
+    if (keywords.some(kw => haystack.includes(kw))) {
+      return bucketKey;
+    }
+  }
+  return null;
+}
+
+/**
  * Creates dynamic recommendations specifically customized to the active Roadmap's goals and phases.
  * It synthesizes relevant Youtube playlists, online courses, and official documentations.
  */
@@ -310,9 +337,12 @@ export function getRecommendationsForRoadmap(roadmap: Roadmap): CuratedResource[
 
   const results: CuratedResource[] = [];
 
-  roadmap.phases.forEach((ph, index) => {
-    // Check if we have pre-indexed high-quality resources
-    const matched = COMPREHENSIVE_RECOMMENDATIONS[ph.id] || COMPREHENSIVE_RECOMMENDATIONS[ph.id.replace('phase-', '')];
+  roadmap.phases.forEach((ph) => {
+    // Match by topic keywords in the phase name/skills, not by id — generated
+    // phase ids (ph-1, ph-2...) never line up with the curated bucket keys.
+    const bucketKey = matchTopicBucket(ph);
+    const matched = bucketKey ? COMPREHENSIVE_RECOMMENDATIONS[bucketKey] : null;
+
     if (matched && matched.length > 0) {
       // Map to the active phase's real ID to guarantee rendering matches correctly!
       matched.forEach(item => {
@@ -322,38 +352,41 @@ export function getRecommendationsForRoadmap(roadmap: Roadmap): CuratedResource[
         });
       });
     } else {
-      // Fallback: Generate custom high-integrity materials on-the-fly dynamically
+      // No curated bucket matched this phase's topic — generate resources
+      // scoped to what the phase actually is (via search URLs), instead of
+      // generic homepages that have nothing to do with the topic.
       const cleanName = ph.name || 'Generative Computing';
+      const encodedName = encodeURIComponent(cleanName);
       results.push(
         {
           id: `dyn-yt-${ph.id}-1`,
           phaseId: ph.id,
-          title: `Advanced ${cleanName} crash course & concepts`,
+          title: `${cleanName} — video tutorials`,
           type: 'video',
-          url: 'https://www.youtube.com/c/Freecodecamp',
-          provider: 'freeCodeCamp YouTube',
-          duration: '45 mins',
-          description: `Excellent video tutorial teaching the core architectures, logic flow, and properties of ${cleanName}.`
+          url: `https://www.youtube.com/results?search_query=${encodedName}+tutorial`,
+          provider: 'YouTube Search',
+          duration: 'Varies',
+          description: `Curated search results for video tutorials covering ${cleanName}.`
         },
         {
           id: `dyn-crs-${ph.id}-1`,
           phaseId: ph.id,
-          title: `${cleanName} Mastery Certification Program`,
+          title: `${cleanName} — courses`,
           type: 'course',
-          url: 'https://www.coursera.org',
-          provider: 'Coursera Academic',
-          duration: '6 weeks',
-          description: `Comprehensive online certification program featuring expert syllabus and project-based pipelines in ${cleanName}.`
+          url: `https://www.coursera.org/search?query=${encodedName}`,
+          provider: 'Coursera Search',
+          duration: 'Varies',
+          description: `Course search results for ${cleanName} on Coursera.`
         },
         {
           id: `dyn-plt-${ph.id}-1`,
           phaseId: ph.id,
-          title: `Official ${cleanName} Reference & Sandbox Guides`,
+          title: `${cleanName} — reference material`,
           type: 'article',
-          url: 'https://developers.google.com',
-          provider: 'Google Devs & Partners',
-          duration: 'Reference Docs',
-          description: `Interactive sandbox specifications and platform tutorials covering secure implementations of ${cleanName}.`
+          url: `https://www.google.com/search?q=${encodedName}+documentation+guide`,
+          provider: 'Web Search',
+          duration: 'Reference',
+          description: `Search results for official documentation and guides on ${cleanName}.`
         }
       );
     }

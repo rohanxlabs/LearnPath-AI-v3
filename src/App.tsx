@@ -196,6 +196,7 @@ export default function App() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [chats, setChats] = useState<ChatMessage[]>([]);
+  const [activityLog, setActivityLog] = useState<Record<string, { xp: number; lessonsCompleted: number }>>({});
   const [unlockedAchievement, setUnlockedAchievement] = useState<Achievement | null>(null);
 
   // Active view controller tabs
@@ -265,6 +266,7 @@ export default function App() {
           setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
           setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
           setChats(Array.isArray(data.chats) ? data.chats : []);
+          setActivityLog(data.activityLog && typeof data.activityLog === 'object' ? data.activityLog : {});
           setActiveTab('home');
 
           const uniqueList: Roadmap[] = [];
@@ -908,6 +910,21 @@ await fetch('/api/roadmaps', {
 // Persist lesson completion (single endpoint handles both operations)
       if (targetRoadmapId) {
         const xpValue = xpAdded || 0;
+
+        // Optimistic local update so the Insights charts reflect this
+        // immediately, without waiting on the next full bootstrap.
+        const todayKey = new Date().toISOString().split('T')[0];
+        setActivityLog(prev => {
+          const existing = prev[todayKey] || { xp: 0, lessonsCompleted: 0 };
+          return {
+            ...prev,
+            [todayKey]: {
+              xp: existing.xp + xpValue,
+              lessonsCompleted: existing.lessonsCompleted + 1
+            }
+          };
+        });
+
         fetch('/api/complete-lesson', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1209,7 +1226,7 @@ await fetch('/api/roadmaps', {
         }
         if (roadmapDetailTab === 'insights') {
           if (!selectedRm) return null;
-          return <AIInsightsTab roadmap={selectedRm} profile={profile} />;
+          return <AIInsightsTab roadmap={selectedRm} profile={profile} activityLog={activityLog} />;
         }
         return (
 <RoadmapsTabContainer

@@ -439,6 +439,7 @@ app.get('/api/bootstrap', async (req, res) => {
       achievements: progress.achievements || [],
       notifications: progress.notifications || [],
       chats: progress.chats || [],
+      activityLog: progress.activityLog || {},
       roadmaps
     });
   } catch (error) {
@@ -453,6 +454,7 @@ app.get('/api/bootstrap', async (req, res) => {
       achievements: [],
       notifications: [],
       chats: [],
+      activityLog: {},
       roadmaps: []
     });
   }
@@ -2083,6 +2085,18 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     if (!dbData.profile) dbData.profile = {};
     dbData.profile.xp = newXP;
 
+    // Real per-day activity log — this is what powers the Learning Velocity /
+    // Weekly Report charts. Replaces the previous fabricated flat-average
+    // spread and single "All Time" bucket with genuine daily totals that
+    // build up from here forward. Pre-existing accounts simply have no
+    // history before this point, which the client shows honestly.
+    if (!dbData.activityLog) dbData.activityLog = {};
+    const activityDateKey = new Date().toISOString().split('T')[0];
+    const dayEntry = dbData.activityLog[activityDateKey] || { xp: 0, lessonsCompleted: 0 };
+    dayEntry.xp += xpValue;
+    dayEntry.lessonsCompleted += 1;
+    dbData.activityLog[activityDateKey] = dayEntry;
+
     const completionPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
     // Update roadmap progress tracking
@@ -2495,7 +2509,7 @@ async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
     const currentRoadmap = result[0]?.roadmap || {};
     const currentProgress = result[0]?.progress || {};
 
-    const { passwordHash, roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats, resource_states } = dbData;
+    const { passwordHash, roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats, resource_states, activityLog } = dbData;
 
     const newRoadmapData = {
       roadmaps: roadmaps || currentRoadmap.roadmaps || [],
@@ -2510,7 +2524,8 @@ async function saveUserDB(userEmail: string, dbData: UserDB): Promise<void> {
       achievements: achievements || currentProgress.achievements || [],
       notifications: notifications || currentProgress.notifications || [],
       chats: chats || currentProgress.chats || [],
-      resource_states: resource_states || currentProgress.resource_states || { completedIds: [], savedIds: [] }
+      resource_states: resource_states || currentProgress.resource_states || { completedIds: [], savedIds: [] },
+      activityLog: activityLog || currentProgress.activityLog || {}
     };
 
     const xp = (profile as any)?.xp ?? (currentProgress.profile as any)?.xp ?? 0;
