@@ -64,6 +64,25 @@ async function withUserLock<T>(email: string, fn: () => Promise<T>): Promise<T> 
   return result;
 }
 import { neon } from '@neondatabase/serverless';
+import {
+  ensureRoadmapTables,
+  migrateRoadmapJsonToTables,
+  reconstructRoadmapJson,
+  findLessonContext,
+  deleteRoadmap,
+  createRoadmapFromJson,
+  getUserRoadmapsReconstructed,
+  getRoadmapsByOwner,
+  upsertRoadmap,
+  upsertResource,
+  upsertPhaseProject,
+  recomputeRoadmapCounters,
+  completeLessonForUser,
+  getRoadmapProgressSnapshot,
+  upsertRoadmapState,
+  getRoadmapState,
+  getUserLessonCompletionStats
+} from './src/server/db/schema';
 import bcrypt from 'bcryptjs';
 import connectPgSimple from 'connect-pg-simple';
 import pg from 'pg';
@@ -429,7 +448,7 @@ app.get('/api/bootstrap', async (req, res) => {
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     const progress = dbData?.progress || {};
-    const roadmaps = await getUserRoadmaps(userEmail);
+    const roadmaps = await getUserRoadmapsReconstructed(userEmail);
 
     return res.json({
       authenticated: true,
@@ -1467,14 +1486,13 @@ app.get('/api/roadmaps/:roadmapId', requireAuth, async (req, res) => {
   }
 
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    const roadmap = dbData?.roadmaps?.find((r: any) => r.id === roadmapId);
-    
+    const roadmap = await reconstructRoadmapJson(roadmapId);
+
     if (!roadmap) {
       return res.status(404).json({ error: 'Roadmap not found' });
     }
 
-    // Add topic/section structure for workspace
+    // Add topic/section structure for workspace (mirrors legacy derived shape).
     const workspaceRoadmap = {
       ...roadmap,
       phases: roadmap.phases.map((phase: any) => ({
@@ -1487,7 +1505,7 @@ app.get('/api/roadmaps/:roadmapId', requireAuth, async (req, res) => {
             type: lesson.type,
             status: lesson.status,
             xpReward: lesson.xpReward,
-            estimatedTime: 15
+            estimatedTime: lesson.estimatedMinutes ?? 15
           }))
         }))
       }))
@@ -1510,55 +1528,43 @@ app.get('/api/topics/:topicId', requireAuth, async (req, res) => {
   }
 
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    
-    // Find lesson in any roadmap
-    let lesson: any = null;
-    let phase: any = null;
-    let level: any = null;
-
-    for (const roadmap of dbData?.roadmaps || []) {
-      for (const p of roadmap.phases || []) {
-        for (const l of p.levels || []) {
-          const found = l.lessons?.find((les: any) => les.id === topicId);
-          if (found) {
-            lesson = found;
-            phase = p;
-            level = l;
-            break;
-          }
-        }
-        if (lesson) break;
-      }
-      if (lesson) break;
-    }
+    const lesson = await findLessonContext(topicId);
 
     if (!lesson) {
       return res.status(404).json({ error: 'Topic not found' });
     }
 
+    // Pull cached summary/content from lesson_content if present.
+    const content = await sql`
+      SELECT markdown_content, summary FROM lesson_content WHERE lesson_id = ${topicId}
+    `;
+    const row = content[0];
+
     // Generate AI summary if not cached
-    let summary = lesson.summary;
+    let summary = row?.summary;
     if (!summary) {
-      summary = `### ${lesson.name}\n\n**Key Concepts:**\n- Core principles of ${lesson.name.toLowerCase()}\n- Practical applications and examples\n\n**Common Mistakes:**\n- Misunderstanding basic concepts\n- Forgetting syntax details`;
+      const name = lesson.title;
+      summary = `### ${name}\n\n**Key Concepts:**\n- Core principles of ${name.toLowerCase()}\n- Practical applications and examples\n\n**Common Mistakes:**\n- Misunderstanding basic concepts\n- Forgetting syntax details`;
     }
 
     const topic = {
       id: lesson.id,
-      name: lesson.name,
+      name: lesson.title,
       type: lesson.type,
-      phaseId: phase?.id,
-      levelId: level?.id,
+      phaseId: lesson.phase_id,
+      levelId: lesson.module_id,
       status: lesson.status,
-      xpReward: lesson.xpReward,
-      content: lesson.content || '',
+      xpReward: lesson.xp_reward,
+      content: row?.markdown_content || '',
       summary,
-      objectives: [
-        `Understand ${lesson.name.toLowerCase()} fundamentals`,
-        `Apply concepts in practical scenarios`,
-        `Complete exercises to reinforce learning`
-      ],
-      estimatedTime: lesson.xpReward || 15
+      objectives: Array.isArray(lesson.learning_objectives) && lesson.learning_objectives.length
+        ? lesson.learning_objectives
+        : [
+            `Understand ${lesson.title.toLowerCase()} fundamentals`,
+            `Apply concepts in practical scenarios`,
+            `Complete exercises to reinforce learning`
+          ],
+      estimatedTime: lesson.estimated_minutes ?? lesson.xp_reward ?? 15
     };
 
     return res.json({ topic });
@@ -1653,45 +1659,72 @@ app.post('/api/update-roadmap', requireAuth, async (req, res) => {
   }
 
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    if (!dbData || !dbData.roadmaps) {
-      return res.status(404).json({ error: 'User or roadmaps not found' });
-    }
-
-    const idx = dbData.roadmaps.findIndex((r: any) => r.id === roadmapId);
-    if (idx === -1) {
+    const existing = await getRoadmapsByOwner(userEmail);
+    if (!existing.some((r: any) => r.id === roadmapId)) {
       return res.status(404).json({ error: 'Roadmap not found' });
     }
 
-    const existing = dbData.roadmaps[idx];
-    const merged = { ...existing };
-
+    // Apply top-level mutable roadmap fields directly to the normalized row.
+    const roadmapPatch: any = {};
     for (const key of Object.keys(updates)) {
       const uVal = (updates as any)[key];
-      const eVal = existing[key];
-
-      if (key === 'quizzes' && uVal && typeof uVal === 'object' && !Array.isArray(uVal)) {
-        merged.quizzes = { ...(eVal || {}), ...uVal };
-      } else if (key === 'resources' && Array.isArray(uVal)) {
-        const existingRes = (eVal || []) as any[];
-        const byId = new Map(existingRes.map(r => [r.id, r]));
-        uVal.forEach((r: any) => { byId.set(r.id, r); });
-        merged.resources = Array.from(byId.values());
-      } else if (key === 'projects' && Array.isArray(uVal)) {
-        const existingProj = (eVal || []) as any[];
-        const byId = new Map(existingProj.map(p => [p.id, p]));
-        uVal.forEach((p: any) => { byId.set(p.id, p); });
-        merged.projects = Array.from(byId.values());
-      } else {
-        merged[key] = uVal;
+      switch (key) {
+        case 'title': roadmapPatch.title = uVal; break;
+        case 'goal': roadmapPatch.goal = uVal; break;
+        case 'progressPercent': roadmapPatch.progressPercent = uVal; break;
+        case 'totalXp': roadmapPatch.totalXp = uVal; break;
+        case 'lessonsCompleted': roadmapPatch.lessonsCompleted = uVal; break;
+        case 'hoursRemaining': roadmapPatch.hoursRemaining = uVal; break;
+        case 'status': roadmapPatch.status = uVal; break;
+        case 'resources':
+          for (const r of Array.isArray(uVal) ? uVal : []) {
+            await upsertResource({
+              id: r.id || `res-${roadmapId}-${r.title}`,
+              roadmapId,
+              phaseId: r.phaseId ?? null,
+              moduleId: r.moduleId ?? null,
+              title: r.title,
+              type: r.type,
+              provider: r.provider ?? null,
+              url: r.url ?? null,
+              description: r.description ?? null,
+              duration: r.duration ?? null
+            });
+          }
+          break;
+        case 'projects':
+          for (const p of Array.isArray(uVal) ? uVal : []) {
+            await upsertPhaseProject({
+              id: p.id || `proj-${roadmapId}-${p.title}`,
+              roadmapId,
+              phaseId: p.phaseId ?? null,
+              title: p.title,
+              difficulty: p.difficulty,
+              description: p.description ?? null,
+              techStack: p.techStack,
+              features: p.features,
+              githubUrl: p.githubUrl ?? null,
+              progress: p.progress
+            });
+          }
+          break;
+        // 'phases' and 'quizzes' structural updates are not mutated via this
+        // endpoint in practice; they are re-persisted through createRoadmapFromJson.
       }
     }
 
-    dbData.roadmaps[idx] = merged;
-    await saveUserDB(userEmail, dbData);
-    invalidateUserRoadmaps(userEmail);
+    if (Object.keys(roadmapPatch).length > 0) {
+      const existingRoadmap = existing.find((r: any) => r.id === roadmapId);
+      await upsertRoadmap({
+        id: roadmapId,
+        ownerEmail: userEmail.toLowerCase(),
+        goal: existingRoadmap?.goal || roadmapPatch.goal || '',
+        ...roadmapPatch
+      });
+    }
 
-    return res.json({ success: true, roadmap: dbData.roadmaps[idx] });
+    const updated = await reconstructRoadmapJson(roadmapId);
+    return res.json({ success: true, roadmap: updated });
   } catch (error) {
     console.error('Update roadmap error:', error);
     return res.status(500).json({ error: 'Failed to update roadmap' });
@@ -1707,7 +1740,7 @@ app.get('/api/roadmaps', requireAuth, async (req, res) => {
   }
 
   try {
-    const roadmaps = await getUserRoadmaps(userEmail);
+    const roadmaps = await getUserRoadmapsReconstructed(userEmail);
     return res.json(roadmaps);
   } catch (error) {
     console.error('Get roadmaps error:', error);
@@ -1726,21 +1759,17 @@ app.delete('/api/roadmaps/:id', requireAuth, async (req, res) => {
   }
 
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    if (!dbData) {
-      return res.status(404).json({ error: 'User data not found' });
-    }
-    
-    const originalLength = dbData.roadmaps?.length || 0;
-    dbData.roadmaps = (dbData.roadmaps || []).filter((r: any) => r.id !== id);
-    const newLength = dbData.roadmaps.length;
-    
-    if (originalLength === newLength) {
+    // Enforce ownership: only delete a roadmap owned by the authenticated user.
+    const owned = await getRoadmapsByOwner(userEmail);
+    if (!owned.some((r: any) => r.id === id)) {
       return res.status(404).json({ error: 'Roadmap not found' });
     }
-    
-    await saveUserDB(userEmail, dbData);
-    invalidateUserRoadmaps(userEmail);
+
+    const deleted = await deleteRoadmap(id);
+    if (deleted === 0) {
+      return res.status(404).json({ error: 'Roadmap not found' });
+    }
+
     return res.json({ success: true, deletedId: id });
   } catch (error) {
     console.error('Delete roadmap error:', error);
@@ -1758,28 +1787,9 @@ app.post('/api/roadmaps', requireAuth, async (req, res) => {
   }
 
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    if (!dbData) {
-      return res.status(404).json({ error: 'User data not found' });
-    }
-
-    const roadmaps = dbData.roadmaps || [];
-    const existingIndex = roadmaps.findIndex((r: any) => r.id === roadmap.id);
-
-    if (existingIndex >= 0) {
-      roadmaps[existingIndex] = { ...roadmaps[existingIndex], ...roadmap };
-    } else {
-      roadmaps.push({
-        ...roadmap,
-        createdAt: roadmap.createdAt || new Date().toISOString()
-      });
-    }
-
-    dbData.roadmaps = roadmaps;
-    await saveUserDB(userEmail, dbData);
-    invalidateUserRoadmaps(userEmail);
-
-    return res.json({ success: true, roadmap: roadmaps[existingIndex >= 0 ? existingIndex : roadmaps.length - 1] });
+    await createRoadmapFromJson(userEmail, roadmap);
+    const saved = await reconstructRoadmapJson(roadmap.id);
+    return res.json({ success: true, roadmap: saved || roadmap });
   } catch (error) {
     console.error('Create roadmap error:', error);
     return res.status(500).json({ error: 'Failed to create roadmap' });
@@ -1860,23 +1870,7 @@ app.get('/api/user-stats', requireAuth, async (req, res) => {
       });
     }
 
-    const roadmaps = dbData.roadmaps || [];
-    let totalLessons = 0;
-    let completedLessons = 0;
-
-    for (const roadmap of roadmaps) {
-      for (const phase of roadmap.phases || []) {
-        for (const level of phase.levels || []) {
-          for (const lesson of level.lessons || []) {
-            totalLessons++;
-            if (lesson.status === 'completed') {
-              completedLessons++;
-            }
-          }
-        }
-      }
-    }
-
+    const { totalLessons, completedLessons } = await getUserLessonCompletionStats(userEmail);
     const overallMastery = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
 
     return res.json({
@@ -2035,49 +2029,41 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     // the per-user lock so concurrent requests cannot interleave reads and clobber
     // each other (lost-update race on the single JSONB column).
     const result = await withUserLock(userEmail, async () => {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    if (!dbData) {
-      throw new HttpError(404, 'User data not found');
-    }
-
-    const roadmaps = dbData.roadmaps || [];
-    let lessonFound = false;
-    let foundLesson: any = null;
-    let totalLessons = 0;
-    let completedLessons = 0;
-
-    const targetRoadmaps = roadmapId ? roadmaps.filter((r: any) => r.id === roadmapId) : roadmaps;
-    const allRoadmaps = roadmapId ? roadmaps : targetRoadmaps;
-
-    for (const roadmap of allRoadmaps) {
-      for (const phase of roadmap.phases || []) {
-        for (const level of phase.levels || []) {
-          for (const lesson of level.lessons || []) {
-            totalLessons++;
-            if (lesson.id === lessonId) {
-              foundLesson = lesson;
-              if (lesson.status !== 'completed') {
-                lesson.status = 'completed';
-                lessonFound = true;
-              }
-            }
-            if (lesson.status === 'completed') {
-              completedLessons++;
-            }
-          }
-        }
-      }
-    }
-
-    if (!lessonFound) {
+    // Resolve the lesson + its roadmap context from the normalized tables.
+    const lessonCtx = await findLessonContext(lessonId);
+    if (!lessonCtx) {
       throw new HttpError(404, 'Lesson not found');
     }
 
-    // Server-authoritative XP: ignore any client-supplied xpEarned/xpReward.
-    // Derive the reward from the lesson's own stored xpReward to prevent inflation.
-    const xpValue = Number(foundLesson?.xpReward) || 0;
+    const targetRoadmapId = roadmapId || lessonCtx.roadmap_id;
+    if (targetRoadmapId && targetRoadmapId !== lessonCtx.roadmap_id) {
+      throw new HttpError(400, 'Lesson does not belong to the provided roadmap');
+    }
+
+    // Server-authoritative XP: derive the reward from the lesson's own stored
+    // xp_reward to prevent inflation (ignore any client-supplied xpEarned/xpReward).
+    const xpValue = Number(lessonCtx.xp_reward) || 0;
     if (xpValue <= 0) {
       throw new HttpError(400, 'Lesson has no valid XP reward');
+    }
+
+    // Record completion in the normalized progress table + recompute roadmap counters.
+    const counters = await completeLessonForUser(
+      userEmail,
+      lessonId,
+      lessonCtx.module_id,
+      lessonCtx.phase_id,
+      lessonCtx.roadmap_id,
+      null,
+      0
+    );
+    const completionPercent = counters.progressPercent;
+
+    // User-level XP + activity log still live on the `users` row (out of scope for
+    // the roadmap normalization). Update them under the same lock.
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData) {
+      throw new HttpError(404, 'User data not found');
     }
 
     const newXP = (dbData.xp || 0) + xpValue;
@@ -2085,11 +2071,6 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     if (!dbData.profile) dbData.profile = {};
     dbData.profile.xp = newXP;
 
-    // Real per-day activity log — this is what powers the Learning Velocity /
-    // Weekly Report charts. Replaces the previous fabricated flat-average
-    // spread and single "All Time" bucket with genuine daily totals that
-    // build up from here forward. Pre-existing accounts simply have no
-    // history before this point, which the client shows honestly.
     if (!dbData.activityLog) dbData.activityLog = {};
     const activityDateKey = new Date().toISOString().split('T')[0];
     const dayEntry = dbData.activityLog[activityDateKey] || { xp: 0, lessonsCompleted: 0 };
@@ -2097,41 +2078,8 @@ app.post('/api/complete-lesson', requireAuth, async (req, res) => {
     dayEntry.lessonsCompleted += 1;
     dbData.activityLog[activityDateKey] = dayEntry;
 
-    const completionPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
-
-    // Update roadmap progress tracking
-    if (roadmapId) {
-      const targetRoadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
-      if (targetRoadmap) {
-        targetRoadmap.lessonsCompleted = completedLessons;
-        targetRoadmap.progressPercent = completionPercent;
-        targetRoadmap.totalXp = dbData.xp || 0;
-        
-        // Track progress in dedicated progress object
-        if (!dbData.progress) dbData.progress = {};
-        if (!dbData.progress[roadmapId]) {
-          dbData.progress[roadmapId] = {
-            roadmapId,
-            startedAt: new Date().toISOString()
-          };
-        }
-        dbData.progress[roadmapId].completedLessonIds = dbData.progress[roadmapId].completedLessonIds || [];
-        if (!dbData.progress[roadmapId].completedLessonIds.includes(lessonId)) {
-          dbData.progress[roadmapId].completedLessonIds.push(lessonId);
-        }
-        dbData.progress[roadmapId].updatedAt = new Date().toISOString();
-        dbData.progress[roadmapId].totalXP = targetRoadmap.totalXp;
-        dbData.progress[roadmapId].progressPercentage = completionPercent;
-        
-        if (completionPercent >= 100) {
-          dbData.progress[roadmapId].completedAt = new Date().toISOString();
-        }
-      }
-    }
-
-    // Already inside the per-user lock: persist and update streak atomically.
     await saveUserDB(userEmail, dbData);
-    invalidateUserRoadmaps(userEmail);
+
     const newStreak = await updateStreak(userEmail);
 
     return {
@@ -2457,7 +2405,20 @@ async function loadUserDB(userEmail: string, options: { createIfMissing?: boolea
       if (!dbData.roadmaps) {
         dbData.roadmaps = [];
       }
-      
+
+      // BACKWARD COMPATIBILITY (Phase 2): one-time backfill of the normalized
+      // relational roadmap tables from the legacy monolithic JSONB roadmap blob.
+      // Guarded so it runs only when the normalized tables are still empty for
+      // this user (idempotent anyway). Fire-and-forget so it never blocks.
+      if (dbData.roadmaps.length > 0) {
+        const alreadyMigrated = (await getRoadmapsByOwner(userEmail)).length > 0;
+        if (!alreadyMigrated) {
+          migrateRoadmapJsonToTables(userEmail, dbData.roadmaps).catch((err: any) => {
+            console.error('[Migration] Normalized table backfill failed for', userEmail, err?.message || err);
+          });
+        }
+      }
+
       return dbData;
     }
 
@@ -2648,94 +2609,41 @@ app.post('/api/progress', aiLimiter, requireAuth, async (req, res) => {
   }
 
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: true });
-    
-    // Initialize progress if not exists
-    if (!dbData.progress) {
-      dbData.progress = {};
-    }
-    
-    const roadmapProgressKey = roadmapId;
-    let progress = dbData.progress[roadmapProgressKey];
-    
-    if (!progress) {
-      // Find roadmap to calculate total lessons
-      const roadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
-      const totalLessons = roadmap?.phases?.reduce((acc: number, ph: any) => 
-        acc + (ph.levels?.reduce((lAcc: number, lvl: any) => 
-          lAcc + (lvl.lessons?.length || 0), 0) || 0), 0) || 0;
-      
-      progress = {
-        userId: userEmail,
-        roadmapId,
-        currentLessonId: null,
-        completedLessonIds: [],
-        totalXP: 0,
-        progressPercentage: 0,
-        startedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+    // Ensure the roadmap + lesson exist in the normalized tables.
+    const lessonCtx = await findLessonContext(lessonId);
+    if (!lessonCtx || lessonCtx.roadmap_id !== roadmapId) {
+      return res.status(404).json({ error: 'Lesson or roadmap not found' });
     }
 
-    // Handle actions
     if (action === 'complete') {
-      if (!progress.completedLessonIds.includes(lessonId)) {
-        progress.completedLessonIds.push(lessonId);
+      // Record the completion relationally and recompute roadmap counters.
+      await completeLessonForUser(
+        userEmail,
+        lessonId,
+        lessonCtx.module_id,
+        lessonCtx.phase_id,
+        roadmapId,
+        null,
+        0
+      );
+
+      // Mark the roadmap state completed if all lessons are done.
+      const lessonRows = await sql`SELECT status FROM lessons WHERE roadmap_id = ${roadmapId}`;
+      const totalLessons = lessonRows.length;
+      const completedLessons = lessonRows.filter((l: any) => l.status === 'completed').length;
+      if (totalLessons > 0 && completedLessons >= totalLessons) {
+        const state = await getRoadmapState(userEmail, roadmapId);
+        await upsertRoadmapState({
+          ownerEmail: userEmail,
+          roadmapId,
+          completedAt: state?.completed_at ?? new Date().toISOString()
+        });
       }
-      progress.updatedAt = new Date().toISOString();
     } else if (action === 'set-current') {
-      progress.currentLessonId = lessonId;
-      progress.updatedAt = new Date().toISOString();
+      await upsertRoadmapState({ ownerEmail: userEmail, roadmapId, currentLessonId: lessonId });
     }
 
-    // Total XP is ALWAYS derived server-side from completed lessons' xpReward.
-    // The client may send `totalXP` but it is ignored to prevent XP inflation.
-    {
-      const roadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
-      const allLessons = roadmap?.phases?.flatMap((ph: any) =>
-        ph.levels?.flatMap((lvl: any) => lvl.lessons || []) || []) || [];
-      progress.totalXP = allLessons
-        .filter((l: any) => progress.completedLessonIds.includes(l.id))
-        .reduce((sum: number, l: any) => sum + (l.xpReward || 0), 0);
-    }
-
-    // Calculate progress percentage
-    const roadmap = dbData.roadmaps?.find((r: any) => r.id === roadmapId);
-    const totalLessons = roadmap?.phases?.reduce((acc: number, ph: any) => 
-      acc + (ph.levels?.reduce((lAcc: number, lvl: any) => 
-        lAcc + (lvl.lessons?.length || 0), 0) || 0), 0) || 0;
-    progress.progressPercentage = totalLessons > 0 
-      ? Math.round((progress.completedLessonIds.length / totalLessons) * 100) 
-      : 0;
-
-    // Check if roadmap is completed
-    if (progress.completedLessonIds.length >= totalLessons && totalLessons > 0) {
-      progress.completedAt = progress.completedAt || new Date().toISOString();
-    }
-
-    // Update roadmap lesson statuses
-    if (action === 'complete' && roadmap) {
-      for (const phase of roadmap.phases || []) {
-        for (const level of phase.levels || []) {
-          for (const lesson of level.lessons || []) {
-            if (progress.completedLessonIds.includes(lesson.id)) {
-              lesson.status = 'completed';
-            } else if (lesson.id === lessonId && action === 'complete') {
-              // Unlock next lesson
-              const nextLesson = level.lessons?.find((l: any, idx: number) => 
-                idx > level.lessons?.indexOf(lesson) && l.status === 'locked');
-              if (nextLesson) nextLesson.status = 'available';
-            }
-          }
-        }
-      }
-      // Save roadmap updates
-      await saveUserDB(userEmail, dbData);
-    }
-
-    dbData.progress[roadmapProgressKey] = progress;
-    await saveUserDB(userEmail, dbData);
-
+    const progress = await getRoadmapProgressSnapshot(userEmail, roadmapId);
     return res.json({ success: true, progress });
   } catch (error: any) {
     console.error('Progress tracking error:', error);
@@ -2753,8 +2661,7 @@ app.get('/api/progress/:roadmapId', requireAuth, async (req, res) => {
   }
 
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    const progress = dbData?.progress?.[roadmapId] || null;
+    const progress = await getRoadmapProgressSnapshot(userEmail, roadmapId);
     return res.json({ progress });
   } catch (error: any) {
     console.error('Get progress error:', error);
@@ -2772,6 +2679,10 @@ app.get('/sw.js', (req, res, next) => {
 // Configure Vite integration as per our React Full-Stack Guidelines inside async bootstrap
 async function bootstrap() {
   preparePWAAssets();
+  // Provision normalized roadmap tables (idempotent; safe on every boot).
+  ensureRoadmapTables().catch((err: any) =>
+    console.error('[Database] Failed to ensure normalized roadmap tables:', err?.message || err)
+  );
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
