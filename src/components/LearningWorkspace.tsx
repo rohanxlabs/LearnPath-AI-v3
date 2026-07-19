@@ -1,8 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronRight, CheckCircle2, Play, Code2, Brain, Trophy, Target, BookOpen, Zap } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { ChevronRight, CheckCircle2, Play, Code2, Brain, Trophy, Target, BookOpen, Zap, Youtube, Library, Rocket, ExternalLink, Github } from 'lucide-react';
 import { Roadmap, Level, Lesson } from '../types';
-import { stripMarkdown } from '../lib/homeData';
+
+type ContentTab = 'learn' | 'resources' | 'quiz' | 'project';
+
+const markdownComponents = {
+  h1: ({ node, ...props }: any) => <h1 className="font-display font-bold text-xl text-purple-300 mt-4 mb-2" {...props} />,
+  h2: ({ node, ...props }: any) => <h2 className="font-display font-bold text-lg text-purple-300 mt-4 mb-2" {...props} />,
+  h3: ({ node, ...props }: any) => <h3 className="font-display font-semibold text-base text-purple-200 mt-3 mb-1.5" {...props} />,
+  p: ({ node, ...props }: any) => <p className="mt-2 text-sm text-zinc-300 leading-relaxed" {...props} />,
+  ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mt-2 mb-2 text-sm text-zinc-300 space-y-1" {...props} />,
+  ol: ({ node, ...props }: any) => <ol className="list-decimal ml-4 mt-2 mb-2 text-sm text-zinc-300 space-y-1" {...props} />,
+  li: ({ node, ...props }: any) => <li {...props} />,
+  strong: ({ node, ...props }: any) => <strong className="text-white font-bold" {...props} />,
+  code: ({ node, className, children, ...props }: any) => {
+    const isBlock = /language-/.test(className || '');
+    if (!isBlock) {
+      return <code className="px-1 py-0.5 rounded bg-white/10 text-purple-200 text-xs" {...props}>{children}</code>;
+    }
+    return (
+      <pre className="my-3 p-3 rounded-lg bg-zinc-950 border border-zinc-800 overflow-x-auto text-xs text-zinc-300">
+        <code {...props}>{children}</code>
+      </pre>
+    );
+  }
+};
 
 interface LearningWorkspaceProps {
   roadmap: Roadmap;
@@ -23,6 +48,14 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   const [completedInLevel, setCompletedInLevel] = useState<string[]>([]);
   const [quizScore, setQuizScore] = useState<number | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
+  const [contentTab, setContentTab] = useState<ContentTab>('learn');
+
+  useEffect(() => {
+    // Fresh topic, fresh tab + quiz state.
+    setContentTab('learn');
+    setQuizScore(null);
+    setQuizAnswers({});
+  }, [selectedTopicId]);
 
   useEffect(() => {
     if (activeLesson?.lessonId && !selectedTopicId) {
@@ -58,7 +91,11 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
           setTopicData({
             ...foundLesson,
             objectives: [`Understand ${foundLesson.name} fundamentals`, `Apply concepts in practice`],
-            summary: `${foundLesson.name} - Learn key concepts and apply them.`
+            summary: `${foundLesson.name} - Learn key concepts and apply them.`,
+            resources: [],
+            project: null,
+            quiz: null,
+            video: { videoId: null, title: null, searchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(foundLesson.name + ' tutorial')}` }
           });
         }
       }
@@ -226,6 +263,34 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
             <ChevronRight className="w-3 h-3 shrink-0" />
             {topicData && <span className="text-white truncate">{topicData.name}</span>}
           </div>
+
+          {topicData && (
+            <div className="flex items-center gap-1 mt-3 -mb-1 overflow-x-auto">
+              {([
+                { id: 'learn', label: 'Learn', icon: BookOpen },
+                { id: 'resources', label: 'Resources', icon: Library },
+                { id: 'quiz', label: 'Quiz', icon: Zap },
+                { id: 'project', label: 'Project', icon: Rocket }
+              ] as { id: ContentTab; label: string; icon: any }[]).map(t => {
+                const Icon = t.icon;
+                const isActive = contentTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setContentTab(t.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                        : 'text-zinc-400 hover:text-zinc-200 border border-transparent'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <AnimatePresence mode="wait">
@@ -257,77 +322,163 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
               transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
               className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6"
             >
-              <section>
-                <h2 className="font-display font-bold text-xl text-white mb-4">Learning Objectives</h2>
-                <ul className="space-y-2">
-                  {(topicData.objectives || []).map((obj: string, i: number) => (
-                    <motion.li 
-                      key={i} 
-                      className="flex items-start gap-2 text-sm text-zinc-300"
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.08 }}
-                    >
-                      <Target className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                      {obj}
-                    </motion.li>
-                  ))}
-                </ul>
-              </section>
+              {contentTab === 'learn' && (
+                <>
+                  <section>
+                    <h2 className="font-display font-bold text-xl text-white mb-4">Learning Objectives</h2>
+                    <ul className="space-y-2">
+                      {(topicData.objectives || []).map((obj: string, i: number) => (
+                        <motion.li 
+                          key={i} 
+                          className="flex items-start gap-2 text-sm text-zinc-300"
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.08 }}
+                        >
+                          <Target className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                          {obj}
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </section>
 
-              <section>
-                <h2 className="font-display font-bold text-xl text-white mb-4">Topic Content</h2>
-                <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap">
-                  {stripMarkdown(topicData.content || '')}
-                </div>
-              </section>
+                  {topicData.video && (
+                    <section>
+                      <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
+                        <Youtube className="w-5 h-5 text-red-400" />
+                        Watch: {topicData.name}
+                      </h2>
+                      {topicData.video.videoId ? (
+                        <div className="rounded-xl overflow-hidden border border-white/10 aspect-video">
+                          <iframe
+                            className="w-full h-full"
+                            src={`https://www.youtube.com/embed/${topicData.video.videoId}`}
+                            title={topicData.video.title || topicData.name}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        </div>
+                      ) : (
+                        <a
+                          href={topicData.video.searchUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-4 rounded-xl bg-red-500/5 border border-red-500/20 text-sm text-zinc-300 hover:bg-red-500/10 transition-colors"
+                        >
+                          <span>Find a video tutorial on YouTube for "{topicData.name}"</span>
+                          <ExternalLink className="w-4 h-4 text-red-400 shrink-0" />
+                        </a>
+                      )}
+                    </section>
+                  )}
 
-              <section>
-                <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-purple-400" />
-                  AI Summary
-                </h2>
-                <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20">
-                  <div className="text-sm text-zinc-300 whitespace-pre-wrap">
-                    {stripMarkdown(topicData.summary || '')}
+                  <section>
+                    <h2 className="font-display font-bold text-xl text-white mb-4">Topic Content</h2>
+                    <div className="prose prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {topicData.content || 'Content is being generated for this topic...'}
+                      </ReactMarkdown>
+                    </div>
+                  </section>
+
+                  <section>
+                    <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
+                      <Brain className="w-5 h-5 text-purple-400" />
+                      AI Summary
+                    </h2>
+                    <div className="p-4 rounded-xl bg-purple-500/5 border border-purple-500/20">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {topicData.summary || ''}
+                      </ReactMarkdown>
+                    </div>
+                  </section>
+
+                  {topicData.type === 'coding' && (
+                    <section>
+                      <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
+                        <Code2 className="w-5 h-5 text-blue-400" />
+                        Coding Exercise
+                      </h2>
+                      <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                        <p className="text-zinc-300 mb-3">Practical coding exercise for this topic.</p>
+                        <button 
+                          onClick={() => handleMarkComplete()}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-blue-500"
+                        >
+                          Mark Complete
+                        </button>
+                      </div>
+                    </section>
+                  )}
+
+                  <div className="pt-4 border-t border-white/5">
+                    {completedInLevel.includes(topicData.id) || topicData.status === 'completed' ? (
+                      <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Completed! +{topicData.xpReward} XP</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleMarkComplete}
+                        className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-xs hover:brightness-110 transition-all"
+                      >
+                        Mark Complete
+                      </button>
+                    )}
                   </div>
-                </div>
-              </section>
+                </>
+              )}
 
-              {topicData.type === 'coding' && (
+              {contentTab === 'resources' && (
                 <section>
                   <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
-                    <Code2 className="w-5 h-5 text-blue-400" />
-                    Coding Exercise
+                    <Library className="w-5 h-5 text-blue-400" />
+                    Resources for {topicData.name}
                   </h2>
-                  <div className="p-4 rounded-xl bg-blue-500/5 border border-blue-500/20">
-                    <p className="text-zinc-300 mb-3">Practical coding exercise for this topic.</p>
-                    <button 
-                      onClick={() => handleMarkComplete()}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-blue-500"
-                    >
-                      Mark Complete
-                    </button>
-                  </div>
+                  {(topicData.resources || []).length > 0 ? (
+                    <div className="space-y-3">
+                      {topicData.resources.map((r: any) => (
+                        <a
+                          key={r.id}
+                          href={r.url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start justify-between gap-3 p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-white">{r.title}</p>
+                            <p className="text-xs text-zinc-400 mt-1">
+                              {r.provider ? `${r.provider} · ` : ''}{r.type}{r.duration ? ` · ${r.duration}` : ''}
+                            </p>
+                            {r.description && <p className="text-xs text-zinc-400 mt-1.5">{r.description}</p>}
+                          </div>
+                          <ExternalLink className="w-4 h-4 text-zinc-400 shrink-0 mt-0.5" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-400">No curated resources for this topic yet.</p>
+                  )}
                 </section>
               )}
 
-              {topicData.type === 'quiz' && !quizScore && (
+              {contentTab === 'quiz' && (
                 <section>
                   <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-400" />
-                    Quiz
+                    Quiz: {topicData.name}
                   </h2>
-                  <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                    <p className="text-zinc-300 mb-3">Test your knowledge with this quiz.</p>
-                    
-                    <div className="space-y-3 mb-4">
-                      {topicData.quizQuestions ? (
-                        topicData.quizQuestions.map((q: any, idx: number) => (
+
+                  {!topicData.quiz || !topicData.quiz.questions?.length ? (
+                    <p className="text-sm text-zinc-400">Quiz for this topic is being generated — check back in a moment.</p>
+                  ) : quizScore === null ? (
+                    <div className="p-4 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                      <div className="space-y-3 mb-4">
+                        {topicData.quiz.questions.map((q: any, idx: number) => (
                           <div key={q.id} className="p-3 bg-white/5 rounded-lg">
                             <p className="text-sm text-zinc-200 mb-2">{idx + 1}. {q.question}</p>
-<div className="space-y-1">
-                               {(q.options || []).map((opt: string, optIdx: number) => (
+                            <div className="space-y-1">
+                              {(q.options || []).map((opt: string, optIdx: number) => (
                                 <label key={optIdx} className="flex items-center gap-2 text-xs cursor-pointer">
                                   <input
                                     type="radio"
@@ -341,74 +492,86 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                               ))}
                             </div>
                           </div>
-                        ))
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          const questions = topicData.quiz.questions || [];
+                          const totalQuestions = questions.length || 1;
+                          let correct = 0;
+                          questions.forEach((q: any) => {
+                            if (quizAnswers[q.id] === q.correctIndex) correct += 1;
+                          });
+                          setQuizScore(correct);
+                          if (correct === totalQuestions) {
+                            handleMarkComplete();
+                          }
+                        }}
+                        disabled={Object.keys(quizAnswers).length === 0}
+                        className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Submit Quiz
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                      <p className="text-emerald-400 font-semibold">
+                        Quiz Score: {quizScore}/{topicData.quiz.questions.length}
+                      </p>
+                      {quizScore === topicData.quiz.questions.length ? (
+                        <p className="text-xs text-zinc-300 mt-1">Perfect! Lesson completed.</p>
                       ) : (
-                        <div className="p-3 bg-white/5 rounded-lg">
-                          <p className="text-sm text-zinc-200 mb-2">Sample Question: What did you learn?</p>
-                          <div className="space-y-1">
-                            {['Option A', 'Option B', 'Option C', 'Option D'].map((opt, idx) => (
-                              <label key={idx} className="flex items-center gap-2 text-xs cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name="quiz-sample"
-                                  checked={quizAnswers['sample'] === idx}
-                                  onChange={() => setQuizAnswers({ ...quizAnswers, ['sample']: idx })}
-                                  className="w-3 h-3"
-                                />
-                                <span className="text-zinc-300">{opt}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
+                        <button
+                          onClick={() => { setQuizScore(null); setQuizAnswers({}); }}
+                          className="mt-2 px-3 py-1.5 bg-white/10 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-white/20"
+                        >
+                          Retry Quiz
+                        </button>
                       )}
                     </div>
-                    
-                    <button
-                      onClick={() => {
-                        const questions = topicData.quizQuestions || [];
-                        const totalQuestions = questions.length || 1;
-                        let correct = 0;
-                        questions.forEach((q: any) => {
-                          if (quizAnswers[q.id] === q.correctIndex) correct += 1;
-                        });
-                        setQuizScore(correct);
-                        if (correct === totalQuestions) {
-                          handleMarkComplete();
-                        }
-                      }}
-                      disabled={Object.keys(quizAnswers).length === 0}
-                      className="px-4 py-2 bg-amber-600 text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Submit Quiz
-                    </button>
-                  </div>
+                  )}
                 </section>
               )}
 
-              {quizScore !== null && (
-                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <p className="text-emerald-400 font-semibold">Quiz Score: {quizScore}/{topicData.quizQuestions?.length || 1}</p>
-                  {quizScore === (topicData.quizQuestions?.length || 1) && (
-                    <p className="text-xs text-zinc-300 mt-1">Perfect! Lesson completed.</p>
+              {contentTab === 'project' && (
+                <section>
+                  <h2 className="font-display font-bold text-xl text-white mb-4 flex items-center gap-2">
+                    <Rocket className="w-5 h-5 text-emerald-400" />
+                    Project for this Phase
+                  </h2>
+                  {topicData.project ? (
+                    <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 space-y-3">
+                      <div>
+                        <p className="text-sm font-bold text-white">{topicData.project.title}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-emerald-400 font-semibold mt-0.5">{topicData.project.difficulty}</p>
+                      </div>
+                      {topicData.project.description && (
+                        <p className="text-sm text-zinc-300">{topicData.project.description}</p>
+                      )}
+                      {Array.isArray(topicData.project.techStack) && topicData.project.techStack.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {topicData.project.techStack.map((t: string) => (
+                            <span key={t} className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] text-zinc-300">{t}</span>
+                          ))}
+                        </div>
+                      )}
+                      {topicData.project.githubUrl && (
+                        <a
+                          href={topicData.project.githubUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300"
+                        >
+                          <Github className="w-3.5 h-3.5" /> View on GitHub
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-zinc-400">No project has been generated for this phase yet.</p>
                   )}
-                </div>
+                </section>
               )}
-
-              <div className="pt-4 border-t border-white/5">
-                {completedInLevel.includes(topicData.id) || topicData.status === 'completed' ? (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Completed! +{topicData.xpReward} XP</span>
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleMarkComplete}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold text-xs hover:brightness-110 transition-all"
-                  >
-                    Mark Complete
-                  </button>
-                )}
-              </div>
             </motion.div>
           ) : (
             <div className="text-center py-12 flex-1 flex items-center justify-center">

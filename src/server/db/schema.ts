@@ -673,6 +673,44 @@ export async function upsertPhaseProject(project: {
 }
 
 // ---------------------------------------------------------------------------
+// Topic-scoped reads: resources / project / quiz for a single lesson's phase.
+// Used by GET /api/topics/:topicId to power the per-lesson Resources, Quiz,
+// and Project sub-tabs (instead of the roadmap-wide tabs).
+// ---------------------------------------------------------------------------
+
+export async function getResourcesForLessonContext(
+  moduleId: string,
+  phaseId: string
+): Promise<any[]> {
+  await ensureRoadmapTables();
+  return sql`
+    SELECT * FROM resources
+    WHERE module_id = ${moduleId} OR phase_id = ${phaseId}
+    ORDER BY order_index ASC
+    LIMIT 8
+  `;
+}
+
+export async function getProjectForPhase(phaseId: string): Promise<any | null> {
+  await ensureRoadmapTables();
+  const rows = await sql`
+    SELECT * FROM phase_projects
+    WHERE phase_id = ${phaseId}
+    ORDER BY order_index ASC
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+export async function getQuizForLesson(lessonId: string): Promise<any | null> {
+  await ensureRoadmapTables();
+  const rows = await sql`
+    SELECT * FROM quizzes WHERE lesson_id = ${lessonId} LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+// ---------------------------------------------------------------------------
 // UserLessonProgress
 // ---------------------------------------------------------------------------
 

@@ -87,7 +87,11 @@ import {
   getRoadmapProgressSnapshot,
   upsertRoadmapState,
   getRoadmapState,
-  getUserLessonCompletionStats
+  getUserLessonCompletionStats,
+  getResourcesForLessonContext,
+  getProjectForPhase,
+  getQuizForLesson,
+  upsertQuiz
 } from './src/server/db/schema';
 import bcrypt from 'bcryptjs';
 import connectPgSimple from 'connect-pg-simple';
@@ -2798,14 +2802,10 @@ try {
    });
 
 // 6. API: Dynamic Quiz Generator
-app.post('/api/generate-quiz', aiLimiter, requireAuth, async (req, res) => {
-  const { topicName } = req.body;
-
-  if (!topicName) {
-    return res.status(400).json({ error: 'Topic name is required for quiz' });
-  }
-
-const prompt = `
+// Shared quiz-question generator, used by both the standalone quiz endpoint
+// and the lazy per-lesson quiz cache in GET /api/topics/:topicId.
+async function generateQuizQuestions(topicName: string): Promise<any[]> {
+  const prompt = `
 Generate a personalized, challenging study quiz for this topic: "${sanitizeForPrompt(topicName, 500)}".
 Generate exactly 3 multiple-choice questions. Include misconceptionNotes for wrong answers.
 
@@ -2822,20 +2822,19 @@ Output must be a JSON array of questions:
 ]
 `;
 
-try {
-      const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.7, asJSON: true });
-      const parsed = cleanAndParseJSON(response, '[]');
-      
-      if (Array.isArray(parsed)) {
-        for (const q of parsed) {
-          if (!q.misconceptionNotes) {
-            q.misconceptionNotes = ['Common misunderstanding - test again.'];
-          }
+  try {
+    const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.7, asJSON: true });
+    const parsed = cleanAndParseJSON(response, '[]');
+
+    if (Array.isArray(parsed)) {
+      for (const q of parsed) {
+        if (!q.misconceptionNotes) {
+          q.misconceptionNotes = ['Common misunderstanding - test again.'];
         }
       }
-      
-      return res.json(parsed);
-
+      return parsed;
+    }
+    return [];
   } catch (error: any) {
     let readableError = error.message || String(error);
     try {
@@ -2845,8 +2844,8 @@ try {
       }
     } catch (_) {}
     console.error('OpenRouter Dynamic Quiz error fallback:', readableError);
-    
-    return res.json([
+
+    return [
       {
         id: 'q-dyn-1',
         question: `In modern ${topicName} development, what is the best strategy to prevent overfitting on local batches?`,
@@ -2883,8 +2882,94 @@ try {
         correctIndex: 0,
         explanation: 'AI roadmaps adaptively suggest easier mini-tasks and explain concepts sequentially to clear bottlenecks and restore confidence.'
       }
-    ]);
+    ];
   }
+}
+
+// Lazily generate + cache (in the `quizzes` table) a real quiz for a lesson,
+// keyed by lesson_id so re-opening the topic doesn't regenerate it. Mirrors
+// the getOrGenerateLessonContent() pattern used for lesson content.
+async function getOrGenerateQuizForLesson(lesson: any): Promise<{ id: string; title: string; questions: any[] } | null> {
+  try {
+    const existing = await getQuizForLesson(lesson.id);
+    if (existing && Array.isArray(existing.questions) && existing.questions.length > 0) {
+      return { id: existing.id, title: existing.title, questions: existing.questions };
+    }
+
+    const questions = await generateQuizQuestions(lesson.title);
+    const quizId = existing?.id || `quiz-${lesson.id}`;
+    await upsertQuiz({
+      id: quizId,
+      lessonId: lesson.id,
+      moduleId: lesson.module_id,
+      phaseId: lesson.phase_id,
+      roadmapId: lesson.roadmap_id,
+      title: `${lesson.title} Quiz`,
+      questions
+    });
+    return { id: quizId, title: `${lesson.title} Quiz`, questions };
+  } catch (err: any) {
+    console.warn('[Quiz-Gen] failed to get/generate quiz for lesson:', err?.message || err);
+    return null;
+  }
+}
+
+// Best-effort YouTube lookup for a topic. Never invents a video ID/URL: if no
+// API key is configured or the search fails/returns nothing, callers fall back
+// to a plain YouTube search-results deep link instead.
+const youtubeVideoCache = new Map<string, { videoId: string | null; title: string | null; fetchedAt: number }>();
+
+async function findYouTubeVideoForTopic(topicName: string): Promise<{
+  videoId: string | null;
+  title: string | null;
+  searchUrl: string;
+}> {
+  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(topicName + ' tutorial')}`;
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) {
+    return { videoId: null, title: null, searchUrl };
+  }
+
+  const cacheKey = topicName.toLowerCase().trim();
+  const cached = youtubeVideoCache.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < 24 * 60 * 60 * 1000) {
+    return { videoId: cached.videoId, title: cached.title, searchUrl };
+  }
+
+  try {
+    const params = new URLSearchParams({
+      key: apiKey,
+      q: `${topicName} tutorial`,
+      part: 'snippet',
+      type: 'video',
+      maxResults: '1',
+      videoEmbeddable: 'true',
+      relevanceLanguage: 'en',
+      safeSearch: 'strict'
+    });
+    const resp = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`);
+    if (!resp.ok) throw new Error(`YouTube API status ${resp.status}`);
+    const data: any = await resp.json();
+    const item = data?.items?.[0];
+    const videoId = item?.id?.videoId || null;
+    const title = item?.snippet?.title || null;
+    youtubeVideoCache.set(cacheKey, { videoId, title, fetchedAt: Date.now() });
+    return { videoId, title, searchUrl };
+  } catch (err: any) {
+    console.warn('[YouTube] lookup failed, falling back to search link:', err?.message || err);
+    return { videoId: null, title: null, searchUrl };
+  }
+}
+
+app.post('/api/generate-quiz', aiLimiter, requireAuth, async (req, res) => {
+  const { topicName } = req.body;
+
+  if (!topicName) {
+    return res.status(400).json({ error: 'Topic name is required for quiz' });
+  }
+
+  const questions = await generateQuizQuestions(topicName);
+  return res.json(questions);
 });
 
 // 7. API: Dynamic Topic Overview Generator
@@ -3097,6 +3182,15 @@ app.get('/api/topics/:topicId', requireAuth, async (req, res) => {
       contentStatus
     });
 
+    // Topic-scoped Resources / Project / Quiz / Video — best-effort, each
+    // degrades independently so a failure in one never blocks the page.
+    const [resources, project, quiz, video] = await Promise.all([
+      getResourcesForLessonContext(lesson.module_id, lesson.phase_id).catch(() => []),
+      getProjectForPhase(lesson.phase_id).catch(() => null),
+      getOrGenerateQuizForLesson(lesson),
+      findYouTubeVideoForTopic(lesson.title).catch(() => ({ videoId: null, title: null, searchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(lesson.title + ' tutorial')}` }))
+    ]);
+
     const topic = {
       id: lesson.id,
       name: lesson.title,
@@ -3117,7 +3211,30 @@ app.get('/api/topics/:topicId', requireAuth, async (req, res) => {
       contentStatus,
       generatedAt,
       lastOpenedAt,
-      metadata
+      metadata,
+      // New: organized Resources / Quiz / Project data, scoped to this topic.
+      resources: resources.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        type: r.type,
+        provider: r.provider,
+        url: r.url,
+        description: r.description,
+        duration: r.duration
+      })),
+      project: project
+        ? {
+            id: project.id,
+            title: project.title,
+            difficulty: project.difficulty,
+            description: project.description,
+            techStack: project.tech_stack,
+            features: project.features,
+            githubUrl: project.github_url
+          }
+        : null,
+      quiz: quiz ? { id: quiz.id, title: quiz.title, questions: quiz.questions } : null,
+      video
     };
 
     return res.json({ topic });
