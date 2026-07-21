@@ -190,7 +190,7 @@ export function PhaseDetailPage({
             {(phase.skillsCovered || []).length > 0 && (
               <div className="flex flex-wrap gap-1.5 pl-10">
                 {(phase.skillsCovered || []).map(skill => (
-                  <span key={skill} className="px-2.5 py-0.5 bg-white dark:bg-white/5 text-zinc-600 dark:text-zinc-400 text-[10px] font-medium rounded-full border border-zinc-200 dark:border-white/10">
+                  <span key={skill} className="px-2.5 py-0.5 bg-white dark:bg-white/5 text-zinc-600 dark:text-zinc-400 text-xs font-medium rounded-full border border-zinc-200 dark:border-white/10">
                     {skill}
                   </span>
                 ))}
@@ -328,7 +328,7 @@ function GateStat({ label, value, done, icon }: { label: string; value: string; 
       <span className={`text-xs font-bold ${done ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
         {value}
       </span>
-      <span className="text-[10px] text-zinc-400 uppercase tracking-wide">{label}</span>
+      <span className="text-xs text-zinc-400 uppercase tracking-wide">{label}</span>
     </div>
   );
 }
@@ -747,11 +747,11 @@ function ProjectSection({ project, roadmap, phase, onRoadmapUpdated }: any) {
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${diffColors[project.difficulty] || 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}>
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border ${diffColors[project.difficulty] || 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}>
                 {project.difficulty}
               </span>
               {isCompleted && (
-                <span className="flex items-center gap-1 text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/20">
+                <span className="flex items-center gap-1 text-xs font-bold uppercase text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/20">
                   <CheckCircle2 className="w-3 h-3" /> Completed
                 </span>
               )}

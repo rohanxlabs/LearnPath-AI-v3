@@ -95,9 +95,10 @@ interface MentorChatViewProps {
   isGenerating: boolean;
   onSelectAction: (topic: string) => void;
   aiActive: boolean | null;
+  roadmapGoal?: string;
 }
 
-export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAction, aiActive }: MentorChatViewProps) {
+export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAction, aiActive, roadmapGoal }: MentorChatViewProps) {
   const [inputText, setInputText] = useState('');
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
@@ -193,17 +194,17 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
   }, []);
 
   const suggestedPrompts = [
-    { text: "Explain NumPy Vector Broadcast", icon: Code2 },
+    { text: roadmapGoal ? `Explain core ${roadmapGoal} concepts for a beginner` : "Explain NumPy Vector Broadcast", icon: Code2 },
     { text: "How does Self-Attention work?", icon: BookOpen },
-    { text: "Design a 4-hour RAG Study Plan", icon: Sparkles },
-    { text: "Suggest AI coding project ideas", icon: Lightbulb }
+    { text: "Design a 4-hour study plan for me", icon: Sparkles },
+    { text: "Suggest coding project ideas", icon: Lightbulb }
   ];
 
   const helperActions = [
-    { label: "Explain Core Concepts", topic: "Explain the absolute foundations of Deep Learning in plain English." },
-    { label: "Generate Live Quiz", topic: "Ask me 3 challenging questions about LLM tokenization so I can practice." },
+    { label: "Explain Core Concepts", topic: roadmapGoal ? `Explain the absolute foundations of ${roadmapGoal} in plain English.` : "Explain the absolute foundations of Deep Learning in plain English." },
+    { label: "Generate Live Quiz", topic: "Ask me 3 challenging questions about my current topic so I can practice." },
     { label: "Review My Study Progress", topic: "Please review my study logs and suggest what topics I should conquer next." },
-    { label: "Suggest AI Projects", topic: "Recommend 2 cool open-source project guides involving Model Context Protocol." }
+    { label: "Suggest Projects", topic: roadmapGoal ? `Recommend 2 beginner-friendly project ideas for learning ${roadmapGoal}.` : "Recommend 2 cool open-source project guides involving Model Context Protocol." }
   ];
 
   return (
@@ -243,7 +244,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
         {/* Streaming / typing load state indicator */}
         {isGenerating && (
           <div className="flex gap-3 mr-auto max-w-[85%]">
-            <div className="p-1.5 h-8 w-8 rounded-xl flex items-center justify-center bg-white/5 border border-white/5 text-purple-400">
+            <div className="p-1.5 h-8 w-8 rounded-xl flex items-center justify-center bg-white/5 border border-white/10 text-purple-400">
               <Bot className="w-4 h-4 animate-spin" />
             </div>
             <div className="p-4 rounded-2xl glass-card glass-card-purple border-purple-500/10 flex items-center gap-1 text-zinc-400">

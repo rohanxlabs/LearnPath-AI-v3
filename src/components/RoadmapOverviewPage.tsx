@@ -266,7 +266,7 @@ export function RoadmapOverviewPage({
                       {doneLs}/{totalLs} lessons
                     </span>
                     {(phase as any).difficulty && (
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${difficultyColor((phase as any).difficulty)}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${difficultyColor((phase as any).difficulty)}`}>
                         {(phase as any).difficulty}
                       </span>
                     )}
@@ -276,12 +276,12 @@ export function RoadmapOverviewPage({
                   {(phase.skillsCovered || []).length > 0 && (
                     <div className="flex flex-wrap gap-1.5 mb-3">
                       {(phase.skillsCovered || []).slice(0, 4).map(skill => (
-                        <span key={skill} className="px-2 py-0.5 bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 text-[10px] font-medium rounded-full border border-zinc-200 dark:border-white/10">
+                        <span key={skill} className="px-2 py-0.5 bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 text-xs font-medium rounded-full border border-zinc-200 dark:border-white/10">
                           {skill}
                         </span>
                       ))}
                       {(phase.skillsCovered || []).length > 4 && (
-                        <span className="px-2 py-0.5 bg-zinc-100 dark:bg-white/5 text-zinc-500 text-[10px] rounded-full border border-zinc-200 dark:border-white/10">
+                        <span className="px-2 py-0.5 bg-zinc-100 dark:bg-white/5 text-zinc-500 text-xs rounded-full border border-zinc-200 dark:border-white/10">
                           +{(phase.skillsCovered || []).length - 4} more
                         </span>
                       )}
@@ -290,7 +290,7 @@ export function RoadmapOverviewPage({
 
                   {/* progress bar */}
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                    <div className="flex items-center justify-between text-xs text-zinc-400">
                       <span>Progress</span>
                       <span className="font-bold text-zinc-700 dark:text-zinc-300">{progress}%</span>
                     </div>

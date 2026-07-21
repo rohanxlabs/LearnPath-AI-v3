@@ -196,7 +196,7 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className={`p-2.5 rounded-xl border flex-shrink-0 ${
-            isUnlocked ? 'bg-purple-500/10 border-purple-500/25' : 'bg-white/5 border-white/5'
+            isUnlocked ? 'bg-purple-500/10 border-purple-500/25' : 'bg-white/5 border-white/10'
           }`}>
             {renderIcon()}
           </div>
@@ -221,7 +221,7 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
               </span>
             </div>
           ) : (
-            <span className="inline-flex items-center gap-1 text-xs text-zinc-300 font-bold bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+            <span className="inline-flex items-center gap-1 text-xs text-zinc-300 font-bold bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
               LOCKED
             </span>
           )}

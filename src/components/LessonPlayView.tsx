@@ -99,7 +99,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               {lesson.content}
             </div>
 
-            <div className="pt-6 border-t border-white/5 flex justify-end">
+            <div className="pt-6 border-t border-white/10 flex justify-end">
               <button
                 onClick={() => setHasCompleted(true)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 rounded-xl shadow-md cursor-pointer transition-all"
@@ -114,12 +114,12 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
       case 'quiz':
         return (
           <div className="space-y-6">
-            <p className="text-xs text-zinc-400">{lesson.content}</p>
+            <p className="text-sm text-zinc-400">{lesson.content}</p>
 
             <div className="space-y-6">
               {lesson.quizQuestions?.map((q, qidx) => (
                 <div key={q.id} className="p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3">
-                  <h4 className="font-semibold text-xs md:text-sm text-zinc-200">
+                  <h4 className="font-semibold text-sm text-zinc-200">
                     <span className="text-purple-400 font-mono text-xs mr-1">Q{qidx + 1}.</span>
                     {q.question}
                   </h4>
@@ -129,7 +129,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                       const isSelected = quizAnswers[q.id] === oidx;
                       const isCorrect = q.correctIndex === oidx;
                       
-                      let optionStyle = 'bg-[#0A0A0A] border-white/5 text-zinc-400 hover:text-white hover:bg-white/5';
+                      let optionStyle = 'bg-[#0A0A0A] border-white/10 text-zinc-400 hover:text-white hover:bg-white/5';
                       if (isSelected) {
                         optionStyle = 'bg-purple-500/10 border-purple-500 text-purple-300 font-semibold';
                       }
@@ -139,7 +139,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                         } else if (isSelected) {
                           optionStyle = 'bg-red-500/10 border-red-500 text-red-400';
                         } else {
-                          optionStyle = 'opacity-40 bg-[#0A0A0A] border-white/5 text-zinc-600';
+                          optionStyle = 'opacity-40 bg-[#0A0A0A] border-white/10 text-zinc-600';
                         }
                       }
 
@@ -241,7 +241,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                     <span>{showHint ? 'Hide Logic Hint' : 'Reveal Hint'}</span>
                   </button>
                   {showHint && (
-                    <div className="mt-2 p-3 bg-amber-500/5 rounded-lg border border-amber-500/20 text-xs text-amber-300 leading-relaxed font-mono whitespace-pre-wrap select-text">
+                    <div className="mt-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/20 text-xs text-amber-300 leading-relaxed font-mono whitespace-pre-wrap select-text">
                       {lesson.codingExercise?.hint}
                     </div>
                   )}
@@ -300,11 +300,11 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   {codeFeedback.passed && (
                     <ConfettiParticles count={15} />
                   )}
-                  <div className="flex items-center justify-between border-b border-white/5 pb-1.5 mb-1 bg-transparent">
+                  <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1 bg-transparent">
                     <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
                       <Code2 className="w-3.5 h-3.5 text-purple-400" /> Compiler Log Diagnostic
                     </span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
                       codeFeedback.passed ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
                     }`}>
                       {codeFeedback.passed ? 'VERIFICATION PASSED' : 'VERIFICATION FAILED'}
@@ -337,7 +337,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
         return (
           <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col items-center text-center space-y-4 max-w-xl mx-auto relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
             <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 via-blue-600 to-emerald-500" />
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5 text-white font-bold font-display text-lg">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/10 text-white font-bold font-display text-lg">
               ⚔️
             </div>
             <div>
@@ -406,7 +406,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
             <button
               onClick={onClose}
-              className="text-xs font-semibold text-zinc-400 hover:text-white cursor-pointer px-3.5 py-1.5 rounded-xl border border-white/5 hover:border-white/10 hover:bg-white/5 transition-all"
+              className="text-xs font-semibold text-zinc-400 hover:text-white cursor-pointer px-3.5 py-1.5 rounded-xl border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all"
             >
               Exit Practice
             </button>

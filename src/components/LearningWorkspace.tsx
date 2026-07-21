@@ -50,7 +50,7 @@ interface LearningWorkspaceProps {
 // ---------------------------------------------------------------------------
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+    <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
       <span className="flex-1 h-px bg-slate-200" />
       {children}
       <span className="flex-1 h-px bg-slate-200" />
@@ -324,7 +324,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                 <>
                   {/* Lesson title */}
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-violet-500 mb-1">Current Lesson</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-violet-500 mb-1">Current Lesson</p>
                     <h1 className="text-xl font-extrabold text-slate-900 leading-snug">{topicData.name}</h1>
                     {topicData.description && (
                       <p className="text-sm text-slate-500 mt-1 leading-relaxed">{topicData.description}</p>
@@ -577,7 +577,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                     <div className="p-5 rounded-xl bg-emerald-50 border border-emerald-100 space-y-3">
                       <div>
                         <p className="text-base font-bold text-slate-900">{topicData.project.title}</p>
-                        <p className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold mt-0.5">{topicData.project.difficulty}</p>
+                        <p className="text-xs uppercase tracking-wider text-emerald-600 font-semibold mt-0.5">{topicData.project.difficulty}</p>
                       </div>
                       {topicData.project.description && (
                         <p className="text-sm text-slate-600 leading-relaxed">{topicData.project.description}</p>
@@ -667,7 +667,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
-            <span className="text-[10px] font-bold text-slate-500 flex-shrink-0">{progressPercent}%</span>
+            <span className="text-xs font-bold text-slate-500 flex-shrink-0">{progressPercent}%</span>
           </div>
         </div>
 
@@ -695,7 +695,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                   <span className="text-[11px] font-bold uppercase tracking-wide truncate flex-1 leading-tight">
                     {phase.name}
                   </span>
-                  <span className="text-[10px] text-slate-400 flex-shrink-0 tabular-nums">{phaseDone}/{phaseTotal}</span>
+                  <span className="text-xs text-slate-400 flex-shrink-0 tabular-nums">{phaseDone}/{phaseTotal}</span>
                 </button>
 
                 {/* Lessons list */}
@@ -703,7 +703,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                   <div className="ml-3 space-y-px mb-1">
                     {phase.levels.map(level => (
                       <div key={level.id}>
-                        <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider truncate">
+                        <div className="px-3 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider truncate">
                           {level.name}
                         </div>
                         {(level.lessons || []).map(lesson => {
@@ -727,7 +727,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                                 : <Play className={`w-3 h-3 flex-shrink-0 ${isActive ? 'text-violet-500' : 'text-slate-300'}`} />
                               }
                               <span className="truncate flex-1 leading-snug">{lesson.name}</span>
-                              {isActive && <span className="text-violet-500 text-[10px] font-bold flex-shrink-0">NOW</span>}
+                              {isActive && <span className="text-violet-500 text-xs font-bold flex-shrink-0">NOW</span>}
                             </motion.button>
                           );
                         })}
@@ -802,7 +802,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                     <div
                       key={phase.id}
                       title={phase.name}
-                      className={`w-5 h-5 rounded-md text-[10px] font-bold flex items-center justify-center transition-colors ${
+                      className={`w-5 h-5 rounded-md text-xs font-bold flex items-center justify-center transition-colors ${
                         isDone ? 'bg-emerald-100 text-emerald-600' :
                         hasCurrent ? 'bg-violet-100 text-violet-600 ring-1 ring-violet-300' :
                         'bg-slate-200 text-slate-400'

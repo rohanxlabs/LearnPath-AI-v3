@@ -28,7 +28,7 @@ export function EmptyState({
       animate={{ opacity: 1, y: 0 }}
       className="flex flex-col items-center justify-center py-20 px-6 text-center"
     >
-      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-100 to-blue-100 flex items-center justify-center mb-6">
+      <div className="w-20 h-20 rounded-full bg-purple-500/15 dark:bg-purple-500/10 flex items-center justify-center mb-6">
         {icon || <Sparkles className="w-10 h-10 text-purple-600" />}
       </div>
       <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">{title}</h3>

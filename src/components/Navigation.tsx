@@ -110,7 +110,7 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
             >
               {/* Active indicator pill */}
               {isActive && (
-                <div className="absolute inset-x-1 sm:inset-0 bg-gradient-to-r from-purple-500/15 to-blue-500/15 border border-purple-500/25 rounded-xl -z-10" />
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-500/15 to-blue-500/15 border border-purple-500/25 rounded-xl -z-10" />
               )}
               <IconComponent className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400 dark:drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'stroke-[2px]'}`} />
               <span className="text-xs tracking-wide font-medium whitespace-nowrap truncate w-full text-center">{displayLabel}</span>
@@ -173,7 +173,7 @@ export function SideDrawer({
       {/* Drawer Panel */}
       <div className={`absolute inset-y-0 left-0 max-w-xs w-full bg-[#f8fafc] dark:bg-[#111111] text-zinc-900 dark:text-white shadow-[0_8px_40px_rgba(0,0,0,0.18)] flex flex-col border-r border-zinc-200 dark:border-white/10 transition-transform duration-300 ease-out ${mounted ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Drawer Header */}
-        <div className="p-5 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between">
+        <div className="p-5 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
@@ -192,7 +192,7 @@ export function SideDrawer({
         </div>
 
         {/* Profile preview summary */}
-        <div className="px-5 py-4 border-b border-zinc-200 dark:border-white/5 bg-zinc-100/50 dark:bg-white/[0.02]">
+        <div className="px-5 py-4 border-b border-zinc-200 dark:border-white/10 bg-zinc-100/50 dark:bg-white/[0.02]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full overflow-hidden border border-zinc-300 dark:border-white/10">
               <img src={profile.avatar} alt="Profile photo" className="w-full h-full object-cover" />
@@ -222,7 +222,7 @@ export function SideDrawer({
                   onTabChange(sec.id);
                   onClose();
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-left font-semibold transition-all duration-200 cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-left font-semibold transition-all duration-200 cursor-pointer min-h-[44px] ${
                   isActive
                     ? 'bg-purple-100/70 dark:bg-white/5 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-white/10'
                     : 'text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-white/5'
@@ -264,9 +264,9 @@ export function SideDrawer({
               onTabChange('profile');
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-white/5 rounded-xl text-left"
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-white/5 rounded-xl text-left min-h-[44px]"
           >
-            <Settings className="w-3.5 h-3.5 text-zinc-500" />
+            <Settings className="w-4 h-4 text-zinc-500" />
             <span>Settings Preferences</span>
           </button>
           <button
@@ -274,9 +274,9 @@ export function SideDrawer({
               onLogoutClick();
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-900 dark:hover:text-white hover:bg-rose-500/10 rounded-xl text-left"
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-900 dark:hover:text-white hover:bg-rose-500/10 rounded-xl text-left min-h-[44px]"
           >
-            <LogOut className="w-3.5 h-3.5 text-rose-500" />
+            <LogOut className="w-4 h-4 text-rose-500" />
             <span className="text-rose-600 dark:text-red-400">Logout</span>
           </button>
         </div>

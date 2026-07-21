@@ -195,7 +195,7 @@ export function HomeView({
 
   if (isLoading) {
     return (
-      <div className="home-view space-y-6 pb-2 max-w-full overflow-x-hidden">
+      <div className="home-view space-y-8 pb-2 max-w-full overflow-x-hidden">
         <SkeletonHeader />
         <div className="space-y-3">
           <Skeleton className="h-4 w-32" />
@@ -363,7 +363,7 @@ export function HomeView({
   ];
 
   return (
-    <div className="home-view space-y-8 pb-2 max-w-full overflow-x-hidden">
+    <div className="home-view space-y-8 pb-4 max-w-full overflow-x-hidden">
       {/* SECTION 1 — Personalized Hero */}
       <motion.section {...fadeUp}>
         <GlassCard tint="glass-card-purple" className="p-5 sm:p-6">
@@ -445,7 +445,7 @@ export function HomeView({
                 </p>
 <button
                 onClick={onGenerateRoadmap}
-                className={`inline-flex items-center gap-2 px-6 py-3 text-white font-bold text-base rounded-xl active:scale-[0.98] transition-all cursor-pointer ${buttonStyles.primary.replace('hover:from-purple-500 hover:to-blue-500', 'hover:brightness-110')}`}
+                className={`inline-flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl active:scale-[0.98] transition-all cursor-pointer ${buttonStyles.primary}`}
               >
                 <PlusCircle className="w-4 h-4" />
                 Generate Roadmap

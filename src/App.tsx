@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
-import { Sparkles, Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, CheckCircle, ArrowLeft, BookOpen, Brain, Code, BarChart } from 'lucide-react';
+import { Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, CheckCircle, ArrowLeft, BookOpen, Brain, Code, BarChart } from 'lucide-react';
+import { AuthScreen } from './components/AuthScreen';
 import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, ChatMessage } from './types';
 import { getPhaseUnlockStatus } from './lib/roadmapUtils';
 import { usePWA } from './lib/usePWA';
@@ -1205,11 +1206,12 @@ export default function App() {
             onSendMessage={handleSendMessage}
             onSelectAction={(topic) => handleSendMessage(topic)}
             aiActive={aiActive}
+            roadmapGoal={roadmaps.find(r => r.id === activeRoadmapId)?.goal}
           />
         );
       }
       if (activeTab === 'progress') {
-        return <AnalyticsView profile={profile} />;
+        return <AnalyticsView profile={profile} activityLog={activityLog} />;
       }
       if (activeTab === 'profile') {
         return (
@@ -1352,11 +1354,12 @@ export default function App() {
             onSendMessage={handleSendMessage}
             onSelectAction={(topic) => handleSendMessage(topic)}
             aiActive={aiActive}
+            roadmapGoal={roadmaps.find(r => r.id === activeRoadmapId)?.goal}
           />
         );
 
       case 'progress':
-        return <AnalyticsView profile={profile} />;
+        return <AnalyticsView profile={profile} activityLog={activityLog} />;
 
       case 'achievements':
         return (
@@ -1436,145 +1439,6 @@ export default function App() {
   };
 
 
-// Render authentication UI (used within modal or standalone)
-  const renderAuthUI = () => {
-    const cardClass = "w-full max-w-sm rounded-[24px] bg-[#111111] border border-white/10 p-6 shadow-2xl space-y-6 relative overflow-hidden";
-    const inputClass = "w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500";
-    const btnClass = "w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
-
-    const header = (
-      <div className="text-center flex flex-col items-center">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5">
-          <Sparkles className="w-5 h-5 text-white animate-pulse" />
-        </div>
-        <h2 className="font-display font-extrabold text-xl tracking-tight mt-3">
-          LearnPath <span className="text-purple-400">AI</span>
-        </h2>
-        <p className="text-xs text-zinc-400 mt-1">Premium Full-Stack AI Learning Platform</p>
-      </div>
-    );
-
-    // ── Password reset confirm form (arrived via email link with ?reset_token) ──
-    if (resetToken) {
-      return (
-        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
-          <div className={cardClass}>
-            <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
-            {header}
-            {authError && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">{authError}</div>}
-            {resetStatus === 'success' ? (
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-300 text-center">
-                ✅ Password updated! You can now sign in with your new password.
-                <button onClick={() => { setResetStatus('idle'); setAuthError(''); }} className="block mt-2 mx-auto text-zinc-400 hover:text-white text-xs cursor-pointer">Back to Sign In</button>
-              </div>
-            ) : (
-              <form onSubmit={handleResetPassword} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="block text-xs uppercase font-bold text-zinc-400">New Password</label>
-                  <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} placeholder="Min 8 chars, include a number" className={inputClass} required minLength={8} />
-                </div>
-                <button type="submit" disabled={resetStatus === 'submitting'} className={btnClass}>
-                  {resetStatus === 'submitting' ? 'Saving…' : 'Set New Password'}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    // ── Forgot password inline form ──
-    if (forgotPasswordMode) {
-      return (
-        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
-          <div className={cardClass}>
-            <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
-            {header}
-            {forgotStatus === 'sent' ? (
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-300 text-center">
-                ✅ Check your inbox! We sent a reset link to <strong>{forgotEmail}</strong>.
-              </div>
-            ) : (
-              <form onSubmit={handleForgotPassword} className="space-y-4">
-                {forgotStatus === 'error' && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">Something went wrong. Please try again.</div>}
-                <div className="space-y-1.5">
-                  <label className="block text-xs uppercase font-bold text-zinc-400">Your Email</label>
-                  <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="you@example.com" className={inputClass} required />
-                </div>
-                <button type="submit" disabled={forgotStatus === 'sending'} className={btnClass}>
-                  {forgotStatus === 'sending' ? 'Sending…' : 'Send Reset Link'}
-                </button>
-              </form>
-            )}
-            <div className="text-center pt-2 border-t border-white/5">
-              <button onClick={() => { setForgotPasswordMode(false); setForgotStatus('idle'); setForgotEmail(''); }} className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">
-                ← Back to Sign In
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // ── Normal login / signup form ──
-    return (
-      <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
-        <div className={cardClass}>
-          <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
-          {header}
-
-          {authError && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">
-              {authError}
-            </div>
-          )}
-
-          <form onSubmit={handleAuthenticate} className="space-y-4">
-            {authMode === 'signup' && (
-              <div className="space-y-1.5">
-                <label className="block text-xs uppercase font-bold text-zinc-400">Full Name</label>
-                <input type="text" value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder="Jane Smith" className={inputClass} required />
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <label className="block text-xs uppercase font-bold text-zinc-400">Registry Email</label>
-              <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="bobby.fisher@learnpath.ai" className={inputClass} required />
-            </div>
-
-            <div className="space-y-1.5 font-sans">
-              <div className="flex justify-between items-center text-xs">
-                <label className="block uppercase font-bold text-zinc-400">Security Password</label>
-                {authMode === 'login' && (
-                  <button type="button" onClick={() => { setForgotPasswordMode(true); setAuthError(''); }} className="text-zinc-500 hover:text-white cursor-pointer">
-                    Forgot Password?
-                  </button>
-                )}
-              </div>
-              <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" className={inputClass} required />
-            </div>
-
-            <button type="submit" disabled={isAuthenticating} className={btnClass}>
-              {isAuthenticating ? 'Processing...' : authMode === 'login' ? 'Confirm Sign In' : 'Create Free Account'}
-            </button>
-          </form>
-
-          <div className="text-center pt-2 space-y-3.5 border-t border-white/5 pb-1.5">
-            <button
-              onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setAuthError(''); }}
-              className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
-            >
-              {authMode === 'login' ? "Don't have an account? Sign Up" : "Already registered? Sign In"}
-            </button>
-            <p className="text-xs text-zinc-500 leading-relaxed">
-              Your data is loaded by email and saved only to your user profile.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
 // Render the app based on auth state
   if (isLoadingAuth) {
     return (
@@ -1612,7 +1476,35 @@ export default function App() {
     if (legalPage === 'terms') return <TermsPage onBack={() => setLegalPage(null)} />;
     if (legalPage === 'privacy') return <PrivacyPage onBack={() => setLegalPage(null)} />;
     if (showAuthModal) {
-      return renderAuthUI();
+      return (
+        <AuthScreen
+          authMode={authMode}
+          setAuthMode={setAuthMode}
+          authEmail={authEmail}
+          setAuthEmail={setAuthEmail}
+          authPassword={authPassword}
+          setAuthPassword={setAuthPassword}
+          authName={authName}
+          setAuthName={setAuthName}
+          authError={authError}
+          setAuthError={setAuthError}
+          isAuthenticating={isAuthenticating}
+          forgotPasswordMode={forgotPasswordMode}
+          setForgotPasswordMode={setForgotPasswordMode}
+          forgotEmail={forgotEmail}
+          setForgotEmail={setForgotEmail}
+          forgotStatus={forgotStatus}
+          setForgotStatus={setForgotStatus}
+          resetToken={resetToken}
+          resetPassword={resetPassword}
+          setResetPassword={setResetPassword}
+          resetStatus={resetStatus}
+          setResetStatus={setResetStatus}
+          handleAuthenticate={handleAuthenticate}
+          handleForgotPassword={handleForgotPassword}
+          handleResetPassword={handleResetPassword}
+        />
+      );
     }
     return (
       <Suspense fallback={<SplashScreen />}>

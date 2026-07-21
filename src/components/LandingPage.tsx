@@ -257,7 +257,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="col-span-2 rounded-2xl border border-white/[0.07] bg-gradient-to-br from-purple-500/[0.1] to-[#0d1425] p-4">
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-purple-400">AI Roadmap</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-purple-400">AI Roadmap</p>
                         <p className="mt-1 text-sm font-bold text-white">Full-Stack Development</p>
                       </div>
                       <span className="flex items-center gap-1.5 rounded-xl bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-400">
@@ -277,7 +277,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                   {/* Continue Learning */}
                   <div className="rounded-2xl border border-white/[0.07] bg-[#0d1425] p-3.5">
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Continue</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Continue</p>
                     <div className="mt-2.5 flex items-center gap-2.5">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 to-violet-600 shadow-[0_6px_18px_rgba(124,58,237,0.4)]">
                         <BookOpen className="h-4 w-4 text-white" />
@@ -294,7 +294,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                   {/* Progress Ring */}
                   <div className="flex flex-col items-center justify-center rounded-2xl border border-white/[0.07] bg-[#0c152b] p-3.5">
-                    <p className="mb-2 text-[9px] font-semibold uppercase tracking-[0.3em] text-zinc-500">Weekly XP</p>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">Weekly XP</p>
                     <div className="relative flex h-16 w-16 items-center justify-center">
                       <svg className="absolute inset-0 -rotate-90" viewBox="0 0 64 64" aria-hidden="true">
                         <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6" />
@@ -330,7 +330,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="rounded-2xl border border-white/[0.07] bg-[#0c152b] p-3.5">
                     <div className="flex items-center gap-1.5 mb-2">
                       <MessageSquare className="h-3.5 w-3.5 text-sky-400" />
-                      <p className="text-[9px] font-semibold uppercase tracking-[0.3em] text-sky-400">AI Mentor</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-400">AI Mentor</p>
                     </div>
                     <div className="space-y-2">
                       <div className="rounded-xl bg-white/[0.05] px-3 py-2 text-[11px] leading-5 text-zinc-200">

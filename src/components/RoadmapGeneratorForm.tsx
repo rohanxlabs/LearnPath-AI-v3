@@ -135,6 +135,8 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
                 <input
                   type="range" min={1} max={40} step={1} value={weeklyHours}
                   onChange={e => setWeeklyHours(Number(e.target.value))}
+                  aria-label="Weekly study hours"
+                  aria-valuetext={`${weeklyHours} hours per week`}
                   className="flex-1 accent-purple-600 cursor-pointer"
                 />
                 <span className="text-xs text-zinc-400">40</span>

@@ -37,11 +37,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onUpdateProgress, is
         <motion.div layout="position" className="flex items-start justify-between gap-4">
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${difficultyColors[project.difficulty]}`}>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${difficultyColors[project.difficulty]}`}>
                 {project.difficulty}
               </span>
               {isCompleted && (
-                <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full border border-green-500/30">
+                <span className="flex items-center gap-1.5 text-xs font-bold uppercase text-green-400 bg-green-500/10 px-2.5 py-1 rounded-full border border-green-500/30">
                   <CheckCircle2 size={12} />
                   <span>Completed</span>
                 </span>

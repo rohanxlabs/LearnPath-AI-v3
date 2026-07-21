@@ -334,7 +334,7 @@ const QuizCard = ({ quiz, onStartQuiz }: { quiz: any; onStartQuiz: any }) => (
           <span className="text-xs text-blue-400 font-bold flex items-center gap-2"><Brain size={14} /> Multiple Choice</span>
         </div>
         {quiz.score > 0 && (
-          <div className={`text-sm font-bold px-3 py-1 rounded-full flex items-center gap-2 ${quiz.score >= 70 ? 'bg-green-500/10 text-green-400' : 'bg-amber-500/10 text-amber-400'}`}>
+          <div className={`text-sm font-bold px-3 py-1 rounded-full flex items-center gap-2 ${quiz.score >= 70 ? 'bg-green-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
             <Trophy size={14} /> {quiz.score}%
           </div>
         )}
@@ -413,7 +413,7 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
       <div className="mb-6">
         <div className="flex justify-between items-center text-sm text-zinc-400 mb-2">
           <span>Question {currentIdx + 1} of {questions.length}</span>
-          <span className="font-bold text-green-400">{correctCount} Correct</span>
+          <span className="font-bold text-emerald-400">{correctCount} Correct</span>
         </div>
         <div className="w-full bg-white/10 rounded-full h-2"><div className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full" style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}></div></div>
       </div>

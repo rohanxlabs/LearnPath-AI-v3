@@ -4,7 +4,7 @@ import { Sparkles } from 'lucide-react';
 
 export const SplashScreen: React.FC = () => {
   return (
-    <div className="fixed inset-0 bg-[#0A0A0A] flex flex-col items-center justify-center z-50">
+    <div role="status" aria-label="Loading LearnPath AI" className="fixed inset-0 bg-[#0A0A0A] flex flex-col items-center justify-center z-50">
       <motion.div
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -36,7 +36,7 @@ export const SplashScreen: React.FC = () => {
           LearnPath <span className="text-purple-400">AI</span>
           <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
         </h1>
-        <p className="text-xs text-zinc-400 mt-2">Loading your learning space...</p>
+        <p aria-live="polite" className="text-xs text-zinc-400 mt-2">Loading your learning space...</p>
       </motion.div>
     </div>
   );

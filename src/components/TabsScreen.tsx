@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart3, Clock, Trophy, Shield, Eye, Sparkles, User, Settings, CreditCard, HelpCircle, CheckCircle, BellRing, Lock, ToggleLeft, ToggleRight, Sun, Flame } from 'lucide-react';
 import { UserProfile, UserSettings } from '../types';
 import { XPBadge, StreakBadge } from './Badges';
@@ -11,11 +11,14 @@ interface UserStats {
   overallMastery: number;
 }
 
+type ActivityLog = Record<string, { xp: number; lessonsCompleted: number }>;
+
 interface AnalyticsViewProps {
   profile: UserProfile;
+  activityLog?: ActivityLog;
 }
 
-export function AnalyticsView({ profile }: AnalyticsViewProps) {
+export function AnalyticsView({ profile, activityLog = {} }: AnalyticsViewProps) {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -41,9 +44,20 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
     fetchStats();
   }, []);
 
-  const weeklyHours = [0, 0, 0, 0, 0, 0, 0];
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const maxHour = 8;
+
+  // Derive last-7-days hours from activityLog (each lesson ≈ 0.5 hrs)
+  const weeklyHours = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - (6 - i)); // Mon=0 … Sun=6 relative to today
+      const key = d.toISOString().slice(0, 10); // "YYYY-MM-DD"
+      const entry = activityLog[key];
+      return entry ? Math.min(maxHour, +(entry.lessonsCompleted * 0.5).toFixed(1)) : 0;
+    });
+  }, [activityLog]);
 
   const completionPercent = stats?.overallMastery || 0;
   const radius = 32;
@@ -91,8 +105,22 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-zinc-400">Loading analytics...</p>
+      <div className="space-y-8">
+        {/* Title skeleton */}
+        <div className="space-y-2">
+          <div className="h-7 w-48 rounded-xl bg-white/5 border border-white/10 animate-pulse" />
+          <div className="h-4 w-72 rounded-lg bg-white/5 border border-white/10 animate-pulse" />
+        </div>
+        {/* Progress ring skeleton */}
+        <div className="h-32 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
+        {/* Stat grid skeleton */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-28 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
+          ))}
+        </div>
+        {/* Chart skeleton */}
+        <div className="h-64 rounded-2xl bg-white/5 border border-white/10 animate-pulse" />
       </div>
     );
   }
@@ -218,7 +246,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
             {/* Simple concentric SVG indicator */}
             <svg className="w-28 h-28 transform -rotate-90">
               <circle cx="56" cy="56" r="45" className="stroke-white/5" strokeWidth="6" fill="none" />
-              <circle cx="56" cy="56" r="45" className="stroke-purple-500" strokeWidth="6" strokeDasharray="282" strokeDashoffset="70" strokeLinecap="round" fill="none" />
+              <circle cx="56" cy="56" r="45" className="stroke-purple-500" strokeWidth="6" strokeDasharray="282" strokeDashoffset={282 - (completionPercent / 100) * 282} strokeLinecap="round" fill="none" />
             </svg>
             <div className="absolute text-center">
                <span className="text-xl sm:text-2xl font-extrabold text-white font-display">{Math.round(completionPercent)}%</span>
