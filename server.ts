@@ -8,6 +8,7 @@ import cors from 'cors';
 import path from 'path';
 import { exec } from 'child_process';
 import { platform } from 'os';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { createServer as createViteServer } from 'vite';
 import pinoHttp from 'pino-http';
 import * as Sentry from '@sentry/node';
@@ -250,7 +251,12 @@ async function bootstrap() {
   return server;
 }
 
-bootstrap().catch((err) => {
-  logger.fatal({ err }, 'Server failed to start');
-  process.exit(1);
-});
+const isMainModule = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
+
+if (isMainModule) {
+  bootstrap().catch((err) => {
+    logger.fatal({ err }, 'Server failed to start');
+    process.exit(1);
+  });
+}
+
