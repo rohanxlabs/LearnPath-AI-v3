@@ -13,6 +13,7 @@ interface RoadmapsTabContainerProps {
   onBackToList: () => void;
   onDeleteRoadmap: (id: string) => void;
   onGenerateRoadmap: (params: any) => Promise<void>;
+  onRoadmapReady?: (roadmap: any) => void;
   isGenerating: boolean;
   profile: UserProfile;
   isLoading?: boolean;
@@ -27,6 +28,7 @@ export function RoadmapsTabContainer({
   onBackToList,
   onDeleteRoadmap,
   onGenerateRoadmap,
+  onRoadmapReady,
   isGenerating,
   profile,
   isLoading,
@@ -69,6 +71,10 @@ export function RoadmapsTabContainer({
           </button>
           {showGenerator && (
             <RoadmapGeneratorForm
+              onRoadmapReady={onRoadmapReady ? async (roadmap) => {
+                await onRoadmapReady(roadmap);
+                setShowGenerator(false);
+              } : undefined}
               onSubmit={async (params) => {
                 await onGenerateRoadmap(params);
                 setShowGenerator(false);

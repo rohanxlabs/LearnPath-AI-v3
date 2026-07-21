@@ -731,6 +731,61 @@ export default function App() {
     setShowAuthModal(false);
   };
 
+  // Receives a fully-formed roadmap from the SSE stream and persists it.
+  // This avoids duplicating the persistence logic — the form calls this once
+  // the stream's "done" event fires.
+  const handleRoadmapReadyFromStream = async (data: any) => {
+    setIsAiGeneratingRoadmap(true);
+    try {
+      const newRoadmap: Roadmap = {
+        id: data.id || `roadmap-${Date.now()}`,
+        goal: data.goal || '',
+        experienceLevel: data.experienceLevel || 'Beginner',
+        weeklyHours: data.weeklyHours || 5,
+        preferredStyle: data.preferredStyle || 'Hands-on',
+        progressPercent: data.progressPercent || 0,
+        totalXp: data.totalXp || 0,
+        lessonsCompleted: data.lessonsCompleted || 0,
+        hoursRemaining: data.hoursRemaining || 40,
+        createdAt: data.createdAt || new Date().toISOString(),
+        phases: data.phases || [],
+        resources: data.resources || [],
+        projects: data.projects || [],
+      };
+
+      const persistResponse = await fetch('/api/roadmaps', {
+        method: 'POST',
+        headers: mutatingHeaders(),
+        body: JSON.stringify(newRoadmap),
+      });
+      const persistData = await persistResponse.json().catch(() => ({}));
+      if (!persistResponse.ok) {
+        throw new Error(persistData.error || `Failed to persist roadmap (HTTP ${persistResponse.status})`);
+      }
+      if (persistData.newAchievement) handleAchievementUnlocked(persistData.newAchievement);
+
+      setRoadmaps(prev => [newRoadmap, ...prev]);
+      setActiveRoadmapId(newRoadmap.id);
+      setSelectedRoadmapId(newRoadmap.id);
+      syncRoadmapsFromDatabase();
+      const newNotif: SystemNotification = {
+        id: `notif-${Date.now()}`,
+        title: 'New AI Syllabus Generated',
+        message: `Your custom roadmap for "${newRoadmap.goal}" is ready. Start learning!`,
+        category: 'roadmap',
+        read: false,
+        timestamp: new Date().toISOString(),
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+      setActiveTab('roadmaps');
+    } catch (err) {
+      console.error('Failed to persist streamed roadmap:', err);
+      showToast('Roadmap was generated but could not be saved. Please try again.');
+    } finally {
+      setIsAiGeneratingRoadmap(false);
+    }
+  };
+
   // Custom AI Roadmap Generation Trigger
   const handleGenerateRoadmap = async (params: {
     goal: string;
@@ -1316,25 +1371,27 @@ export default function App() {
                 if (next) setActiveLesson(next);
               }}
               onGenerateRoadmap={handleGenerateRoadmap}
+              onRoadmapReady={handleRoadmapReadyFromStream}
+                isGenerating={isAiGeneratingRoadmap}
+              />
+            );
+          }
+  
+          // ── Roadmap List (no roadmap selected) ──
+          return (
+            <RoadmapsTabContainer
+              roadmaps={roadmaps}
+              selectedRoadmapId={selectedRoadmapId}
+              onSelectRoadmap={(id) => {
+                setSelectedRoadmapId(id);
+                setActiveRoadmapId(id);
+                setSelectedPhaseId(null);
+              }}
+              onBackToList={() => { setSelectedRoadmapId(null); setSelectedPhaseId(null); }}
+              onDeleteRoadmap={(id) => setConfirmDeleteId(id)}
+              onGenerateRoadmap={handleGenerateRoadmap}
+              onRoadmapReady={handleRoadmapReadyFromStream}
               isGenerating={isAiGeneratingRoadmap}
-            />
-          );
-        }
-
-        // ── Roadmap List (no roadmap selected) ──
-        return (
-          <RoadmapsTabContainer
-            roadmaps={roadmaps}
-            selectedRoadmapId={selectedRoadmapId}
-            onSelectRoadmap={(id) => {
-              setSelectedRoadmapId(id);
-              setActiveRoadmapId(id);
-              setSelectedPhaseId(null);
-            }}
-            onBackToList={() => { setSelectedRoadmapId(null); setSelectedPhaseId(null); }}
-            onDeleteRoadmap={(id) => setConfirmDeleteId(id)}
-            onGenerateRoadmap={handleGenerateRoadmap}
-            isGenerating={isAiGeneratingRoadmap}
             profile={profile}
             isLoading={isLoadingAuth}
             onAiAction={handleAiAction}

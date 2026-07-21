@@ -238,6 +238,29 @@ function cleanProvider(raw: any): string {
   return host || 'Official Docs';
 }
 
+// Domains that LLMs commonly hallucinate as real resource URLs but are either
+// placeholder examples, dead, or fictional. Any URL matching these patterns is
+// replaced with the curated MDN search fallback.
+const HALLUCINATED_URL_PATTERNS = [
+  /^https?:\/\/(www\.)?example\.(com|org|net)/i,
+  /^https?:\/\/(www\.)?yoursite\./i,
+  /^https?:\/\/(www\.)?website\.(com|org)/i,
+  /^https?:\/\/(www\.)?placeholder\./i,
+  /^https?:\/\/(www\.)?learnmore\./i,
+  /^https?:\/\/(www\.)?samplecourse\./i,
+  /^https?:\/\/localhost/i,
+  /^https?:\/\/127\.0\.0\.1/i,
+  /\/course\/(course-title|course-name|your-course)/i,
+  /\/learn\/(topic|subject|skill)-\d+/i,
+  // Commonly hallucinated YouTube video IDs that are known-invalid patterns
+  /youtube\.com\/watch\?v=XXXXXXXXXXX/i,
+  /youtube\.com\/watch\?v=dQw4w9WgXcQ/i, // rickroll placeholder
+];
+
+function isHallucinatedUrl(url: string): boolean {
+  return HALLUCINATED_URL_PATTERNS.some((re) => re.test(url));
+}
+
 export function normalizeResources(
   raw: any[],
   ctx: { phase: number; module: number; moduleName: string; goal: string }
@@ -246,9 +269,12 @@ export function normalizeResources(
   return raw
     .filter((r) => r && typeof r === 'object')
     .map((r: any, ri: number) => {
-      const url = typeof r.url === 'string' && /^https?:\/\//i.test(r.url) ? r.url : '';
+      const rawUrl = typeof r.url === 'string' ? r.url.trim() : '';
+      const looksLikeUrl = /^https?:\/\//i.test(rawUrl);
+      // Reject hallucinated/placeholder URLs in addition to non-URLs.
+      const url = looksLikeUrl && !isHallucinatedUrl(rawUrl) ? rawUrl : '';
       const provider = cleanProvider(r);
-      // Fallback: search MDN or freeCodeCamp based on topic, never show a dead example.com link.
+      // Fallback: search MDN or freeCodeCamp based on topic, never show a dead link.
       const fallbackUrl = `https://developer.mozilla.org/en-US/search?q=${encodeURIComponent(ctx.moduleName || ctx.goal)}`;
       return {
         id: typeof r.id === 'string' ? r.id : `res-${ctx.phase}-${ctx.module}-${ri + 1}`,
@@ -509,18 +535,149 @@ function getFallbackResources(goal: string, theme: string, pIdx: number, mIdx: n
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Domain detection helpers for goal-aware fallback
+// ---------------------------------------------------------------------------
+
+type DomainPlan = {
+  phases: Array<{
+    name: string;
+    description: string;
+    difficulty: Difficulty;
+    moduleThemes: string[];
+    projectTitle: string;
+    projectTech: string[];
+    skillTags: string[];
+  }>;
+};
+
+/** Detect the primary technical domain from the goal string. */
+function detectGoalDomain(goal: string): string {
+  const g = goal.toLowerCase();
+  if (/machine.?learn|ml\b|deep.?learn|neural|tensorflow|pytorch|scikit|sklearn/.test(g)) return 'ml';
+  if (/data.?sci|data.?analy|pandas|numpy|matplotlib|seaborn|visualization/.test(g)) return 'data-science';
+  if (/large.?lang|llm|gpt|chatgpt|langchain|rag|vector.?db|embedding|genai|generative.?ai/.test(g)) return 'llm';
+  if (/react\b|next\.?js|vue|svelte|frontend|front.?end|ui\b|tailwind|css\b/.test(g)) return 'frontend';
+  if (/node\.?js|express|fastapi|django|flask|spring|backend|back.?end|rest.?api|graphql/.test(g)) return 'backend';
+  if (/full.?stack|mern|mean|fullstack/.test(g)) return 'fullstack';
+  if (/devops|docker|kubernetes|k8s|ci.?cd|terraform|ansible|aws|gcp|azure|cloud/.test(g)) return 'devops';
+  if (/android|ios|swift|kotlin|flutter|react.?native|mobile/.test(g)) return 'mobile';
+  if (/dsa|data.?struct|algorithm|leetcode|competitive|system.?design/.test(g)) return 'dsa';
+  if (/python\b/.test(g)) return 'python';
+  if (/javascript|typescript|js\b|ts\b/.test(g)) return 'javascript';
+  if (/java\b/.test(g)) return 'java';
+  if (/c\+\+|cpp|competitive\s+c/.test(g)) return 'cpp';
+  if (/sql|database|postgres|mysql|mongodb|nosql/.test(g)) return 'database';
+  if (/cyber.?sec|security|hacking|pentest|ctf/.test(g)) return 'security';
+  if (/blockchain|solidity|web3|smart.?contract/.test(g)) return 'blockchain';
+  return 'software'; // generic software engineering fallback
+}
+
+/** Return a domain-specific 6-phase plan with concrete names and tech stacks. */
+function getDomainPhasePlan(domain: string, goal: string, goalTitle: string): DomainPlan['phases'] {
+  const plans: Record<string, DomainPlan['phases']> = {
+    ml: [
+      { name: 'Python & Math Foundations for ML', description: `Set up Python, NumPy, and the linear algebra / statistics that underpin every ML algorithm.`, difficulty: 'beginner', moduleThemes: ['Python for Data Science', 'Linear Algebra with NumPy', 'Statistics & Probability', 'Pandas Data Wrangling'], projectTitle: 'Exploratory Data Analysis: Real Dataset Report', projectTech: ['Python', 'NumPy', 'Pandas', 'Matplotlib'], skillTags: ['python', 'numpy', 'pandas', 'statistics'] },
+      { name: 'Core Machine Learning Algorithms', description: 'Implement and evaluate supervised and unsupervised algorithms using scikit-learn.', difficulty: 'beginner', moduleThemes: ['Supervised Learning: Regression', 'Supervised Learning: Classification', 'Unsupervised Clustering', 'Model Evaluation & Cross-Validation'], projectTitle: 'Classification Pipeline: Iris / Titanic Dataset', projectTech: ['scikit-learn', 'Pandas', 'Matplotlib'], skillTags: ['scikit-learn', 'classification', 'regression', 'cross-validation'] },
+      { name: 'Neural Networks & Deep Learning', description: 'Build neural networks from scratch, then use PyTorch to train CNNs and RNNs.', difficulty: 'intermediate', moduleThemes: ['Backpropagation & Gradient Descent', 'PyTorch Tensors & Autograd', 'Convolutional Neural Networks', 'Sequence Models & RNNs'], projectTitle: 'Image Classifier: CIFAR-10 with CNN', projectTech: ['PyTorch', 'torchvision', 'CUDA'], skillTags: ['pytorch', 'cnn', 'backpropagation', 'deep-learning'] },
+      { name: 'Applied ML: NLP & Computer Vision', description: 'Apply deep learning to text and image problems using HuggingFace and transfer learning.', difficulty: 'intermediate', moduleThemes: ['Text Preprocessing & Embeddings', 'Transfer Learning with HuggingFace', 'Object Detection & Segmentation', 'Fine-Tuning Pretrained Models'], projectTitle: 'Sentiment Classifier with BERT Fine-Tuning', projectTech: ['HuggingFace Transformers', 'PyTorch', 'tokenizers'], skillTags: ['nlp', 'transformers', 'fine-tuning', 'huggingface'] },
+      { name: 'MLOps & Production Systems', description: 'Deploy, monitor, and maintain ML models in production with best engineering practices.', difficulty: 'advanced', moduleThemes: ['Model Serialization & APIs', 'Experiment Tracking with MLflow', 'Docker & CI for ML Pipelines', 'Model Monitoring & Data Drift'], projectTitle: 'End-to-End ML API with FastAPI + Docker', projectTech: ['FastAPI', 'Docker', 'MLflow', 'Prometheus'], skillTags: ['mlops', 'docker', 'fastapi', 'mlflow'] },
+      { name: 'Capstone: Real-World ML Project', description: 'Design, train, and ship a complete ML system for a real problem, with full documentation.', difficulty: 'expert', moduleThemes: ['Problem Framing & Dataset Curation', 'Model Architecture Design', 'Hyperparameter Tuning at Scale', 'Production Deployment & Monitoring'], projectTitle: 'Capstone: End-to-End ML Product', projectTech: ['PyTorch', 'FastAPI', 'Docker', 'Cloud (GCP/AWS)'], skillTags: ['system-design', 'ml-engineering', 'deployment', 'research'] },
+    ],
+    'data-science': [
+      { name: 'Python for Data Analysis', description: 'Master Python, Pandas, and NumPy for cleaning, transforming, and exploring datasets.', difficulty: 'beginner', moduleThemes: ['Python Data Types & Control Flow', 'NumPy Arrays & Broadcasting', 'Pandas DataFrames', 'Data Cleaning & Missing Values'], projectTitle: 'Dataset Audit: Clean & Profile a Raw CSV', projectTech: ['Python', 'Pandas', 'NumPy'], skillTags: ['python', 'pandas', 'numpy', 'data-cleaning'] },
+      { name: 'Statistics & Exploratory Analysis', description: 'Apply statistical thinking to find patterns, test hypotheses, and validate findings.', difficulty: 'beginner', moduleThemes: ['Descriptive Statistics', 'Distributions & Hypothesis Testing', 'Correlation & Causation', 'EDA with Seaborn'], projectTitle: 'EDA Report: Business Dataset Deep-Dive', projectTech: ['Seaborn', 'SciPy', 'Pandas'], skillTags: ['statistics', 'eda', 'seaborn', 'hypothesis-testing'] },
+      { name: 'Data Visualization & Storytelling', description: 'Build compelling, accurate visualizations that communicate insights to stakeholders.', difficulty: 'intermediate', moduleThemes: ['Matplotlib Internals', 'Plotly Interactive Charts', 'Dashboard Design Principles', 'Communicating with Data'], projectTitle: 'Interactive Dashboard with Plotly Dash', projectTech: ['Plotly', 'Dash', 'Pandas'], skillTags: ['plotly', 'visualization', 'dashboards', 'storytelling'] },
+      { name: 'SQL & Database Querying', description: 'Query, aggregate, and join relational data from databases with confidence.', difficulty: 'intermediate', moduleThemes: ['SQL SELECT, WHERE, JOIN', 'Window Functions & CTEs', 'Query Optimization', 'Python + PostgreSQL with psycopg2'], projectTitle: 'SQL Analytics Report on Business Database', projectTech: ['PostgreSQL', 'psycopg2', 'DBeaver'], skillTags: ['sql', 'postgresql', 'window-functions', 'database'] },
+      { name: 'Machine Learning for Data Scientists', description: 'Apply ML models to real datasets and communicate results in business terms.', difficulty: 'advanced', moduleThemes: ['Regression & Classification with scikit-learn', 'Feature Engineering', 'Model Selection & Pipeline', 'Business Metrics & Model Evaluation'], projectTitle: 'Predictive Model: Customer Churn Analysis', projectTech: ['scikit-learn', 'XGBoost', 'SHAP'], skillTags: ['scikit-learn', 'feature-engineering', 'xgboost', 'model-evaluation'] },
+      { name: 'Capstone: Full Data Science Project', description: 'Scope, execute, and present a full end-to-end data science project on a real business problem.', difficulty: 'expert', moduleThemes: ['Problem Definition & Scope', 'Data Pipeline Architecture', 'Model Deployment & APIs', 'Stakeholder Presentation'], projectTitle: 'Capstone: Data Science Portfolio Project', projectTech: ['FastAPI', 'Docker', 'PostgreSQL', 'Streamlit'], skillTags: ['data-pipeline', 'deployment', 'presentation', 'portfolio'] },
+    ],
+    llm: [
+      { name: 'Python & NLP Foundations', description: 'Build the Python and text-processing skills required for modern LLM work.', difficulty: 'beginner', moduleThemes: ['Python for NLP', 'Text Tokenization & Preprocessing', 'Word Embeddings (Word2Vec, GloVe)', 'Attention Mechanism Intuition'], projectTitle: 'Text Classifier with TF-IDF + Logistic Regression', projectTech: ['Python', 'NLTK', 'scikit-learn'], skillTags: ['python', 'nlp', 'tokenization', 'embeddings'] },
+      { name: 'Transformers & HuggingFace', description: 'Understand the Transformer architecture and use HuggingFace to fine-tune and run models.', difficulty: 'beginner', moduleThemes: ['Transformer Architecture Deep Dive', 'HuggingFace Pipelines & Tokenizers', 'Fine-Tuning BERT for Classification', 'Model Hub & Deployment'], projectTitle: 'Fine-Tuned Sentiment Classifier on HuggingFace Hub', projectTech: ['HuggingFace Transformers', 'PyTorch', 'Datasets'], skillTags: ['transformers', 'bert', 'fine-tuning', 'huggingface'] },
+      { name: 'Prompt Engineering & LLM APIs', description: 'Design effective prompts, chain calls, and use OpenAI / Gemini APIs for real applications.', difficulty: 'intermediate', moduleThemes: ['Prompt Design Principles', 'Few-Shot & Chain-of-Thought Prompting', 'OpenAI & Gemini API Integration', 'Output Parsing & Structured Responses'], projectTitle: 'AI-Powered Document Summarizer with GPT-4', projectTech: ['OpenAI API', 'Python', 'Pydantic'], skillTags: ['prompt-engineering', 'openai', 'gpt', 'structured-output'] },
+      { name: 'RAG — Retrieval-Augmented Generation', description: 'Build RAG pipelines that ground LLMs in your own documents using vector databases.', difficulty: 'intermediate', moduleThemes: ['Vector Embeddings & Semantic Search', 'Vector Databases (Pinecone / ChromaDB)', 'RAG Pipeline Architecture', 'Evaluation & Hallucination Reduction'], projectTitle: 'Document Q&A System with RAG + ChromaDB', projectTech: ['LangChain', 'ChromaDB', 'OpenAI', 'FastAPI'], skillTags: ['rag', 'vector-db', 'langchain', 'chromadb'] },
+      { name: 'LLM Agents & Tool Use', description: 'Build autonomous agents that plan, use tools, and execute multi-step tasks.', difficulty: 'advanced', moduleThemes: ['ReAct & Agent Frameworks', 'Tool Calling & Function Calling', 'LangChain Agents & LangGraph', 'Multi-Agent Orchestration'], projectTitle: 'Autonomous Research Agent with Tool Calling', projectTech: ['LangChain', 'LangGraph', 'OpenAI', 'Python'], skillTags: ['agents', 'tool-calling', 'langgraph', 'orchestration'] },
+      { name: 'Capstone: Production LLM Application', description: 'Ship a complete LLM-powered product with evaluation, monitoring, and CI/CD.', difficulty: 'expert', moduleThemes: ['LLM Application Architecture', 'Evaluation & LLM Testing (LangSmith)', 'Deployment with FastAPI + Docker', 'Cost & Latency Optimization'], projectTitle: 'Capstone: Production LLM SaaS Application', projectTech: ['FastAPI', 'Docker', 'LangSmith', 'OpenAI'], skillTags: ['llm-ops', 'evaluation', 'deployment', 'optimization'] },
+    ],
+    frontend: [
+      { name: 'HTML, CSS & JavaScript Fundamentals', description: 'Build a solid foundation in the three core languages of the web.', difficulty: 'beginner', moduleThemes: ['HTML Semantics & Accessibility', 'CSS Layout: Flexbox & Grid', 'JavaScript ES6+ Essentials', 'DOM Manipulation & Events'], projectTitle: 'Portfolio Landing Page (HTML + CSS)', projectTech: ['HTML5', 'CSS3', 'JavaScript'], skillTags: ['html', 'css', 'javascript', 'dom'] },
+      { name: 'React Fundamentals', description: 'Learn component-based UI development with React hooks and state management.', difficulty: 'beginner', moduleThemes: ['JSX & Component Architecture', 'useState & useEffect Hooks', 'Props, Context & Lifting State', 'React Router & Navigation'], projectTitle: 'Weather App with React + Public API', projectTech: ['React', 'Vite', 'CSS Modules'], skillTags: ['react', 'hooks', 'jsx', 'state-management'] },
+      { name: 'Advanced React & State Management', description: 'Master performance patterns, global state, and advanced React APIs.', difficulty: 'intermediate', moduleThemes: ['useMemo, useCallback & Memoization', 'Zustand / Redux Toolkit', 'Custom Hooks & Code Sharing', 'React Query & Data Fetching'], projectTitle: 'E-commerce Product Listing with Cart (Zustand)', projectTech: ['React', 'Zustand', 'React Query', 'Tailwind CSS'], skillTags: ['zustand', 'react-query', 'memoization', 'custom-hooks'] },
+      { name: 'TypeScript & Testing', description: 'Add type safety with TypeScript and ship confidence with automated tests.', difficulty: 'intermediate', moduleThemes: ['TypeScript Generics & Utility Types', 'Typed React Components & Hooks', 'Unit Testing with Vitest', 'Integration Testing with Testing Library'], projectTitle: 'Fully-Typed React Dashboard with Tests', projectTech: ['TypeScript', 'Vitest', 'Testing Library'], skillTags: ['typescript', 'vitest', 'testing', 'generics'] },
+      { name: 'Next.js & Full-Stack React', description: 'Build server-rendered, SEO-friendly React apps with Next.js App Router.', difficulty: 'advanced', moduleThemes: ['Next.js App Router & RSC', 'Server Actions & API Routes', 'Authentication with NextAuth.js', 'Deployment on Vercel'], projectTitle: 'Full-Stack Blog with Next.js + PostgreSQL', projectTech: ['Next.js', 'NextAuth.js', 'PostgreSQL', 'Vercel'], skillTags: ['nextjs', 'rsc', 'nextauth', 'vercel'] },
+      { name: 'Capstone: Production-Grade Frontend App', description: 'Design and ship a complete, performant, accessible frontend application.', difficulty: 'expert', moduleThemes: ['Performance Auditing & Core Web Vitals', 'Accessibility (WCAG) Testing', 'CI/CD with GitHub Actions', 'Micro-frontends & Monorepos'], projectTitle: 'Capstone: Full-Featured SaaS Frontend', projectTech: ['Next.js', 'TypeScript', 'Storybook', 'Vercel'], skillTags: ['performance', 'accessibility', 'ci-cd', 'monorepo'] },
+    ],
+    backend: [
+      { name: 'HTTP, APIs & Server Fundamentals', description: 'Understand how the web works and build your first REST APIs.', difficulty: 'beginner', moduleThemes: ['HTTP Methods, Status Codes & Headers', 'REST API Design Principles', 'Node.js + Express Basics', 'JSON & Request/Response Cycle'], projectTitle: 'REST API: Todo CRUD with Express', projectTech: ['Node.js', 'Express', 'Postman'], skillTags: ['http', 'rest', 'express', 'node'] },
+      { name: 'Databases & Data Modelling', description: 'Design schemas and write queries for both relational and document databases.', difficulty: 'beginner', moduleThemes: ['SQL: Tables, Joins & Indexes', 'PostgreSQL with Prisma ORM', 'MongoDB & Mongoose', 'Database Schema Design'], projectTitle: 'User Authentication API with PostgreSQL + Prisma', projectTech: ['PostgreSQL', 'Prisma', 'Node.js'], skillTags: ['postgresql', 'prisma', 'mongodb', 'schema-design'] },
+      { name: 'Authentication & Security', description: 'Implement secure auth flows and protect APIs from common attacks.', difficulty: 'intermediate', moduleThemes: ['JWT & Session Authentication', 'OAuth 2.0 & Social Login', 'Rate Limiting & Input Validation', 'OWASP Top 10 for APIs'], projectTitle: 'Secure Auth System: JWT + Refresh Tokens', projectTech: ['Node.js', 'jsonwebtoken', 'bcrypt', 'express-rate-limit'], skillTags: ['jwt', 'oauth', 'security', 'rate-limiting'] },
+      { name: 'Scalability & Distributed Systems', description: 'Design backends that handle load, failures, and horizontal scaling.', difficulty: 'intermediate', moduleThemes: ['Caching with Redis', 'Message Queues with BullMQ', 'Horizontal Scaling & Load Balancers', 'WebSockets & Real-Time APIs'], projectTitle: 'Real-Time Chat API with Redis + WebSockets', projectTech: ['Redis', 'BullMQ', 'Socket.io', 'Node.js'], skillTags: ['redis', 'queues', 'websockets', 'scaling'] },
+      { name: 'Microservices & DevOps', description: 'Break monoliths into services and automate deployment pipelines.', difficulty: 'advanced', moduleThemes: ['Microservice Architecture Patterns', 'Docker & Docker Compose', 'Kubernetes Basics', 'CI/CD with GitHub Actions'], projectTitle: 'Microservices App Deployed with Docker Compose', projectTech: ['Docker', 'Docker Compose', 'GitHub Actions'], skillTags: ['microservices', 'docker', 'kubernetes', 'ci-cd'] },
+      { name: 'Capstone: Production Backend System', description: 'Architect and deploy a production-grade backend service from scratch.', difficulty: 'expert', moduleThemes: ['System Design for Scale', 'Observability: Logs, Metrics, Traces', 'Database Performance Tuning', 'API Gateway & Service Mesh'], projectTitle: 'Capstone: Production Backend API Platform', projectTech: ['Node.js', 'PostgreSQL', 'Redis', 'Kubernetes'], skillTags: ['system-design', 'observability', 'performance', 'api-gateway'] },
+    ],
+    fullstack: [
+      { name: 'Web Fundamentals: HTML, CSS & JavaScript', description: 'Master the building blocks of every web application.', difficulty: 'beginner', moduleThemes: ['HTML5 Semantics & Forms', 'CSS Flexbox, Grid & Responsive Design', 'JavaScript ES6+: Arrays, Promises, Async', 'Git & Version Control Workflow'], projectTitle: 'Responsive Personal Portfolio Site', projectTech: ['HTML', 'CSS', 'JavaScript', 'Git'], skillTags: ['html', 'css', 'javascript', 'git'] },
+      { name: 'React Frontend Development', description: 'Build modern, component-driven UIs with React.', difficulty: 'beginner', moduleThemes: ['React Components & JSX', 'Hooks: useState, useEffect, useContext', 'API Calls with Fetch & Axios', 'React Router v6'], projectTitle: 'Movie Browser App: React + TMDB API', projectTech: ['React', 'Vite', 'Axios', 'React Router'], skillTags: ['react', 'hooks', 'axios', 'routing'] },
+      { name: 'Node.js & Express Backend', description: 'Build REST APIs, connect to databases, and handle auth.', difficulty: 'intermediate', moduleThemes: ['Node.js & Express REST API', 'PostgreSQL with Prisma', 'JWT Authentication', 'Input Validation & Error Handling'], projectTitle: 'Full-Stack Blog: React Frontend + Express API', projectTech: ['Node.js', 'Express', 'PostgreSQL', 'Prisma'], skillTags: ['nodejs', 'express', 'prisma', 'jwt'] },
+      { name: 'TypeScript, Testing & Advanced React', description: 'Harden the codebase with types and tests.', difficulty: 'intermediate', moduleThemes: ['TypeScript in React & Node', 'React Query for Server State', 'Unit & Integration Testing', 'State Management with Zustand'], projectTitle: 'TypeScript Task Manager with Tests', projectTech: ['TypeScript', 'Zustand', 'Vitest', 'React Query'], skillTags: ['typescript', 'react-query', 'zustand', 'testing'] },
+      { name: 'Next.js, DevOps & Deployment', description: 'Ship full-stack apps with SSR, CI/CD, and cloud infrastructure.', difficulty: 'advanced', moduleThemes: ['Next.js App Router & Server Actions', 'Docker & GitHub Actions CI/CD', 'Cloud Deployment (Vercel / Railway)', 'Performance & Security Hardening'], projectTitle: 'Full-Stack SaaS App with Next.js + Auth', projectTech: ['Next.js', 'Docker', 'PostgreSQL', 'Vercel'], skillTags: ['nextjs', 'docker', 'ci-cd', 'deployment'] },
+      { name: 'Capstone: Full-Stack Product', description: 'Build a complete, shippable web product with real users in mind.', difficulty: 'expert', moduleThemes: ['System Architecture & Database Design', 'Real-Time Features & WebSockets', 'Monitoring & Error Tracking', 'Launch Checklist & SEO'], projectTitle: 'Capstone: Full-Stack SaaS Product Launch', projectTech: ['Next.js', 'PostgreSQL', 'Redis', 'Vercel'], skillTags: ['architecture', 'real-time', 'monitoring', 'seo'] },
+    ],
+    devops: [
+      { name: 'Linux & Shell Scripting', description: 'Get comfortable with the Linux command line and Bash automation.', difficulty: 'beginner', moduleThemes: ['Linux File System & Permissions', 'Bash Scripting & Cron Jobs', 'SSH & Remote Server Management', 'Networking Fundamentals for DevOps'], projectTitle: 'Automated Server Setup Script with Bash', projectTech: ['Bash', 'Linux', 'SSH', 'cron'], skillTags: ['linux', 'bash', 'ssh', 'networking'] },
+      { name: 'Docker & Containerization', description: 'Package applications into reproducible containers and orchestrate with Compose.', difficulty: 'beginner', moduleThemes: ['Docker Images & Containers', 'Writing Dockerfiles', 'Docker Compose Multi-Service Apps', 'Docker Volumes & Networks'], projectTitle: 'Containerized Full-Stack App with Docker Compose', projectTech: ['Docker', 'Docker Compose', 'Nginx'], skillTags: ['docker', 'containers', 'dockerfile', 'compose'] },
+      { name: 'CI/CD & Automation', description: 'Automate testing and deployment with modern CI/CD pipelines.', difficulty: 'intermediate', moduleThemes: ['GitHub Actions Workflows', 'Automated Testing in Pipelines', 'Semantic Versioning & Release Management', 'Artifact Registry & Image Push'], projectTitle: 'CI/CD Pipeline: Test, Build, Push to Registry', projectTech: ['GitHub Actions', 'Docker Hub', 'Jest'], skillTags: ['ci-cd', 'github-actions', 'automation', 'release-management'] },
+      { name: 'Kubernetes & Orchestration', description: 'Deploy and manage containerized apps at scale with Kubernetes.', difficulty: 'intermediate', moduleThemes: ['Kubernetes Architecture & Objects', 'Deployments, Services & Ingress', 'ConfigMaps, Secrets & RBAC', 'Helm Charts for Package Management'], projectTitle: 'Kubernetes Deployment: Microservice App on minikube', projectTech: ['Kubernetes', 'Helm', 'kubectl', 'minikube'], skillTags: ['kubernetes', 'helm', 'ingress', 'rbac'] },
+      { name: 'Infrastructure as Code & Cloud', description: 'Provision and manage cloud infrastructure reproducibly with Terraform.', difficulty: 'advanced', moduleThemes: ['Terraform Core: Providers, Resources, State', 'AWS/GCP Infrastructure Provisioning', 'Ansible for Configuration Management', 'Cost Optimization & Tagging'], projectTitle: 'Terraform-Provisioned Cloud Infra on AWS', projectTech: ['Terraform', 'AWS', 'Ansible'], skillTags: ['terraform', 'aws', 'iac', 'ansible'] },
+      { name: 'Capstone: Production DevOps Platform', description: 'Design and implement a complete DevOps platform for a real application.', difficulty: 'expert', moduleThemes: ['Observability: Prometheus, Grafana, Loki', 'GitOps with ArgoCD', 'Security Scanning in CI', 'Disaster Recovery Planning'], projectTitle: 'Capstone: Full DevOps Platform with Observability', projectTech: ['Kubernetes', 'Prometheus', 'Grafana', 'ArgoCD'], skillTags: ['observability', 'gitops', 'security', 'disaster-recovery'] },
+    ],
+    dsa: [
+      { name: 'Programming Fundamentals & Complexity', description: 'Build problem-solving instincts and understand Big-O analysis.', difficulty: 'beginner', moduleThemes: ['Time & Space Complexity (Big-O)', 'Arrays & Strings', 'Recursion & Call Stack', 'Two Pointers & Sliding Window'], projectTitle: 'LeetCode Easy Set: Arrays & Strings (15 problems)', projectTech: ['Python', 'C++', 'LeetCode'], skillTags: ['big-o', 'arrays', 'recursion', 'two-pointers'] },
+      { name: 'Core Data Structures', description: 'Implement and use stacks, queues, linked lists, trees, and hash maps.', difficulty: 'beginner', moduleThemes: ['Stacks & Queues', 'Linked Lists', 'Binary Trees & BSTs', 'Hash Maps & Sets'], projectTitle: 'Data Structures Library: Implement from Scratch', projectTech: ['Python', 'C++'], skillTags: ['stacks', 'linked-lists', 'trees', 'hash-maps'] },
+      { name: 'Sorting, Searching & Divide-and-Conquer', description: 'Master the classic algorithmic strategies that appear in 60% of coding interviews.', difficulty: 'intermediate', moduleThemes: ['Merge Sort & Quick Sort', 'Binary Search & Variants', 'Divide & Conquer Patterns', 'LeetCode Medium: Sorting Problems'], projectTitle: '10 Binary Search Problems on LeetCode', projectTech: ['Python', 'LeetCode'], skillTags: ['sorting', 'binary-search', 'divide-conquer', 'algorithms'] },
+      { name: 'Dynamic Programming & Greedy', description: 'Solve optimization problems with DP memoization, tabulation, and greedy strategies.', difficulty: 'intermediate', moduleThemes: ['1D Dynamic Programming', '2D DP: Grid & String Problems', 'Greedy Algorithms', 'Classic DP Problems (Knapsack, LCS, Coin Change)'], projectTitle: '15 DP Problems: Memoization to Tabulation', projectTech: ['Python', 'LeetCode'], skillTags: ['dynamic-programming', 'memoization', 'greedy', 'knapsack'] },
+      { name: 'Graphs, Trees & Advanced Algorithms', description: 'Master graph traversal, shortest paths, and advanced tree algorithms.', difficulty: 'advanced', moduleThemes: ['Graph BFS & DFS', 'Dijkstra & Bellman-Ford', 'Topological Sort & Union Find', 'Segment Trees & Fenwick Trees'], projectTitle: '10 Graph Problems: BFS + DFS + Dijkstra', projectTech: ['Python', 'LeetCode'], skillTags: ['graphs', 'bfs', 'dijkstra', 'union-find'] },
+      { name: 'System Design & Interview Preparation', description: 'Design scalable systems and practice full interview loops for top tech companies.', difficulty: 'expert', moduleThemes: ['System Design: Scalability Patterns', 'Designing Distributed Systems', 'Behavioral Interview Frameworks (STAR)', 'Mock Interview & Time Management'], projectTitle: 'System Design Doc: URL Shortener / Rate Limiter', projectTech: ['Excalidraw', 'Notion', 'LeetCode Premium'], skillTags: ['system-design', 'distributed-systems', 'interview-prep', 'behavioral'] },
+    ],
+    mobile: [
+      { name: 'Mobile Development Fundamentals', description: 'Understand mobile platforms, UX patterns, and set up your development environment.', difficulty: 'beginner', moduleThemes: ['Mobile UX Principles & Navigation Patterns', 'Development Environment Setup', 'Component Architecture for Mobile', 'State Management Basics'], projectTitle: 'Counter App with Navigation', projectTech: ['React Native / Flutter', 'Expo', 'VS Code'], skillTags: ['mobile-ux', 'navigation', 'components', 'state'] },
+      { name: 'Core UI & Layouts', description: 'Build flexible, responsive mobile UIs using the target framework.', difficulty: 'beginner', moduleThemes: ['Flexbox Layouts for Mobile', 'Lists, FlatList & ScrollView', 'Forms, Inputs & Validation', 'Styling & Theming'], projectTitle: 'Product List App with Search & Filter', projectTech: ['React Native', 'StyleSheet', 'Expo'], skillTags: ['flatlist', 'flexbox', 'forms', 'theming'] },
+      { name: 'Networking & Local Storage', description: 'Connect to APIs and persist data locally on the device.', difficulty: 'intermediate', moduleThemes: ['REST API Integration with Axios', 'AsyncStorage & SQLite', 'Authentication with JWT', 'Offline-First Data Sync'], projectTitle: 'Notes App: API-backed with Offline Storage', projectTech: ['Axios', 'AsyncStorage', 'SQLite'], skillTags: ['axios', 'asyncstorage', 'jwt', 'offline'] },
+      { name: 'Native Features & Device APIs', description: 'Access camera, location, notifications, and other native capabilities.', difficulty: 'intermediate', moduleThemes: ['Camera & Media Picker', 'Geolocation & Maps', 'Push Notifications', 'Biometric Authentication'], projectTitle: 'Location-Based App with Maps Integration', projectTech: ['react-native-maps', 'Expo Camera', 'Firebase'], skillTags: ['camera', 'maps', 'notifications', 'biometrics'] },
+      { name: 'Testing, Performance & Publishing', description: 'Test thoroughly, optimize performance, and publish to the App Store and Google Play.', difficulty: 'advanced', moduleThemes: ['Unit Testing with Jest', 'E2E Testing with Detox', 'Performance Profiling & Optimization', 'App Store / Play Store Submission'], projectTitle: 'Optimized & Tested Production App', projectTech: ['Jest', 'Detox', 'Expo EAS'], skillTags: ['jest', 'detox', 'performance', 'app-store'] },
+      { name: 'Capstone: Full-Featured Mobile App', description: 'Build and publish a complete, feature-rich mobile application.', difficulty: 'expert', moduleThemes: ['Architecture: Clean Architecture for Mobile', 'CI/CD for Mobile with Expo EAS', 'Analytics & Crash Reporting', 'Monetization & App Growth'], projectTitle: 'Capstone: Published Mobile App', projectTech: ['React Native', 'Expo EAS', 'Firebase', 'RevenueCat'], skillTags: ['architecture', 'eas', 'analytics', 'monetization'] },
+    ],
+    security: [
+      { name: 'Networking & Security Fundamentals', description: 'Understand how networks work and the threat landscape you will operate in.', difficulty: 'beginner', moduleThemes: ['OSI Model & TCP/IP Stack', 'DNS, HTTP & TLS Deep Dive', 'Common Attack Vectors (OWASP Top 10)', 'Linux for Security Practitioners'], projectTitle: 'Network Traffic Analysis with Wireshark', projectTech: ['Wireshark', 'Linux', 'Nmap'], skillTags: ['networking', 'tcp-ip', 'owasp', 'linux'] },
+      { name: 'Web Application Security', description: 'Find and exploit web vulnerabilities in lab environments (ethically).', difficulty: 'beginner', moduleThemes: ['SQL Injection & XSS', 'CSRF & Insecure Authentication', 'SSRF & XXE Vulnerabilities', 'OWASP Juice Shop Walkthroughs'], projectTitle: 'OWASP Juice Shop: Complete All Challenges', projectTech: ['Burp Suite', 'OWASP Juice Shop', 'Docker'], skillTags: ['sqli', 'xss', 'csrf', 'burp-suite'] },
+      { name: 'Penetration Testing Methodology', description: 'Execute structured pentests: reconnaissance, exploitation, reporting.', difficulty: 'intermediate', moduleThemes: ['Reconnaissance & OSINT', 'Exploitation with Metasploit', 'Post-Exploitation & Pivoting', 'Professional Report Writing'], projectTitle: 'Full Pentest Report on TryHackMe Lab', projectTech: ['Metasploit', 'Nmap', 'TryHackMe'], skillTags: ['recon', 'metasploit', 'post-exploitation', 'reporting'] },
+      { name: 'Cryptography & PKI', description: 'Understand cryptographic primitives and implement secure systems.', difficulty: 'intermediate', moduleThemes: ['Symmetric & Asymmetric Encryption', 'Hashing & Digital Signatures', 'TLS/SSL Certificate Lifecycle', 'Implementing Crypto in Python'], projectTitle: 'Secure Messaging CLI with Asymmetric Encryption', projectTech: ['Python', 'cryptography library', 'OpenSSL'], skillTags: ['cryptography', 'rsa', 'tls', 'digital-signatures'] },
+      { name: 'Cloud & Infrastructure Security', description: 'Secure cloud environments, IAM policies, and container workloads.', difficulty: 'advanced', moduleThemes: ['AWS/GCP Security Best Practices', 'IAM Policies & Least Privilege', 'Container Security & Docker Hardening', 'SIEM & Log Analysis'], projectTitle: 'AWS Security Audit & Hardening Report', projectTech: ['AWS Security Hub', 'CloudTrail', 'Prowler'], skillTags: ['aws-security', 'iam', 'container-security', 'siem'] },
+      { name: 'Capstone: Full Bug Bounty / CTF Portfolio', description: 'Build a portfolio of real findings and CTF write-ups to land security roles.', difficulty: 'expert', moduleThemes: ['Bug Bounty Platforms & Scope Reading', 'Advanced Web Exploitation', 'Reverse Engineering & Binary Exploitation', 'CTF Competition Strategy'], projectTitle: 'Capstone: 3 Bug Bounty Reports + CTF Write-ups', projectTech: ['HackerOne', 'Burp Suite Pro', 'Ghidra'], skillTags: ['bug-bounty', 'reverse-engineering', 'binary-exploitation', 'ctf'] },
+    ],
+  };
+
+  // Return domain-specific plan if available, otherwise build a goal-specific generic plan
+  if (domain in plans) return plans[domain];
+
+  // Generic software engineering fallback — still uses the goal title, not "Foundations"
+  return [
+    { name: `${goalTitle}: Environment & Core Concepts`, description: `Set up your environment and learn the foundational concepts behind ${goal}.`, difficulty: 'beginner' as Difficulty, moduleThemes: [`${goalTitle} Environment Setup`, `Core Vocabulary & Mental Models`, `First Hands-on Exercise`, `Tooling & Workflow`], projectTitle: `Hello-World Build: ${goalTitle}`, projectTech: ['Git', 'CLI', 'Editor'], skillTags: [goal.toLowerCase().split(' ')[0] || 'software', 'tooling', 'git', 'fundamentals'] },
+    { name: `${goalTitle}: Essential Patterns`, description: `Learn the day-to-day patterns and operations every practitioner in ${goal} relies on.`, difficulty: 'beginner' as Difficulty, moduleThemes: [`Working with Data in ${goalTitle}`, `Core Patterns & Idioms`, `Debugging & Error Handling`, `Testing Basics`], projectTitle: `Guided Mini-Project: First Functional ${goalTitle} Build`, projectTech: ['Git', 'Testing Framework'], skillTags: [goal.toLowerCase().split(' ')[0] || 'software', 'patterns', 'debugging', 'testing'] },
+    { name: `Intermediate ${goalTitle}`, description: `Move into structured, reusable approaches and real integrations for ${goal}.`, difficulty: 'intermediate' as Difficulty, moduleThemes: [`Abstractions & Architecture`, `Design Patterns`, `External Integrations`, `Code Organization`], projectTitle: `Component Suite: Reusable ${goalTitle} Modules`, projectTech: ['Package Manager', 'Framework', 'CI'], skillTags: [goal.toLowerCase().split(' ')[0] || 'software', 'architecture', 'design-patterns', 'integration'] },
+    { name: `Applied ${goalTitle}`, description: `Build end-to-end systems combining all skills from ${goal}.`, difficulty: 'intermediate' as Difficulty, moduleThemes: [`End-to-End Feature Development`, `Persistence & State`, `APIs & External Services`, `Observability & Logging`], projectTitle: `Integrated Service: End-to-End ${goalTitle} Feature`, projectTech: ['REST/HTTP', 'Database', 'Docker'], skillTags: [goal.toLowerCase().split(' ')[0] || 'software', 'rest', 'database', 'observability'] },
+    { name: `Advanced ${goalTitle}`, description: `Tackle performance, architecture, and production-grade engineering for ${goal}.`, difficulty: 'advanced' as Difficulty, moduleThemes: [`Performance & Optimization`, `Architecture & Scaling`, `Security & Reliability`, `Automation & CI/CD`], projectTitle: `Production-Grade ${goalTitle} System`, projectTech: ['Cloud', 'Containers', 'Monitoring'], skillTags: [goal.toLowerCase().split(' ')[0] || 'software', 'performance', 'security', 'ci-cd'] },
+    { name: `${goalTitle} Capstone & Expert Track`, description: `Mastery-level engineering, specialization, and a portfolio-ready capstone for ${goal}.`, difficulty: 'expert' as Difficulty, moduleThemes: [`Advanced Specialization`, `System Design at Scale`, `Research & Emerging Patterns`, `Portfolio & Career Readiness`], projectTitle: `Capstone: ${goalTitle} Portfolio Masterpiece`, projectTech: ['Cloud-Native', 'Distributed Systems', 'Open Source'], skillTags: [goal.toLowerCase().split(' ')[0] || 'software', 'system-design', 'distributed-systems', 'portfolio'] },
+  ];
+}
+
 export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string }): any {
   const goal = meta.goal || 'the learning goal';
   const goalTitle = goal.charAt(0).toUpperCase() + goal.slice(1);
 
-  const phasePlan: Array<{ name: string; description: string; difficulty: Difficulty; moduleThemes: string[]; projectTitle: string; projectTech: string[] }> = [
-    { name: `Foundations of ${goalTitle}`, description: `Build core mental models, tooling, and vocabulary for ${goal}. No prior experience assumed.`, difficulty: 'beginner', moduleThemes: ['Environment & Tooling', 'Core Concepts & Terminology', 'First Principles', 'Hands-on Basics'], projectTitle: `Starter Sandbox: ${goalTitle} Hello-World Project`, projectTech: ['Git', 'CLI', 'Editor/IDE'] },
-    { name: `Essential Skills in ${goalTitle}`, description: `Develop the day-to-day competencies every practitioner needs, with guided practice.`, difficulty: 'beginner', moduleThemes: ['Working with Data', 'Core Patterns', 'Debugging & Testing', 'Small Projects'], projectTitle: `Guided Mini-Project: First Functional Build`, projectTech: ['Git', 'Unit Tests'] },
-    { name: `Intermediate ${goalTitle}`, description: `Move beyond basics into structured, reusable, and maintainable approaches.`, difficulty: 'intermediate', moduleThemes: ['Structures & Abstractions', 'Design Patterns', 'Working at Scale', 'Integration'], projectTitle: `Component Builder: Reusable Module Suite`, projectTech: ['Package Manager', 'Framework'] },
-    { name: `Applied ${goalTitle}`, description: `Combine skills into real systems with external integrations and workflows.`, difficulty: 'intermediate', moduleThemes: ['APIs & Interfaces', 'Persistence & State', 'Concurrency & Flow', 'Observability'], projectTitle: `Integrated Service: End-to-End Feature`, projectTech: ['REST/HTTP', 'Database', 'CI'] },
-    { name: `Advanced ${goalTitle}`, description: `Tackle performance, architecture, and production-grade engineering.`, difficulty: 'advanced', moduleThemes: ['Performance & Optimization', 'Architecture & Scaling', 'Security & Reliability', 'Automation'], projectTitle: `Production-Grade System: Scalable Build`, projectTech: ['Cloud', 'Containers', 'Monitoring'] },
-    { name: `Expert & Specialization in ${goalTitle}`, description: `Mastery, specialization, and capstone-level engineering for ${goal}.`, difficulty: 'expert', moduleThemes: ['Advanced Specialization', 'Research & Cutting-Edge Topics', 'System Design at Scale', 'Leadership & Mentoring'], projectTitle: `Capstone: Expert Portfolio Masterpiece`, projectTech: ['Cloud-Native', 'Distributed Systems'] }
-  ];
+  const domain = detectGoalDomain(goal);
+  const phasePlan = getDomainPhasePlan(domain, goal, goalTitle);
 
   const phases = phasePlan.map((plan, pIdx) => {
     const phaseId = `ph-${pIdx + 1}`;
@@ -545,7 +702,7 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
         lessons.push({
           id: lessonId, name: `${theme}: Lesson ${l + 1}`, description: `Learn and apply ${theme.toLowerCase()} in the context of ${goal}.`,
           learningObjectives: [`Apply ${theme} concepts to ${goal}`, `Complete a guided exercise reinforcing ${theme.toLowerCase()}`],
-          prerequisites: prereqs, skillTags: [String(goal).toLowerCase().split(' ')[0], theme.toLowerCase().replace(/[^a-z0-9]+/g, '-')].filter(Boolean),
+          prerequisites: prereqs, skillTags: (plan.skillTags && plan.skillTags.length > 0 ? plan.skillTags.slice(0, 3) : [String(goal).toLowerCase().split(' ')[0], theme.toLowerCase().replace(/[^a-z0-9]+/g, '-')]).filter(Boolean),
           difficulty: plan.difficulty === 'expert' ? 'advanced' : plan.difficulty, estimatedMinutes: 20 + ((lessonCounter * 5) % 20),
           type: 'learn', status: isFirstOverall ? 'available' : 'locked', contentStatus: 'pending', xpReward: 25
         });
@@ -571,7 +728,7 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
     const projectTier = PROJECT_LADDER[Math.min(PROJECT_LADDER.length - 1, pIdx)];
     return {
       id: phaseId, name: plan.name, description: plan.description, estimatedHours: 12 + (pIdx * 2), difficulty: plan.difficulty,
-      skillsCovered: plan.moduleThemes.map((t) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-')), modules,
+      skillsCovered: (plan as any).skillTags?.length ? (plan as any).skillTags : plan.moduleThemes.map((t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-')), modules,
       projects: [{ id: `proj-${pIdx + 1}`, title: plan.projectTitle, difficulty: projectTier, description: `Apply everything from ${plan.name} to ship ${plan.projectTitle}. Build incrementally, test continuously, and document your work for ${goal}.`, techStack: plan.projectTech, features: ['Scaffold the project structure', 'Implement core feature set', 'Add tests and documentation', 'Deploy or demo the result'], progress: 0 }]
     };
   });

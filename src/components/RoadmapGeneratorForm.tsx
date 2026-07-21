@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, GraduationCap, X } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Sparkles, GraduationCap, X, CheckCircle2 } from 'lucide-react';
 import { buttonStyles } from '../styles/theme';
 
 export interface RoadmapGeneratorParams {
@@ -10,6 +11,10 @@ export interface RoadmapGeneratorParams {
 }
 
 interface RoadmapGeneratorFormProps {
+  /** Called with the fully-generated roadmap JSON once the stream completes. */
+  onRoadmapReady?: (roadmap: any) => void;
+  /** Legacy callback kept for backward compatibility — called with form params
+   *  when the streaming endpoint is unavailable. */
   onSubmit: (params: RoadmapGeneratorParams) => Promise<void>;
   isGenerating: boolean;
   onCancel?: () => void;
@@ -24,31 +29,35 @@ const GOAL_CHIPS = [
   'iOS App Development',
 ];
 
-const LOADING_QUOTES = [
-  'Mapping out your learning phases...',
-  'Building your quizzes...',
-  'Setting up your coding exercises...',
-  'Generating your personalized lessons...',
-  'Putting together your milestones...',
-];
-
-export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: RoadmapGeneratorFormProps) {
+export function RoadmapGeneratorForm({
+  onRoadmapReady,
+  onSubmit,
+  isGenerating,
+  onCancel,
+}: RoadmapGeneratorFormProps) {
   const [goal, setGoal] = useState('');
   const [goalError, setGoalError] = useState('');
   const [experienceLevel, setExperienceLevel] = useState('Beginner');
   const [weeklyHours, setWeeklyHours] = useState(10);
   const [preferredStyle, setPreferredStyle] = useState('Hands-on');
-  const [quoteIdx, setQuoteIdx] = useState(0);
-  const goalInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (isGenerating) {
-      const interval = setInterval(() => {
-        setQuoteIdx(prev => (prev + 1) % LOADING_QUOTES.length);
-      }, 2500);
-      return () => clearInterval(interval);
-    }
-  }, [isGenerating]);
+  // ── Streaming state ──────────────────────────────────────────────────────────
+  const [streamPhases, setStreamPhases] = useState<string[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Clean up stream on unmount.
+  useEffect(() => () => { abortRef.current?.abort(); }, []);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+
+  const handleCancel = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsStreaming(false);
+    setStreamPhases([]);
+    onCancel?.();
+  }, [onCancel]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,15 +66,88 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
       return;
     }
     setGoalError('');
-    await onSubmit({ goal: goal.trim(), experienceLevel, weeklyHours: Number(weeklyHours), preferredStyle });
+
+    const params: RoadmapGeneratorParams = {
+      goal: goal.trim(),
+      experienceLevel,
+      weeklyHours: Number(weeklyHours),
+      preferredStyle,
+    };
+
+    // Try the SSE streaming endpoint first.
+    if (onRoadmapReady) {
+      setIsStreaming(true);
+      setStreamPhases([]);
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const res = await fetch('/api/generate-roadmap-stream', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': (document.cookie.match(/csrf-token=([^;]+)/) || [])[1] || '',
+          },
+          body: JSON.stringify(params),
+          signal: controller.signal,
+        });
+
+        if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE frames are separated by \n\n
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() ?? '';
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith('data:')) continue;
+            try {
+              const event = JSON.parse(line.slice(5).trim());
+              if (event.type === 'phase' && event.name) {
+                setStreamPhases(prev => [...prev, String(event.name)]);
+              } else if (event.type === 'done' && event.roadmap) {
+                setIsStreaming(false);
+                setStreamPhases([]);
+                setGoal('');
+                onRoadmapReady(event.roadmap);
+                return;
+              }
+            } catch {
+              // malformed SSE line — skip
+            }
+          }
+        }
+        // Stream ended without a done event — fall through to legacy path.
+        throw new Error('Stream ended without a roadmap');
+      } catch (err: any) {
+        if (err.name === 'AbortError') return; // user cancelled — do nothing
+        console.warn('[RoadmapGeneratorForm] SSE stream failed, falling back:', err.message);
+        setIsStreaming(false);
+        setStreamPhases([]);
+        // Fall through to legacy onSubmit.
+      }
+    }
+
+    // Legacy path (no SSE or SSE failed).
+    await onSubmit(params);
     setGoal('');
   };
 
   const handleChipClick = (chip: string) => {
     setGoal(chip);
     setGoalError('');
-    goalInputRef.current?.focus();
   };
+
+  const busy = isGenerating || isStreaming;
 
   return (
     <div className="rounded-2xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 shadow-sm overflow-hidden">
@@ -94,7 +176,8 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
                   key={chip}
                   type="button"
                   onClick={() => handleChipClick(chip)}
-                  className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors
+                  disabled={busy}
+                  className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors disabled:opacity-50
                     ${goal === chip
                       ? 'bg-purple-600 text-white border-purple-600'
                       : 'border-purple-200 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/20'
@@ -105,12 +188,12 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
               ))}
             </div>
             <input
-              ref={goalInputRef}
               type="text"
               value={goal}
               onChange={e => { setGoal(e.target.value); if (goalError) setGoalError(''); }}
               placeholder="e.g., Build a full-stack application with React and Node.js"
-              className={`w-full px-4 py-2.5 bg-white dark:bg-white/5 border rounded-xl text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500 ${goalError ? 'border-red-400 dark:border-red-500' : 'border-zinc-200 dark:border-white/10'}`}
+              disabled={busy}
+              className={`w-full px-4 py-2.5 bg-white dark:bg-white/5 border rounded-xl text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60 ${goalError ? 'border-red-400 dark:border-red-500' : 'border-zinc-200 dark:border-white/10'}`}
             />
             {goalError && (
               <p className="text-xs text-red-500 dark:text-red-400 mt-1">{goalError}</p>
@@ -126,7 +209,8 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
               <select
                 value={experienceLevel}
                 onChange={e => setExperienceLevel(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={busy}
+                className="w-full px-3 py-2 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60"
               >
                 <option>Beginner</option>
                 <option>Intermediate</option>
@@ -143,9 +227,10 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
                 <input
                   type="range" min={1} max={40} step={1} value={weeklyHours}
                   onChange={e => setWeeklyHours(Number(e.target.value))}
+                  disabled={busy}
                   aria-label="Weekly study hours"
                   aria-valuetext={`${weeklyHours} hours per week`}
-                  className="flex-1 accent-purple-600 cursor-pointer"
+                  className="flex-1 accent-purple-600 cursor-pointer disabled:opacity-60"
                 />
                 <span className="text-xs text-zinc-400">40</span>
               </div>
@@ -158,7 +243,8 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
               <select
                 value={preferredStyle}
                 onChange={e => setPreferredStyle(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                disabled={busy}
+                className="w-full px-3 py-2 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl text-sm text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60"
               >
                 <option>Hands-on</option>
                 <option>Visual</option>
@@ -171,16 +257,16 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
           <div className="flex gap-3">
             <button
               type="submit"
-                disabled={isGenerating || goal.trim().length < 3}
+              disabled={busy || goal.trim().length < 3}
               className={`flex-1 py-3 rounded-xl text-sm font-bold ${buttonStyles.primary} flex items-center justify-center gap-2 disabled:opacity-50 transition-all`}
             >
               <Sparkles className="w-4 h-4" />
-              <span>{isGenerating ? 'Generating...' : 'Create My Roadmap'}</span>
+              <span>{busy ? 'Generating...' : 'Create My Roadmap'}</span>
             </button>
-            {isGenerating && onCancel && (
+            {busy && (
               <button
                 type="button"
-                onClick={onCancel}
+                onClick={handleCancel}
                 className="px-4 py-3 rounded-xl text-sm font-semibold bg-zinc-100 dark:bg-white/5 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/10 border border-zinc-200 dark:border-white/10 transition-colors flex items-center gap-1.5"
               >
                 <X className="w-4 h-4" /> Cancel
@@ -190,22 +276,63 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
         </form>
       </div>
 
-      {/* loading indicator */}
-      {isGenerating && (
-        <div className="px-6 pb-6 pt-2 border-t border-zinc-100 dark:border-white/10">
-          <div className="flex items-center gap-4 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-500/30">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center animate-spin flex-shrink-0">
-              <Sparkles className="w-4 h-4 text-white" />
+      {/* ── Streaming progress panel ── */}
+      <AnimatePresence>
+        {busy && (
+          <motion.div
+            key="stream-panel"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden border-t border-zinc-100 dark:border-white/10"
+          >
+            <div className="px-6 pb-6 pt-4 space-y-3">
+              {/* spinner row */}
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center animate-spin flex-shrink-0">
+                  <Sparkles className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-zinc-900 dark:text-white">Building your personalised roadmap…</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    {streamPhases.length > 0
+                      ? `${streamPhases.length} phase${streamPhases.length !== 1 ? 's' : ''} planned`
+                      : 'Waiting for AI response…'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Phase progress track */}
+              {streamPhases.length > 0 && (
+                <div className="space-y-1.5 pl-11">
+                  {streamPhases.map((name, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="flex items-center gap-2"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
+                      <span className="text-xs text-zinc-700 dark:text-zinc-300 font-medium truncate">{name}</span>
+                    </motion.div>
+                  ))}
+                  {/* animated "building" indicator for the next phase */}
+                  <motion.div
+                    className="flex items-center gap-2"
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ repeat: Infinity, duration: 1.4 }}
+                  >
+                    <div className="w-3.5 h-3.5 rounded-full border-2 border-purple-400 border-t-transparent animate-spin flex-shrink-0" />
+                    <span className="text-xs text-purple-500 font-medium">Constructing next phase…</span>
+                  </motion.div>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-sm font-bold text-zinc-900 dark:text-white">Personalizing Your Roadmap</p>
-              <p className="text-xs text-purple-600 dark:text-purple-300 font-mono mt-0.5">
-                {LOADING_QUOTES[quoteIdx]}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

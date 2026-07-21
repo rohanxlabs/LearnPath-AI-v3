@@ -115,6 +115,121 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
   }
 });
 
+// ---------------------------------------------------------------------------
+// SSE streaming endpoint — emits phase names as the AI builds the roadmap,
+// then sends the complete roadmap as the final event.
+// Client receives: data: {"type":"phase","name":"..."}\n\n  ...repeated...
+//                  data: {"type":"done","roadmap":{...}}\n\n
+//                  data: {"type":"error","message":"..."}\n\n  (on hard fail)
+// ---------------------------------------------------------------------------
+router.post('/generate-roadmap-stream', aiLimiter, requireAuth, async (req, res) => {
+  const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;
+  if (!goal) { res.status(400).json({ error: 'Goal is required' }); return; }
+
+  // Set up SSE headers.
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no', // disable Nginx buffering
+  });
+
+  const send = (payload: object) => {
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  const meta = { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year };
+
+  // Emit the detected domain / phase plan upfront so the UI can show names
+  // immediately, before the AI even responds.
+  const { buildFallbackCurriculum: _bfc, ...curriculumExports } = await import('../lib/curriculum');
+  const { detectGoalDomain: _dgd, getDomainPhasePlan: _gdpp } = curriculumExports as any;
+
+  // We re-use the same generation logic as the non-streaming endpoint but emit
+  // phase names as they are extracted from the parsed JSON.
+  const sanitized = sanitizeForPrompt;
+  const universityContext = college && branch && year
+    ? `\nLearner is a ${sanitized(year)} student at ${sanitized(college)} studying ${sanitized(branch)}; align topics and ordering with their university syllabus (AKTU where applicable).`
+    : '';
+  const indiaContext = `\nAudience: Indian college/engineering learners. Flow like a semester (foundations -> core -> applied -> advanced -> specialization), blend theory with heavy coding, and include placement skills (DSA, system design, projects). Prefer globally-recognized resources.`;
+
+  const buildRoadmapPrompt = () => `You are a senior curriculum architect. Design a DEEP, degree-level learning curriculum for: "${sanitized(goal)}".
+Learner level: "${sanitized(experienceLevel || 'Beginner')}". Pace: ${sanitized(weeklyHours || 5)} hrs/week. Style: "${sanitized(preferredStyle || 'Hands-on')}".${universityContext}${indiaContext}
+
+STRUCTURE (mandatory, never under-deliver):
+- ${CURRICULUM_LIMITS.minPhases}-${CURRICULUM_LIMITS.maxPhases} phases; difficulty rises monotonically beginner -> intermediate -> advanced -> expert.
+- ${CURRICULUM_LIMITS.minModulesPerPhase}-${CURRICULUM_LIMITS.maxModulesPerPhase} modules per phase (difficulty rises within the phase).
+- ${CURRICULUM_LIMITS.minLessonsPerModule}-${CURRICULUM_LIMITS.maxLessonsPerModule} lessons per module (metadata only, NO lesson content/markdown/quizzes).
+
+NAMING & QUALITY:
+- Titles must be specific and domain-accurate (e.g. "Implementing Binary Search Trees"), never generic ("Introduction","Basics","Overview","Module 1","Project").
+- No duplicate lesson titles or module names anywhere. Descriptions: one concise, concrete sentence.
+- Order concepts logically (fundamentals first). Only reference real technologies; do not hallucinate.
+
+LESSON FIELDS: id "les-{phase}-{module}-{n}" (unique); name; description; learningObjectives (2-4 measurable outcomes, each a full phrase); prerequisites (1-3 EARLIER lesson ids forming a real chain, first lesson []); skillTags (2-5 specific lowercase tags like python,numpy,react,sql — never "basics"/"concepts"); difficulty beginner|intermediate|advanced; estimatedMinutes ${CURRICULUM_LIMITS.minLessonMinutes}-${CURRICULUM_LIMITS.maxLessonMinutes}; type "learn"; status "available" for the FIRST lesson only else "locked"; contentStatus "pending".
+
+MODULE FIELDS: id "mod-{phase}-{n}"; name; description; difficulty; estimatedHours 3-8; resources 2-4. Each resource: id, type documentation|video|practice|book, title, provider, url (real https), description. PREFER official documentation, official learning resources, high-quality YouTube playlists, interactive practice platforms, and well-known books; AVOID random blogs. Resources MUST match the module topic.
+
+PHASE FIELDS: id "ph-{n}"; name; description; estimatedHours 10-30; difficulty; skillsCovered (3-6 tags); projects (>=1). Projects reinforce that phase's concepts and get harder across phases using this ladder: mini-exercise -> mini-project -> real-application -> portfolio-project -> capstone. Each project: id, title, difficulty (one ladder value), description (2-3 sentences), techStack (real tools), features (3-6 concrete), progress 0.
+
+Return ONLY a JSON object of this exact shape (one example element shown per array; produce the full required counts):
+{"goal":"${sanitized(goal, 120)}","phases":[{"id":"ph-1","name":"...","description":"...","estimatedHours":18,"difficulty":"beginner","skillsCovered":["..."],"modules":[{"id":"mod-1-1","name":"...","description":"...","difficulty":"beginner","estimatedHours":5,"lessons":[{"id":"les-1-1-1","name":"...","description":"...","learningObjectives":["...","..."],"prerequisites":[],"skillTags":["...","..."],"difficulty":"beginner","estimatedMinutes":25,"type":"learn","status":"available","contentStatus":"pending"}],"resources":[{"id":"res-1-1-1","title":"...","type":"documentation","provider":"...","url":"https://...","description":"..."}]}],"projects":[{"id":"proj-1","title":"...","difficulty":"mini-exercise","description":"...","techStack":["..."],"features":["..."],"progress":0}]}]}`;
+
+  const MAX_RETRIES = 2;
+  let bestCandidate: { parsed: any; score: number } | null = null;
+
+  try {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const prompt = attempt === 0
+        ? buildRoadmapPrompt()
+        : `Your previous curriculum for "${sanitized(goal, 120)}" was REJECTED. Fix EVERY issue below and regenerate the COMPLETE curriculum:\n${(validateCurriculumQuality(bestCandidate!.parsed).issues.slice(0, 12).map((i: string) => `- ${i}`).join('\n'))}\n\nKeep the SAME JSON shape and all prior rules. Return ONLY the JSON object.`;
+
+      let parsed: any;
+      try {
+        const response = await callOpenRouterChatCompletion(prompt, { temperature: attempt === 0 ? 0.5 : 0.35, asJSON: true, timeoutMs: 30000, maxTokens: 8000 });
+        parsed = cleanAndParseJSON(response, '{}');
+      } catch (genErr: any) {
+        console.warn(`[Roadmap-Stream] Generation attempt ${attempt + 1} failed:`, genErr.message);
+        continue;
+      }
+
+      if (!parsed?.phases || !Array.isArray(parsed.phases) || parsed.phases.length === 0) continue;
+
+      // Emit phase names as soon as we have them.
+      for (const phase of parsed.phases) {
+        if (phase?.name) send({ type: 'phase', name: String(phase.name) });
+      }
+
+      const quality = validateCurriculumQuality(parsed);
+      if (!bestCandidate || quality.score > bestCandidate.score) bestCandidate = { parsed, score: quality.score };
+      if (quality.ok) break;
+    }
+
+    const finalParsed = (bestCandidate && bestCandidate.score >= 60 && Array.isArray(bestCandidate.parsed.phases))
+      ? bestCandidate.parsed
+      : null;
+
+    if (finalParsed) {
+      const normalized = validateAndNormalizeCurriculum(finalParsed, meta);
+      logCurriculumStats('AI-Stream', normalized);
+      send({ type: 'done', roadmap: normalized });
+    } else {
+      throw new Error('All generation attempts failed the quality gate');
+    }
+  } catch (error: any) {
+    console.error('[Roadmap-Stream] Falling back to local curriculum:', error.message);
+    const fallbackRoadmap = buildFallbackCurriculum(meta);
+    // Emit fallback phase names so the UI still animates.
+    for (const phase of fallbackRoadmap.phases || []) {
+      if (phase?.name) send({ type: 'phase', name: String(phase.name) });
+    }
+    logCurriculumStats('AI-Stream-Fallback', fallbackRoadmap);
+    send({ type: 'done', roadmap: fallbackRoadmap, fallback: true });
+  } finally {
+    res.end();
+  }
+});
+
 // Get all roadmaps for a user
 router.get('/roadmaps', requireAuth, async (req, res) => {
   const userEmail = req.session.userEmail!;

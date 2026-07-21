@@ -40,9 +40,15 @@ Rules:
   try {
     const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.7, asJSON: true });
     const parsed = cleanAndParseJSON(response, '{"projects":[]}');
-    return res.json({ projects: parsed.projects || [] });
+    // Ensure all project descriptions are specific to the goal, not generic.
+    const projects = (parsed.projects || []).filter(
+      (p: any) => p && typeof p.title === 'string' && typeof p.description === 'string'
+    );
+    return res.json({ projects });
   } catch (error: any) {
     console.error('[AI-Fallback] /api/generate-projects fallback:', error.message);
+    // Return empty array — the roadmap already has embedded phase projects.
+    // Better to show nothing than random unrelated project ideas.
     return res.json({ projects: [] });
   }
 });

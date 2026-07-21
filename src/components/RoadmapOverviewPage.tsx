@@ -27,6 +27,7 @@ interface RoadmapOverviewPageProps {
     weeklyHours: number;
     preferredStyle: string;
   }) => Promise<void>;
+  onRoadmapReady?: (roadmap: any) => void;
   isGenerating: boolean;
 }
 
@@ -45,6 +46,7 @@ export function RoadmapOverviewPage({
   onBack,
   onContinueLearning,
   onGenerateRoadmap,
+  onRoadmapReady,
   isGenerating,
 }: RoadmapOverviewPageProps) {
   const [lockedToast, setLockedToast] = useState<string | null>(null);
@@ -334,6 +336,10 @@ export function RoadmapOverviewPage({
         </button>
         {showGenerator && (
           <RoadmapGeneratorForm
+            onRoadmapReady={onRoadmapReady ? async (roadmap) => {
+              await onRoadmapReady(roadmap);
+              setShowGenerator(false);
+            } : undefined}
             onSubmit={async (params) => {
               await onGenerateRoadmap(params);
               setShowGenerator(false);
