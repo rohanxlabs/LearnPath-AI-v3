@@ -49,19 +49,30 @@ const ChatMessageItem = memo(({ ch, isGenerating }: { ch: ChatMessage; isGenerat
                     </div>
                   );
                 },
-                code({ className, children, ...props }) {
-                  return <code className={className} {...props}>{children}</code>;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                code({ className, children }: any) {
+                  return <code className={className}>{children}</code>;
                 },
-                h1: ({ node, ...props }) => <h1 className="font-display font-bold text-xl text-purple-300 mt-3 mb-2" {...props} />,
-                h2: ({ node, ...props }) => <h2 className="font-display font-bold text-lg text-purple-400 mt-3 mb-1.5" {...props} />,
-                h3: ({ node, ...props }) => <h3 className="font-display font-semibold text-base text-purple-300 mt-3 mb-1" {...props} />,
-                h4: ({ node, ...props }) => <h4 className="font-display font-semibold text-sm text-purple-300 mt-3 mb-1" {...props} />,
-                p: ({ node, ...props }) => <p className="mt-1.5 text-zinc-320 leading-relaxed" {...props} />,
-                ul: ({ node, ...props }) => <ul className="list-disc ml-4 mt-2 mb-2 text-zinc-300" {...props} />,
-                ol: ({ node, ...props }) => <ol className="list-decimal ml-4 mt-2 mb-2 text-zinc-300" {...props} />,
-                li: ({ node, ...props }) => <li className="mt-1" {...props} />,
-                strong: ({ node, ...props }) => <strong className="text-white font-bold" {...props} />,
-                em: ({ node, ...props }) => <em className="text-zinc-200 italic" {...props} />
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                h1: ({ children }: any) => <h1 className="font-display font-bold text-xl text-purple-300 mt-3 mb-2">{children}</h1>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                h2: ({ children }: any) => <h2 className="font-display font-bold text-lg text-purple-400 mt-3 mb-1.5">{children}</h2>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                h3: ({ children }: any) => <h3 className="font-display font-semibold text-base text-purple-300 mt-3 mb-1">{children}</h3>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                h4: ({ children }: any) => <h4 className="font-display font-semibold text-sm text-purple-300 mt-3 mb-1">{children}</h4>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                p: ({ children }: any) => <p className="mt-1.5 leading-relaxed">{children}</p>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ul: ({ children }: any) => <ul className="list-disc ml-4 mt-2 mb-2 text-zinc-300">{children}</ul>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ol: ({ children }: any) => <ol className="list-decimal ml-4 mt-2 mb-2 text-zinc-300">{children}</ol>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                li: ({ children }: any) => <li className="mt-1">{children}</li>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                strong: ({ children }: any) => <strong className="text-white font-bold">{children}</strong>,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                em: ({ children }: any) => <em className="text-zinc-200 italic">{children}</em>
               }}
             >
               {ch.text}

@@ -8,6 +8,11 @@ import { HomeView } from './components/HomeView';
 import { SplashScreen } from './components/SplashScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion } from 'motion/react';
+import { FeedbackWidget } from './components/FeedbackWidget';
+import { OnboardingWizard } from './components/OnboardingWizard';
+import type { OnboardingData } from './components/OnboardingWizard';
+import { TermsPage, PrivacyPage } from './components/LegalPages';
+import { useAnalytics } from './hooks/useAnalytics';
 
 // Route-level code splitting: each tab/view below is only fetched the first
 // time the user actually navigates to it, instead of shipping in the main
@@ -161,8 +166,16 @@ export function renderHomeView(
 
 export default function App() {
   const pwa = usePWA();
+  const { track, identify, page } = useAnalytics();
+
   const [showOnlineToast, setShowOnlineToast] = useState(false);
   const [wasOffline, setWasOffline] = useState(false);
+
+  // Legal page routing
+  const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | null>(null);
+
+  // Onboarding: show wizard for brand-new users (no roadmaps yet, first login)
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (!pwa.isOnline) {
@@ -280,6 +293,9 @@ export default function App() {
           });
           setRoadmaps(uniqueList);
           setActiveRoadmapId(uniqueList[0]?.id || '');
+
+          // PostHog: identify the user for analytics
+          identify(data.email, { name: data.profile?.name || '' });
 
           setIsAuthenticated(true);
         } else {
@@ -523,8 +539,17 @@ export default function App() {
       setAchievements([]);
       setNotifications([]);
       setChats([]);
+      // PostHog: identify on login/signup
+      identify(data.email || email, { name: name });
+      track(mode === 'signup' ? 'user_signed_up' : 'user_logged_in');
+
       setIsAuthenticated(true);
       syncRoadmapsFromDatabase();
+
+      // Show onboarding wizard for new signups with no roadmaps
+      if (mode === 'signup') {
+        setShowOnboarding(true);
+      }
       
       if (showAuthModal) {
         setShowAuthModal(false);
@@ -1485,8 +1510,10 @@ export default function App() {
     );
   }
 
-  // If not authenticated, show landing page
+  // If not authenticated, show landing page (or legal pages)
   if (!isAuthenticated) {
+    if (legalPage === 'terms') return <TermsPage onBack={() => setLegalPage(null)} />;
+    if (legalPage === 'privacy') return <PrivacyPage onBack={() => setLegalPage(null)} />;
     if (showAuthModal) {
       return renderAuthUI();
     }
@@ -1501,8 +1528,24 @@ export default function App() {
             setAuthMode('login');
             setShowAuthModal(true);
           }}
+          onTerms={() => setLegalPage('terms')}
+          onPrivacy={() => setLegalPage('privacy')}
         />
       </Suspense>
+    );
+  }
+
+  // Onboarding wizard for brand-new users
+  if (showOnboarding) {
+    return (
+      <OnboardingWizard
+        userName={profile.name || 'there'}
+        onComplete={(data: OnboardingData) => {
+          setShowOnboarding(false);
+          track('onboarding_completed', { goal: data.goal, experience: data.experienceLevel });
+          handleGenerateRoadmap(data);
+        }}
+      />
     );
   }
 
@@ -1688,6 +1731,13 @@ export default function App() {
           />
         </Suspense>
       )}
+
+      {/* Feedback widget — visible on all authenticated screens */}
+      <FeedbackWidget context={activeTab} />
+
+      {/* Legal pages accessible from authenticated app via footer in profile or sidebar */}
+      {legalPage === 'terms' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-[#0A0A0A]"><TermsPage onBack={() => setLegalPage(null)} /></div>}
+      {legalPage === 'privacy' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-[#0A0A0A]"><PrivacyPage onBack={() => setLegalPage(null)} /></div>}
     </div>
     </ErrorBoundary>
   );

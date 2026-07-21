@@ -1,0 +1,61 @@
+# Render deployment configuration (Infrastructure as Code)
+# https://render.com/docs/render-yaml-spec
+#
+# To use this file:
+#   1. Push to GitHub
+#   2. In Render dashboard → New → Blueprint → connect your repo
+#   3. Render will detect this file and provision the service automatically
+#
+# Secrets are set in the Render dashboard under Environment → Secret Files / Env Vars.
+# Never commit actual secret values here.
+
+services:
+  - type: web
+    name: learnpath-ai
+    runtime: node
+    region: oregon          # Change to: ohio | virginia | frankfurt | singapore
+    plan: starter           # starter (free) | standard | pro
+    branch: main
+
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    startCommand: node dist/server.cjs
+
+    healthCheckPath: /api/health
+
+    # Render sets PORT automatically; the app reads process.env.PORT
+    # All other secrets are added in the dashboard (Environment tab)
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # Secrets — set the actual values in the Render dashboard:
+      - key: DATABASE_URL
+        sync: false          # marks as secret, value entered in dashboard
+      - key: SESSION_SECRET
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false          # set to your Render public URL, e.g. https://learnpath-ai.onrender.com
+      # Optional — remove or leave blank if not using:
+      - key: SENTRY_DSN
+        sync: false
+      - key: VITE_SENTRY_DSN
+        sync: false
+      - key: SENTRY_AUTH_TOKEN
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: REDIS_TOKEN
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: VITE_POSTHOG_KEY
+        sync: false
+      - key: VITE_POSTHOG_HOST
+        value: https://app.posthog.com

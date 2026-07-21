@@ -5,9 +5,11 @@ import { Sparkles, Bot, Shield, Zap, BookOpen, Brain, Code, BarChart3 } from 'lu
 interface LandingPageProps {
   onGetStarted: () => void;
   onSignIn: () => void;
+  onTerms: () => void;
+  onPrivacy: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn, onTerms, onPrivacy }) => {
   const features = [
     {
       icon: Bot,
@@ -125,6 +127,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onSignIn
           >
             Create Your First Roadmap
           </motion.button>
+        </motion.div>
+
+        {/* Footer legal links */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.0, duration: 0.5 }}
+          className="flex items-center justify-center gap-6 mt-10 text-xs text-zinc-600"
+        >
+          <button onClick={onTerms} className="hover:text-zinc-400 transition-colors">Terms of Service</button>
+          <span>·</span>
+          <button onClick={onPrivacy} className="hover:text-zinc-400 transition-colors">Privacy Policy</button>
+          <span>·</span>
+          <span>© {new Date().getFullYear()} LearnPath AI</span>
         </motion.div>
       </div>
     </div>

@@ -3,22 +3,66 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>LearnPath AI • Personalized Learning Roadmap Tree</title>
-    
-    <!-- PWA Manifest & Themes -->
+    <title>LearnPath AI • AI-Powered Personalized Learning Roadmaps</title>
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- SEO Meta Tags                                                        -->
+    <!-- ------------------------------------------------------------------ -->
+    <meta name="description" content="LearnPath AI generates personalised learning roadmaps powered by AI. Set your goal, track your progress, and master new skills with an interactive AI mentor." />
+    <meta name="keywords" content="learning roadmap, AI learning, personalised education, online courses, skill development, programming, data science, AI mentor" />
+    <meta name="author" content="LearnPath AI" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://learnpath.ai/" />
+
+    <!-- Open Graph (Facebook, LinkedIn, WhatsApp) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://learnpath.ai/" />
+    <meta property="og:title" content="LearnPath AI • AI-Powered Personalised Learning Roadmaps" />
+    <meta property="og:description" content="Generate your own custom AI learning roadmap in seconds. Track lessons, earn XP, and get answers from an AI mentor." />
+    <meta property="og:image" content="https://learnpath.ai/og-image.jpg" />
+    <meta property="og:site_name" content="LearnPath AI" />
+
+    <!-- Twitter / X Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@learnpathai" />
+    <meta name="twitter:title" content="LearnPath AI • AI-Powered Learning Roadmaps" />
+    <meta name="twitter:description" content="Generate your own custom AI learning roadmap in seconds. Track lessons, earn XP, and get answers from an AI mentor." />
+    <meta name="twitter:image" content="https://learnpath.ai/og-image.jpg" />
+
+    <!-- ------------------------------------------------------------------ -->
+    <!-- PWA Manifest & Theme                                                  -->
+    <!-- ------------------------------------------------------------------ -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#8b5cf6" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    
+
     <!-- Apple iOS / Safari Support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="LearnPath AI" />
     <link rel="apple-touch-icon" href="/icon-192.jpg" />
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "LearnPath AI",
+      "description": "AI-powered personalised learning platform that generates custom roadmaps, tracks progress, and provides interactive AI mentoring.",
+      "url": "https://learnpath.ai",
+      "applicationCategory": "EducationApplication",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "featureList": [
+        "AI-generated learning roadmaps",
+        "Interactive AI mentor chat",
+        "Progress tracking and XP system",
+        "Quiz and coding exercises"
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
