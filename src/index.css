@@ -783,3 +783,90 @@ body {
   background: rgba(255, 255, 255, 0.78) !important;
   border-color: rgba(168, 85, 247, 0.2) !important;
 }
+
+/* ==========================================================================
+   lp-dark — Landing page dark-theme isolation
+   Cancels every .light colour / background override so the dark landing page
+   renders correctly even when .light is set on <html> / <body>.
+   ========================================================================== */
+
+/* Restore colours for all text elements inside the landing page */
+.lp-dark,
+.lp-dark *,
+.lp-dark h1,
+.lp-dark h2,
+.lp-dark h3,
+.lp-dark h4,
+.lp-dark h5,
+.lp-dark h6,
+.lp-dark p,
+.lp-dark span,
+.lp-dark li,
+.lp-dark button,
+.lp-dark a {
+  text-shadow: none !important;
+}
+
+/* All explicit colour utilities used in the landing page */
+.lp-dark .text-white           { color: #ffffff !important; }
+.lp-dark .text-white\/85       { color: rgba(255,255,255,0.85) !important; }
+.lp-dark .text-white\/90       { color: rgba(255,255,255,0.90) !important; }
+.lp-dark .text-white\/80       { color: rgba(255,255,255,0.80) !important; }
+.lp-dark .text-zinc-100        { color: #f4f4f5 !important; }
+.lp-dark .text-zinc-200        { color: #e4e4e7 !important; }
+.lp-dark .text-zinc-300        { color: #d4d4d8 !important; }
+.lp-dark .text-zinc-400        { color: #a1a1aa !important; }
+.lp-dark .text-zinc-500        { color: #71717a !important; }
+.lp-dark .text-purple-200      { color: #e9d5ff !important; }
+.lp-dark .text-purple-300      { color: #d8b4fe !important; }
+.lp-dark .text-purple-400      { color: #c084fc !important; }
+.lp-dark .text-cyan-300        { color: #67e8f9 !important; }
+.lp-dark .text-cyan-400        { color: #22d3ee !important; }
+.lp-dark .text-emerald-300     { color: #6ee7b7 !important; }
+.lp-dark .text-emerald-400     { color: #34d399 !important; }
+.lp-dark .text-amber-400       { color: #fbbf24 !important; }
+.lp-dark .text-amber-500       { color: #f59e0b !important; }
+.lp-dark .text-sky-400         { color: #38bdf8 !important; }
+.lp-dark .text-rose-400        { color: #fb7185 !important; }
+.lp-dark .text-pink-400        { color: #f472b6 !important; }
+.lp-dark .text-indigo-400      { color: #818cf8 !important; }
+.lp-dark .text-transparent     { color: transparent !important; }
+
+/* Headings — override the blanket .light heading colour */
+.lp-dark h1,
+.lp-dark h2,
+.lp-dark h3,
+.lp-dark h4 { color: #ffffff !important; }
+
+/* Paragraphs — the .light p rule forces dark; reset to inherit so explicit classes win */
+.lp-dark p  { color: inherit !important; }
+
+/* Backgrounds — ensure dark cards stay dark */
+.lp-dark .bg-\[#0d1425\]   { background-color: #0d1425 !important; }
+.lp-dark .bg-\[#0b1324\]   { background-color: #0b1324 !important; }
+.lp-dark .bg-\[#0c152b\]   { background-color: #0c152b !important; }
+.lp-dark .bg-\[#080e1e\]   { background-color: #080e1e !important; }
+.lp-dark .bg-\[#0f1630\]   { background-color: #0f1630 !important; }
+.lp-dark .bg-\[#050816\]   { background-color: #050816 !important; }
+.lp-dark .bg-\[#090d1f\]   { background-color: #090d1f !important; }
+.lp-dark .bg-\[#080e20\]   { background-color: #080e20 !important; }
+
+/* Borders — keep white-alpha borders visible */
+.lp-dark [class*="border-white\/"] { border-color: revert !important; }
+.lp-dark [class*="border-purple-"] { border-color: revert !important; }
+
+/* Gradient text — ensure bg-clip-text is never overridden */
+.lp-dark [class*="bg-gradient-to-"] { color: revert !important; }
+.lp-dark .bg-clip-text { -webkit-background-clip: text !important; background-clip: text !important; }
+
+/* Button gradients — text must stay white */
+.lp-dark button[class*="bg-gradient-to-"],
+.lp-dark button[class*="bg-gradient-to-"] * { color: #ffffff !important; }
+
+/* Misc size / font overrides from .light — reset to base */
+.lp-dark .text-xs   { font-size: 0.75rem  !important; line-height: 1rem      !important; }
+.lp-dark .text-sm   { font-size: 0.875rem !important; line-height: 1.25rem   !important; }
+.lp-dark .text-base { font-size: 1rem     !important; line-height: 1.5rem    !important; }
+.lp-dark .text-lg   { font-size: 1.125rem !important; line-height: 1.75rem   !important; }
+.lp-dark .text-xl   { font-size: 1.25rem  !important; line-height: 1.75rem   !important; }
+.lp-dark [class*="text-["] { font-size: revert !important; line-height: revert !important; }
