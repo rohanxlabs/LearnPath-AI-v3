@@ -111,6 +111,7 @@ function GlassCard({
   tint = 'glass-card',
   interactive = true,
 }: {
+  key?: React.Key;
   children: React.ReactNode;
   className?: string;
   tint?: string;

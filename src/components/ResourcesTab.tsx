@@ -170,7 +170,7 @@ const FilterControls = ({ searchTerm, setSearchTerm, filterType, setFilterType, 
   </div>
 );
 
-const ResourceGrid = ({ resources, completedIds, savedIds, onToggleCompleted, onToggleSaved }) => {
+const ResourceGrid = ({ resources, completedIds, savedIds, onToggleCompleted, onToggleSaved }: { resources: any[]; completedIds: any[]; savedIds: any[]; onToggleCompleted: any; onToggleSaved: any }) => {
   if (resources.length === 0) {
     return (
       <EmptyState
@@ -190,7 +190,7 @@ const ResourceGrid = ({ resources, completedIds, savedIds, onToggleCompleted, on
   );
 };
 
-const ResourceCard = ({ resource, isCompleted, isSaved, onToggleCompleted, onToggleSaved }) => {
+const ResourceCard = ({ resource, isCompleted, isSaved, onToggleCompleted, onToggleSaved }: { resource: any; isCompleted: any; isSaved: any; onToggleCompleted: any; onToggleSaved: any }) => {
   const getResourceIcon = (type: string) => {
     switch (type) {
       case 'video': return <Video className="w-4 h-4 text-rose-400" />;

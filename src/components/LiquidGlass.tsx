@@ -117,6 +117,7 @@ export function LiquidButton({ className = '', variant = 'ghost', children, ...p
 
 export interface LiquidGlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   glassEffect?: boolean;
+  children?: React.ReactNode;
 }
 
 export function LiquidGlassCard({ className = '', glassEffect = true, children, ...props }: LiquidGlassCardProps) {

@@ -18,6 +18,7 @@ export function Skeleton({ className = '', width, height, style }: SkeletonProps
 }
 
 interface SkeletonCardProps {
+  key?: React.Key;
   className?: string;
 }
 

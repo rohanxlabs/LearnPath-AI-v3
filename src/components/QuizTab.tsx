@@ -310,7 +310,7 @@ const Header = () => (
   </div>
 );
 
-const QuizList = ({ quizzes, onStartQuiz }) => (
+const QuizList = ({ quizzes, onStartQuiz }: { quizzes: any[]; onStartQuiz: any }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
     {quizzes.map(quiz => (
       <QuizCard key={quiz.id} quiz={quiz} onStartQuiz={onStartQuiz} />
@@ -318,7 +318,7 @@ const QuizList = ({ quizzes, onStartQuiz }) => (
   </div>
 );
 
-const QuizCard = ({ quiz, onStartQuiz }) => (
+const QuizCard = ({ quiz, onStartQuiz }: { quiz: any; onStartQuiz: any }) => (
   <div className="p-5 rounded-2xl border border-white/10 bg-white/5 shadow-lg flex flex-col gap-4">
     <div className="flex-grow space-y-4">
       <div className="flex justify-between items-start">
@@ -349,7 +349,7 @@ const QuizCard = ({ quiz, onStartQuiz }) => (
   </div>
 );
 
-const PrepResource = ({ resource }) => {
+const PrepResource = ({ resource }: { resource: any }) => {
     const iconMap = { video: <Video size={16} />, course: <Bookmark size={16} />, book: <BookOpen size={16} /> };
     return (
         <a href={resource.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors">
