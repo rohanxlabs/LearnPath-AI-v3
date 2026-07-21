@@ -987,15 +987,14 @@ export default function App() {
     }
   };
 
-  // Custom quick selectors for cards
-  const handleSelectRecommendationTask = (rec: any) => {
+  // Custom quick selectors for cards — stable reference via useCallback to avoid
+  // HomeView re-rendering whenever unrelated App state changes.
+  const handleSelectRecommendationTask = useCallback((rec: any) => {
     if (rec.category === 'mentor') {
       setActiveTab('mentor');
       handleSendMessage(`Can you explain details about ${rec.title}?`);
     } else {
-      // Direct jump onto Roadmaps section to continue active phases
       setActiveTab('roadmaps');
-      // Set level id default expand
       const activeRm = roadmaps.find(r => r.id === activeRoadmapId) || roadmaps[0];
       if (!activeRm) return;
       const activePhase = activeRm.phases.find(p => p.status === 'current') || activeRm.phases[0];
@@ -1003,14 +1002,14 @@ export default function App() {
       const activeLevel = activePhase.levels.find(l => l.status === 'current') || activePhase.levels[0];
       if (!activeLevel) return;
       const firstAvailableLesson = activeLevel.lessons.find(l => l.status === 'available') || activeLevel.lessons[0];
-      
       setActiveLesson({
         phaseId: activePhase.id,
         levelId: activeLevel.id,
         lessonId: firstAvailableLesson.id
       });
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roadmaps, activeRoadmapId]);
 
   // Notification management callbacks
   const handleToggleReadNotification = (id: string) => {
@@ -1703,19 +1702,25 @@ export default function App() {
       )}
 
 {/* Primary tab Content Layout with desktop alignment container constraint */}
-      <main className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}>
-        <Suspense fallback={<TabFallback />}>
-          {activeLesson && activeRoadmap ? (
-            <LearningWorkspace
-              roadmap={activeRoadmap}
-              activeLesson={activeLesson}
-              onCompleteLesson={(xpAdded, lessonId) => handleLessonComplete(xpAdded, lessonId)}
-              onNavigateToLesson={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
-            />
-          ) : (
-            renderTabContent()
-          )}
-        </Suspense>
+      <main
+        className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}
+        style={{ contain: 'layout style' }}
+      >
+        {/* Per-tab ErrorBoundary: a crash in one tab doesn't take down the whole app */}
+        <ErrorBoundary key={activeLesson ? `lesson-${activeLesson.lessonId}` : activeTab}>
+          <Suspense fallback={<TabFallback />}>
+            {activeLesson && activeRoadmap ? (
+              <LearningWorkspace
+                roadmap={activeRoadmap}
+                activeLesson={activeLesson}
+                onCompleteLesson={(xpAdded, lessonId) => handleLessonComplete(xpAdded, lessonId)}
+                onNavigateToLesson={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
+              />
+            ) : (
+              renderTabContent()
+            )}
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       {/* Modern Floating PWA Interaction and State Notifications */}

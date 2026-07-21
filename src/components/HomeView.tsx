@@ -27,7 +27,7 @@ import { motion } from 'motion/react';
 import { UserProfile, Roadmap, Phase, Achievement } from '../types';
 import { AIRecommendationCard } from './Cards';
 import { StreakBadge } from './Badges';
-import { Skeleton, SkeletonCard, LoadingSpinner, SkeletonHeader, SkeletonRoadmapCard, SkeletonNotificationCard } from './Skeleton';
+import { Skeleton, SkeletonCard, LoadingSpinner, SkeletonHeader, SkeletonRoadmapCard, SkeletonNotificationCard, SkeletonHomeHero } from './Skeleton';
 import {
   computeRoadmapStats,
   deriveProgressInsights,
@@ -222,25 +222,26 @@ export function HomeView({
   if (isLoading) {
     return (
       <div className="home-view space-y-8 pb-2 max-w-full overflow-x-hidden">
-        <SkeletonHeader />
+        {/* SkeletonHomeHero matches the real hero's rounded-2xl dimensions exactly — prevents CLS */}
+        <SkeletonHomeHero />
         <div className="space-y-3">
-          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-32" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-8 w-14" />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-7 w-14" />
                 <Skeleton className="h-3 w-16" />
               </div>
             ))}
           </div>
         </div>
         <div className="space-y-3">
-          <Skeleton className="h-4 w-36" />
-          <div className="p-5 sm:p-6 rounded-3xl bg-white/5 border border-white/10 space-y-3">
+          <Skeleton className="h-3 w-36" />
+          <div className="p-5 sm:p-6 rounded-2xl bg-white/5 border border-white/10 space-y-3">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-3 w-5/6" />
-            <Skeleton className="h-10 w-full sm:w-auto rounded-xl" />
+            <Skeleton className="h-10 w-40 rounded-xl" />
           </div>
         </div>
         <div className="space-y-3">
@@ -311,7 +312,8 @@ export function HomeView({
     }
   };
 
-  const snapshotCards = [
+  // Memoized to prevent recreation on every render caused by unrelated App state changes
+  const snapshotCards = useMemo(() => [
     {
       id: 'level',
       label: 'Current Level',
@@ -348,9 +350,9 @@ export function HomeView({
       glass: 'glass-card-blue',
       iconColor: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
     },
-  ];
+  ], [stats, profile.streak, activeRoadmap]);
 
-  const quickActions = [
+  const quickActions = useMemo(() => [
     {
       id: 'generate',
       label: 'Generate New Roadmap',
@@ -386,7 +388,7 @@ export function HomeView({
       },
       disabled: !activeRoadmap,
     },
-  ];
+  ], [onGenerateRoadmap, onOpenMentor, onViewProgress, onStartLesson, onContinueLearning, currentLesson, activeRoadmap]);
 
   return (
     <div className="home-view space-y-8 pb-4 max-w-full overflow-x-hidden">

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'learnpath-ai-cache-v3';
+const CACHE_NAME = 'learnpath-ai-cache-v4';
 const OFFLINE_URL = '/offline.html';
 
 // External URLs (e.g. Google Fonts) are intentionally excluded from addAll().
@@ -53,35 +53,49 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle local API requests - Network First with local cache backup
+  // Handle local API requests
   if (url.pathname.startsWith('/api/')) {
+    // These routes carry user-specific or session-sensitive data that must
+    // never be served stale — always go to the network and never cache.
+    const NEVER_CACHE_ROUTES = [
+      '/api/login', '/api/logout', '/api/register',
+      '/api/user-profile', '/api/user-stats', '/api/bootstrap',
+      '/api/password-reset', '/api/progress',
+      '/api/ai-recommendations', '/api/mentor-chat',
+    ];
+    const isNeverCache = NEVER_CACHE_ROUTES.some(r => url.pathname.startsWith(r));
+    if (isNeverCache) {
+      // Pure network — no caching at all
+      event.respondWith(
+        fetch(request).catch(() =>
+          new Response(JSON.stringify({ error: 'Offline', message: 'This feature requires a network connection.' }), {
+            headers: { 'Content-Type': 'application/json' }
+          })
+        )
+      );
+      return;
+    }
+
+    // For cacheable API routes (topics, public-stats, user-analytics) use
+    // Network First: try network, fall back to cache.
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // If successful, cache a clone for offline use
           if (response.status === 200) {
             const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseClone);
-            });
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
           }
           return response;
         })
-        .catch(() => {
-          // Look in cache for offline backup
-          return caches.match(request).then((cachedResponse) => {
-            if (cachedResponse) {
-              return cachedResponse;
-            }
-            // If offline and request is for general JSON, return a friendly offline JSON payload
-            return new Response(JSON.stringify({ 
-              error: 'Offline', 
-              message: 'Information is cached and loadable offline once visited. Connect to network to fetch fresh content.' 
-            }), {
-              headers: { 'Content-Type': 'application/json' }
-            });
-          });
-        })
+        .catch(() =>
+          caches.match(request).then((cachedResponse) =>
+            cachedResponse ||
+            new Response(JSON.stringify({
+              error: 'Offline',
+              message: 'Content is cached from a previous visit. Connect to network to fetch fresh data.'
+            }), { headers: { 'Content-Type': 'application/json' } })
+          )
+        )
     );
     return;
   }

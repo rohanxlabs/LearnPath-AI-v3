@@ -182,6 +182,29 @@ export function SkeletonNotificationCard({ className = '' }: SkeletonNotificatio
   );
 }
 
+// Matches the exact layout of HomeView's hero GlassCard to eliminate CLS
+export function SkeletonHomeHero() {
+  return (
+    <div className="p-5 sm:p-6 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden">
+      {/* label + heading */}
+      <Skeleton className="h-3 w-28 mb-2" />
+      <Skeleton className="h-7 w-64 sm:w-80 mb-4" />
+      {/* chips row */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Skeleton className="h-7 w-36 rounded-xl" />
+        <Skeleton className="h-7 w-24 rounded-xl" />
+        <Skeleton className="h-7 w-20 rounded-xl" />
+        <Skeleton className="h-7 w-16 rounded-xl" />
+      </div>
+      {/* CTA buttons */}
+      <div className="flex flex-col sm:flex-row gap-2.5">
+        <Skeleton className="h-10 w-40 rounded-xl" />
+        <Skeleton className="h-10 w-36 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 interface SkeletonChatPreviewProps {
   className?: string;
 }
