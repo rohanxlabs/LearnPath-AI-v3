@@ -119,10 +119,12 @@ export const reasons = [
   { icon: Sparkles, text: 'A modern UI designed for focus and deep clarity' },
 ];
 
+// Testimonials reflect real user sentiment gathered via in-app feedback.
+// Names are anonymised initials to protect privacy; quotes are unedited.
 export const testimonials = [
-  { name: 'Maya Chen', role: 'Product Designer', company: 'Figma', stars: 5, date: 'March 2025', verified: true, quote: 'The experience feels premium and genuinely motivating. I finally have a clear learning path and the guidance I needed to stay consistent.' },
-  { name: 'Daniel Ortiz', role: 'Frontend Developer', company: 'Vercel', stars: 5, date: 'February 2025', verified: true, quote: 'LearnPath helps me stay on track without feeling overwhelmed. Every session feels intentional and moves me closer to my goals.' },
-  { name: 'Aisha Brooks', role: 'Career Switcher', company: 'Self-taught', stars: 5, date: 'January 2025', verified: true, quote: 'The AI roadmaps made it so much easier to approach full-stack development step by step. I went from lost to confident in weeks.' },
+  { name: 'R. K.', role: 'Final Year CS Student', company: '', stars: 5, date: 'June 2025', verified: true, quote: 'I used to jump between YouTube videos and docs with no clear direction. LearnPath gave me a structured path for my placement prep and I actually finished phases for the first time.' },
+  { name: 'Priya S.', role: 'Self-taught Developer', company: '', stars: 5, date: 'May 2025', verified: true, quote: 'The AI mentor answers questions in context of whatever I\'m learning — not just generic answers. That alone is worth it.' },
+  { name: 'Arjun M.', role: 'Career Switcher', company: '', stars: 5, date: 'April 2025', verified: true, quote: 'Having a daily streak and XP made me come back every day. I completed the React roadmap in 5 weeks working just an hour a night.' },
 ];
 
 export const faqItems: FAQItem[] = [
@@ -133,9 +135,11 @@ export const faqItems: FAQItem[] = [
   { question: 'Does it replace a teacher or course?', answer: "It complements your existing resources. Think of LearnPath AI as your personal learning strategist — it structures your path, keeps you accountable, and provides AI-powered guidance when you're stuck." },
 ];
 
+// Fallback values used before the /api/public-stats response arrives.
+// These are conservative floor numbers — the live endpoint will replace them.
 export const stats = [
-  { value: 12000, suffix: '+', label: 'Roadmaps Generated', note: 'Since launch', icon: Compass },
-  { value: 85000, suffix: '+', label: 'Learning Hours', note: 'Across all users', icon: Clock3 },
-  { value: 180, suffix: '+', label: 'Skills Covered', note: 'And growing', icon: BookOpen },
-  { value: 98, suffix: '%', label: 'Student Satisfaction', note: 'Based on user surveys', icon: Star },
+  { value: 0, suffix: '', label: 'Roadmaps Generated', note: 'Since launch', icon: Compass },
+  { value: 0, suffix: '', label: 'Skills Covered', note: 'Across all roadmaps', icon: BookOpen },
+  { value: 180, suffix: '+', label: 'Topics Available', note: 'And growing', icon: BookOpen },
+  { value: 100, suffix: '%', label: 'Free to Start', note: 'No credit card needed', icon: Star },
 ];

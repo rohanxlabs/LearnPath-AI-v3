@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sparkles,
@@ -51,6 +51,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const previewRef = useRef<HTMLElement | null>(null);
   const featuresRef = useRef<HTMLElement | null>(null);
+
+  // Live stat overrides fetched from the public (no-auth) endpoint.
+  // Falls back gracefully — the stats section still renders with fallback values.
+  const [liveStats, setLiveStats] = useState<{ roadmapsGenerated: number; skillsCovered: number } | null>(null);
+  useEffect(() => {
+    fetch('/api/public-stats')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data && typeof data.roadmapsGenerated === 'number') {
+          setLiveStats({ roadmapsGenerated: data.roadmapsGenerated, skillsCovered: data.skillsCovered });
+        }
+      })
+      .catch(() => { /* silently fall back to static values */ });
+  }, []);
 
   const scrollToPreview = useCallback(() => {
     previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -257,12 +271,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="col-span-2 rounded-2xl border border-white/[0.07] bg-gradient-to-br from-purple-500/[0.1] to-[#0d1425] p-4">
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-purple-400">AI Roadmap</p>
-                        <p className="mt-1 text-sm font-bold text-white">Full-Stack Development</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-purple-400">Your AI Roadmap</p>
+                        <p className="mt-1 text-sm font-bold text-white">Your personalised learning path</p>
                       </div>
-                      <span className="flex items-center gap-1.5 rounded-xl bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                        Live
+                      <span className="flex items-center gap-1.5 rounded-xl bg-purple-500/15 px-2.5 py-1 text-[10px] font-bold text-purple-300">
+                        <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                        Demo
                       </span>
                     </div>
                     {/* Progress bar */}
@@ -270,8 +284,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       <div className="h-full w-[68%] rounded-full bg-gradient-to-r from-purple-500 to-cyan-500" />
                     </div>
                     <div className="mt-1.5 flex justify-between text-[10px] text-zinc-500">
-                      <span>Phase 3 of 5</span>
-                      <span className="text-purple-400 font-semibold">68% complete</span>
+                      <span>Phase 3 of 6</span>
+                      <span className="text-purple-400 font-semibold">Keep going — you're making progress</span>
                     </div>
                   </div>
 
@@ -283,8 +297,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <BookOpen className="h-4 w-4 text-white" />
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-white">React Hooks Deep Dive</p>
-                        <p className="text-[10px] text-zinc-500">3 steps left</p>
+                        <p className="truncate text-xs font-semibold text-white">Pick up where you left off</p>
+                        <p className="text-[10px] text-zinc-500">AI-selected next lesson</p>
                       </div>
                     </div>
                     <div className="mt-2.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-[10px] font-semibold text-emerald-400">
@@ -308,12 +322,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         </defs>
                       </svg>
                       <div className="relative text-center">
-                        <p className="text-lg font-extrabold leading-none text-white">86%</p>
+                        <p className="text-lg font-extrabold leading-none text-white">XP</p>
                       </div>
                     </div>
                     <div className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-400">
                       <Flame className="h-3 w-3" />
-                      <span className="font-bold">14 day streak</span>
+                      <span className="font-bold">Daily streak active</span>
                     </div>
                   </div>
 
@@ -321,9 +335,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="flex items-center justify-between rounded-2xl border border-white/[0.07] bg-[#0d1425] px-3.5 py-3">
                     <div className="flex items-center gap-2">
                       <Trophy className="h-4 w-4 text-amber-400" />
-                      <span className="text-xs font-semibold text-white">2 450 XP</span>
+                      <span className="text-xs font-semibold text-white">XP earned</span>
                     </div>
-                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-400">+120 today</span>
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-400">+ today</span>
                   </div>
 
                   {/* AI Mentor chat preview */}
@@ -334,7 +348,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <div className="space-y-2">
                       <div className="rounded-xl bg-white/[0.05] px-3 py-2 text-[11px] leading-5 text-zinc-200">
-                        Try building a mini project — use <span className="text-purple-300">useState</span> + <span className="text-cyan-300">useEffect</span> together.
+                        Try building a mini project to apply what you've learned so far.
                       </div>
                       <div className="rounded-xl bg-purple-500/[0.12] px-3 py-2 text-[11px] leading-5 text-zinc-400">
                         You: "What should I build next?"
@@ -346,7 +360,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <div className="col-span-2 flex items-center justify-between rounded-2xl border border-white/[0.07] bg-gradient-to-r from-[#0d1425] to-[#0a1022] px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <Zap className="h-4 w-4 shrink-0 text-violet-400" />
-                      <span className="text-xs text-zinc-300"><span className="font-semibold text-white">Next up:</span> State Management with Zustand</span>
+                      <span className="text-xs text-zinc-300"><span className="font-semibold text-white">Next up:</span> AI picks your next best lesson</span>
                     </div>
                     <ArrowRight className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
                   </div>
@@ -569,10 +583,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               />
             </FadeInSection>
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {stats.map((stat, index) => (
-                <StatCard key={stat.label} stat={stat} index={index} />
-              ))}
-            </div>
+                {stats.map((stat, index) => {
+                  // Slot 0 → roadmapsGenerated, slot 1 → skillsCovered from live endpoint.
+                  const liveValue =
+                    liveStats && index === 0 ? liveStats.roadmapsGenerated
+                    : liveStats && index === 1 ? liveStats.skillsCovered
+                    : undefined;
+                  const liveSuffix = liveValue !== undefined && liveValue > 0 ? '+' : stat.suffix;
+                  const displayStat = liveValue !== undefined
+                    ? { ...stat, value: liveValue, suffix: liveSuffix }
+                    : stat;
+                  return <StatCard key={stat.label} stat={displayStat} index={index} />;
+                })}
+              </div>
           </div>
         </section>
 
@@ -839,7 +862,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <li>
                   <div className="flex items-center gap-1.5 text-sm text-zinc-500">
                     <Users className="h-3.5 w-3.5" />
-                    12,000+ active learners
+                    {liveStats && liveStats.roadmapsGenerated > 0
+                      ? `${liveStats.roadmapsGenerated.toLocaleString()}+ roadmaps created`
+                      : 'Growing community of learners'}
                   </div>
                 </li>
               </ul>

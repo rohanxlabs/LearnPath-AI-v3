@@ -54,9 +54,21 @@ export const SectionHeading: React.FC<{
 export const useAnimatedCount = (target: number, isVisible: boolean) => {
   const [count, setCount] = useState(0);
   const started = useRef(false);
+  const lastTarget = useRef(target);
+
   useEffect(() => {
-    if (!isVisible || started.current) return;
-    started.current = true;
+    // Re-run the animation whenever the target value changes (e.g. live data arrives)
+    // OR when the section first scrolls into view.
+    const targetChanged = lastTarget.current !== target;
+    if (!isVisible && !targetChanged) return;
+    if (targetChanged) lastTarget.current = target;
+    // Allow re-run when target changes even if animation already ran once.
+    if (isVisible || targetChanged) {
+      if (!targetChanged) {
+        if (started.current) return;
+        started.current = true;
+      }
+    }
     const duration = 1400;
     const startedAt = performance.now();
     const tick = (now: number) => {

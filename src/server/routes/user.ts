@@ -8,6 +8,12 @@ import {
 import { logger } from '../lib/logger';
 
 // ---------------------------------------------------------------------------
+// Public stats cache — TTL 5 minutes so the landing page is fast.
+// ---------------------------------------------------------------------------
+let publicStatsCache: { roadmapsGenerated: number; skillsCovered: number; ts: number } | null = null;
+const PUBLIC_STATS_TTL = 5 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
 // Feedback table bootstrap (idempotent) — called at module load, never inside handlers.
 // ---------------------------------------------------------------------------
 let feedbackTableReady: Promise<void> | null = null;
@@ -287,6 +293,32 @@ router.get('/user-analytics', requireAuth, async (req, res) => {
 // 503 so the frontend can show an honest message rather than fake state.
 router.post('/checkout', requireAuth, async (_req, res) => {
   return res.status(503).json({ error: 'Payments are not yet enabled. Pro features are coming soon.' });
+});
+
+// Public stats — no auth required, used by the landing page.
+// Returns real DB counts with a 5-minute in-memory cache so every landing
+// page load doesn't hit the database.
+router.get('/public-stats', async (_req, res) => {
+  const now = Date.now();
+  if (publicStatsCache && now - publicStatsCache.ts < PUBLIC_STATS_TTL) {
+    return res.json(publicStatsCache);
+  }
+  try {
+    const [rmRow, skillRow] = await Promise.all([
+      sql`SELECT COUNT(*) AS count FROM roadmaps`.catch(() => [{ count: 0 }]),
+      // Count distinct skill tags across all lessons — a good proxy for "skills covered".
+      sql`SELECT COUNT(DISTINCT skill_tag) AS count FROM (
+            SELECT jsonb_array_elements_text(skill_tags) AS skill_tag FROM lessons
+          ) t`.catch(() => [{ count: 0 }]),
+    ]);
+    const roadmapsGenerated = Number((rmRow as any[])[0]?.count ?? 0);
+    const skillsCovered = Number((skillRow as any[])[0]?.count ?? 0);
+    publicStatsCache = { roadmapsGenerated, skillsCovered, ts: now };
+    return res.json({ roadmapsGenerated, skillsCovered });
+  } catch (err) {
+    logger.warn({ err }, '[public-stats] DB query failed, returning zeros');
+    return res.json({ roadmapsGenerated: 0, skillsCovered: 0 });
+  }
 });
 
 export default router;
