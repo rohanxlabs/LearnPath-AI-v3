@@ -146,8 +146,9 @@ export const glassCardStyles = {
 
 // Button variants
 export const buttonStyles = {
-  primary: 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-semibold transition-all duration-200',
-  secondary: 'bg-white/10 hover:bg-white/20 text-zinc-200 dark:text-zinc-300 border border-white/10 transition-all duration-200',
+  // Primary: canonical purple→violet→indigo gradient. Used for all primary CTAs.
+  primary: 'bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:brightness-110 text-white font-semibold transition-all duration-200 shadow-[0_4px_14px_rgba(124,58,237,0.3)]',
+  secondary: 'bg-white/8 hover:bg-white/15 text-zinc-200 border border-white/10 hover:border-white/20 transition-all duration-200',
   success: 'bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-all duration-200',
   warning: 'bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-all duration-200',
   ghost: 'hover:bg-white/5 text-zinc-400 hover:text-white transition-all duration-200',

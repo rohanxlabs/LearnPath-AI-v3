@@ -11,10 +11,10 @@ interface RoadmapsListProps {
 }
 
 export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoading }: RoadmapsListProps) {
-  const getStatusColor = (progress: number) => {
-    if (progress === 0) return 'bg-slate-100 text-slate-700 border-slate-200';
-    if (progress === 100) return 'bg-green-100 text-green-700 border-green-200';
-    return 'bg-blue-100 text-blue-700 border-blue-200';
+  const getStatusStyle = (progress: number) => {
+    if (progress === 0) return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20';
+    if (progress === 100) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25';
+    return 'bg-blue-500/10 text-blue-400 border-blue-500/25';
   };
 
   const getStatusLabel = (progress: number) => {
@@ -36,11 +36,11 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
     return (
       <div className="text-center py-12 px-6">
         <div className="max-w-md mx-auto">
-          <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <TrendingUp className="w-10 h-10 text-indigo-600" />
+          <div className="w-16 h-16 glass-card rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <TrendingUp className="w-7 h-7 text-purple-400" />
           </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">No Roadmaps Yet</h3>
-          <p className="text-sm text-slate-600">
+          <h3 className="text-lg font-bold text-white mb-2">No Roadmaps Yet</h3>
+          <p className="text-sm text-zinc-400">
             Create your first learning roadmap to get started on your journey!
           </p>
         </div>
@@ -52,7 +52,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="p-5 rounded-2xl bg-white border border-slate-200 space-y-3">
+          <div key={i} className="p-5 rounded-2xl glass-card space-y-3">
             <Skeleton className="h-5 w-3/4 rounded-lg" />
             <div className="flex items-center gap-2">
               <Skeleton className="h-5 w-20 rounded-full" />
@@ -81,7 +81,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
       {roadmaps.map((roadmap) => (
         <div
           key={roadmap.id}
-          className="group bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg transition-all cursor-pointer relative"
+          className="group glass-card rounded-2xl p-5 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer relative"
           onClick={() => onSelectRoadmap(roadmap.id)}
         >
           {/* Delete Button */}
@@ -92,45 +92,45 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
                 onDeleteRoadmap(roadmap.id);
               }
             }}
-            className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-red-50 rounded-lg"
+            className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-lg hover:bg-rose-500/10"
             aria-label="Delete roadmap"
           >
-            <Trash2 className="w-4 h-4 text-red-500" />
+            <Trash2 className="w-4 h-4 text-rose-400" />
           </button>
 
           {/* Content */}
           <div className="pr-8">
             <div className="flex items-start justify-between gap-3 mb-3">
-              <h3 className="font-bold text-lg text-slate-900 line-clamp-2 flex-1">
+              <h3 className="font-bold text-base text-white line-clamp-2 flex-1">
                 {roadmap.goal}
               </h3>
             </div>
 
             <div className="flex items-center gap-2 mb-3">
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getStatusColor(roadmap.progressPercent)}`}>
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getStatusStyle(roadmap.progressPercent)}`}>
                 {getStatusLabel(roadmap.progressPercent)}
               </span>
-              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+              <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">
                 {roadmap.experienceLevel}
               </span>
             </div>
 
             {/* Progress Bar */}
             <div className="mb-3">
-              <div className="flex items-center justify-between text-xs text-slate-600 mb-1.5">
+              <div className="flex items-center justify-between text-xs text-zinc-400 mb-1.5">
                 <span>Progress</span>
-                <span className="font-semibold">{roadmap.progressPercent}%</span>
+                <span className="font-semibold text-white">{roadmap.progressPercent}%</span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-2">
+              <div className="w-full bg-white/5 rounded-full h-1.5">
                 <div
-                  className="bg-gradient-to-r from-indigo-500 to-purple-500 h-2 rounded-full transition-all duration-300"
+                  className="bg-gradient-to-r from-purple-500 to-blue-500 h-1.5 rounded-full transition-all duration-300"
                   style={{ width: `${roadmap.progressPercent}%` }}
-                ></div>
+                />
               </div>
             </div>
 
             {/* Stats Row */}
-            <div className="flex items-center gap-4 text-xs text-slate-600 mb-3">
+            <div className="flex items-center gap-4 text-xs text-zinc-400 mb-3">
               <div className="flex items-center gap-1.5">
                 <TrendingUp className="w-3.5 h-3.5" />
                 <span>{roadmap.totalXp} XP</span>
@@ -142,7 +142,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
             </div>
 
             {/* Creation Date */}
-            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
               <Calendar className="w-3.5 h-3.5" />
               <span>Created {formatDate(roadmap.createdAt)}</span>
             </div>
@@ -150,7 +150,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
 
           {/* Arrow Icon */}
           <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-            <ChevronRight className="w-5 h-5 text-indigo-600" />
+            <ChevronRight className="w-5 h-5 text-purple-400" />
           </div>
         </div>
       ))}

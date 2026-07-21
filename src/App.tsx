@@ -1264,17 +1264,17 @@ export default function App() {
         if (!selectedRoadmapId) {
           if (roadmapDetailTab === 'resources') {
             return (
-              <div className="flex flex-col items-center justify-center py-20 px-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
-                  <BookOpen className="w-10 h-10 text-indigo-600" />
+              <div className="flex flex-col items-center justify-center py-20 px-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10">
+                <div className="w-20 h-20 bg-gradient-to-br from-purple-500/15 to-blue-500/15 rounded-full flex items-center justify-center mb-6">
+                  <BookOpen className="w-10 h-10 text-purple-600 dark:text-purple-400" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
-                <p className="text-sm text-slate-600 text-center max-w-md mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-2">Select a Roadmap</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
                   Choose a roadmap from your list to access curated learning resources tailored to your learning path.
                 </p>
                 <button
                   onClick={() => setRoadmapDetailTab('roadmap')}
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
                 >
                   View My Roadmaps
                 </button>
@@ -1283,17 +1283,17 @@ export default function App() {
           }
           if (roadmapDetailTab === 'quiz') {
             return (
-              <div className="flex flex-col items-center justify-center py-20 px-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
-                  <Brain className="w-10 h-10 text-indigo-600" />
+              <div className="flex flex-col items-center justify-center py-20 px-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10">
+                <div className="w-20 h-20 bg-gradient-to-br from-purple-500/15 to-blue-500/15 rounded-full flex items-center justify-center mb-6">
+                  <Brain className="w-10 h-10 text-purple-600 dark:text-purple-400" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
-                <p className="text-sm text-slate-600 text-center max-w-md mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-2">Select a Roadmap</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
                   Choose a roadmap to access quizzes and test your knowledge on specific topics.
                 </p>
                 <button
                   onClick={() => setRoadmapDetailTab('roadmap')}
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
                 >
                   View My Roadmaps
                 </button>
@@ -1302,17 +1302,17 @@ export default function App() {
           }
           if (roadmapDetailTab === 'projects') {
             return (
-              <div className="flex flex-col items-center justify-center py-20 px-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
-                  <Code className="w-10 h-10 text-indigo-600" />
+              <div className="flex flex-col items-center justify-center py-20 px-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10">
+                <div className="w-20 h-20 bg-gradient-to-br from-purple-500/15 to-blue-500/15 rounded-full flex items-center justify-center mb-6">
+                  <Code className="w-10 h-10 text-purple-600 dark:text-purple-400" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
-                <p className="text-sm text-slate-600 text-center max-w-md mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-2">Select a Roadmap</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
                   Choose a roadmap to access hands-on projects and build your portfolio.
                 </p>
                 <button
                   onClick={() => setRoadmapDetailTab('roadmap')}
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
                 >
                   View My Roadmaps
                 </button>
@@ -1321,17 +1321,17 @@ export default function App() {
           }
           if (roadmapDetailTab === 'insights') {
             return (
-              <div className="flex flex-col items-center justify-center py-20 px-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mb-6">
-                  <BarChart className="w-10 h-10 text-indigo-600" />
+              <div className="flex flex-col items-center justify-center py-20 px-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10">
+                <div className="w-20 h-20 bg-gradient-to-br from-purple-500/15 to-blue-500/15 rounded-full flex items-center justify-center mb-6">
+                  <BarChart className="w-10 h-10 text-purple-600 dark:text-purple-400" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">Select a Roadmap</h3>
-                <p className="text-sm text-slate-600 text-center max-w-md mb-6">
+                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-2">Select a Roadmap</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
                   Choose a roadmap to view personalized AI insights and track your learning progress.
                 </p>
                 <button
                   onClick={() => setRoadmapDetailTab('roadmap')}
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
+                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
                 >
                   View My Roadmaps
                 </button>
@@ -1496,16 +1496,16 @@ export default function App() {
           <div className={cardClass}>
             <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
             {header}
-            {authError && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">{authError}</div>}
+            {authError && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">{authError}</div>}
             {resetStatus === 'success' ? (
-              <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-[11px] font-semibold text-green-300 text-center">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-300 text-center">
                 ✅ Password updated! You can now sign in with your new password.
-                <button onClick={() => { setResetStatus('idle'); setAuthError(''); }} className="block mt-2 mx-auto text-zinc-400 hover:text-white text-[11px] cursor-pointer">Back to Sign In</button>
+                <button onClick={() => { setResetStatus('idle'); setAuthError(''); }} className="block mt-2 mx-auto text-zinc-400 hover:text-white text-xs cursor-pointer">Back to Sign In</button>
               </div>
             ) : (
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">New Password</label>
+                  <label className="block text-xs uppercase font-bold text-zinc-400">New Password</label>
                   <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} placeholder="Min 8 chars, include a number" className={inputClass} required minLength={8} />
                 </div>
                 <button type="submit" disabled={resetStatus === 'submitting'} className={btnClass}>
@@ -1526,14 +1526,14 @@ export default function App() {
             <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
             {header}
             {forgotStatus === 'sent' ? (
-              <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-[11px] font-semibold text-green-300 text-center">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-300 text-center">
                 ✅ Check your inbox! We sent a reset link to <strong>{forgotEmail}</strong>.
               </div>
             ) : (
               <form onSubmit={handleForgotPassword} className="space-y-4">
-                {forgotStatus === 'error' && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">Something went wrong. Please try again.</div>}
+                {forgotStatus === 'error' && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">Something went wrong. Please try again.</div>}
                 <div className="space-y-1.5">
-                  <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Your Email</label>
+                  <label className="block text-xs uppercase font-bold text-zinc-400">Your Email</label>
                   <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="you@example.com" className={inputClass} required />
                 </div>
                 <button type="submit" disabled={forgotStatus === 'sending'} className={btnClass}>
@@ -1542,7 +1542,7 @@ export default function App() {
               </form>
             )}
             <div className="text-center pt-2 border-t border-white/5">
-              <button onClick={() => { setForgotPasswordMode(false); setForgotStatus('idle'); setForgotEmail(''); }} className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer">
+              <button onClick={() => { setForgotPasswordMode(false); setForgotStatus('idle'); setForgotEmail(''); }} className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">
                 ← Back to Sign In
               </button>
             </div>
@@ -1559,7 +1559,7 @@ export default function App() {
           {header}
 
           {authError && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">
               {authError}
             </div>
           )}
@@ -1567,19 +1567,19 @@ export default function App() {
           <form onSubmit={handleAuthenticate} className="space-y-4">
             {authMode === 'signup' && (
               <div className="space-y-1.5">
-                <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Full Name</label>
+                <label className="block text-xs uppercase font-bold text-zinc-400">Full Name</label>
                 <input type="text" value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder="Jane Smith" className={inputClass} required />
               </div>
             )}
 
             <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Registry Email</label>
+              <label className="block text-xs uppercase font-bold text-zinc-400">Registry Email</label>
               <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="bobby.fisher@learnpath.ai" className={inputClass} required />
             </div>
 
             <div className="space-y-1.5 font-sans">
-              <div className="flex justify-between items-center text-[10px]">
-                <label className="block uppercase font-bold text-zinc-400 font-mono">Security Password</label>
+              <div className="flex justify-between items-center text-xs">
+                <label className="block uppercase font-bold text-zinc-400">Security Password</label>
                 {authMode === 'login' && (
                   <button type="button" onClick={() => { setForgotPasswordMode(true); setAuthError(''); }} className="text-zinc-500 hover:text-white cursor-pointer">
                     Forgot Password?
@@ -1597,11 +1597,11 @@ export default function App() {
           <div className="text-center pt-2 space-y-3.5 border-t border-white/5 pb-1.5">
             <button
               onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setAuthError(''); }}
-              className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
             >
               {authMode === 'login' ? "Don't have an account? Sign Up" : "Already registered? Sign In"}
             </button>
-            <p className="text-[10px] text-zinc-500 leading-relaxed">
+            <p className="text-xs text-zinc-500 leading-relaxed">
               Your data is loaded by email and saved only to your user profile.
             </p>
           </div>
@@ -1737,13 +1737,13 @@ export default function App() {
           canned fallback content that only looks AI-generated. */}
       {aiActive === false && showAiOfflineBanner && (
         <div className="px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between gap-3">
-          <p className="text-[11px] text-amber-300 leading-snug">
+          <p className="text-xs text-amber-300 leading-snug">
             <strong className="font-bold">AI features are offline.</strong> Mentor replies, roadmaps,
             quizzes, recommendations, and insights are showing generic fallback content, not real AI output.
           </p>
           <button
             onClick={() => setShowAiOfflineBanner(false)}
-            className="text-amber-300/70 hover:text-amber-200 text-[11px] font-bold shrink-0 cursor-pointer"
+            className="text-amber-300/70 hover:text-amber-200 text-xs font-bold shrink-0 cursor-pointer"
           >
             Dismiss
           </button>
@@ -1812,7 +1812,7 @@ export default function App() {
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
             <div>
               <p className="font-bold">Offline Learning Active Mode</p>
-              <p className="text-[10px] text-zinc-400">Viewing cached roadmaps & study paths</p>
+              <p className="text-xs text-zinc-400">Viewing cached roadmaps & study paths</p>
             </div>
           </div>
         </div>
@@ -1824,7 +1824,7 @@ export default function App() {
             <CheckCircle className="w-4 h-4 shrink-0 text-emerald-400" />
             <div>
               <p className="font-bold">Connection Restored</p>
-              <p className="text-[10px] text-zinc-400">AI search and validation queries re-activated</p>
+              <p className="text-xs text-zinc-400">AI search and validation queries re-activated</p>
             </div>
           </div>
         </div>
@@ -1841,11 +1841,11 @@ export default function App() {
         <div className="fixed bottom-22 left-4 right-4 z-50 p-3.5 rounded-2xl glass-card glass-card-purple border border-purple-500/35 text-white text-xs shadow-2xl flex items-center justify-between gap-3 max-w-sm mx-auto animate-pulse-glow">
           <div className="flex-1">
             <p className="font-bold">App Update Available ✨</p>
-            <p className="text-[10px] text-zinc-300">Reload to instantly activate the latest features</p>
+            <p className="text-xs text-zinc-300">Reload to instantly activate the latest features</p>
           </div>
           <button
             onClick={pwa.triggerUpdateApp}
-            className="px-3 py-1.5 font-bold text-[10px] text-white bg-gradient-to-r from-purple-500 to-blue-600 rounded-lg cursor-pointer hover:brightness-110 shrink-0"
+            className="px-3 py-1.5 font-bold text-xs text-white bg-gradient-to-r from-purple-500 to-blue-600 rounded-lg cursor-pointer hover:brightness-110 shrink-0"
           >
             Reload Now
           </button>

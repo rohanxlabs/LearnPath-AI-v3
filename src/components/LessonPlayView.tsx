@@ -95,7 +95,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
       case 'learn':
         return (
           <div className="space-y-4">
-            <div className="prose prose-invert max-w-none text-zinc-350 text-xs md:text-sm leading-relaxed whitespace-pre-wrap select-text selection:bg-purple-500/20">
+            <div className="prose prose-invert max-w-none text-zinc-300 text-xs md:text-sm leading-relaxed whitespace-pre-wrap select-text selection:bg-purple-500/20">
               {lesson.content}
             </div>
 
@@ -131,7 +131,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                       
                       let optionStyle = 'bg-[#0A0A0A] border-white/5 text-zinc-400 hover:text-white hover:bg-white/5';
                       if (isSelected) {
-                        optionStyle = 'bg-purple-500/10 border-purple-500 text-purple-430 font-semibold';
+                        optionStyle = 'bg-purple-500/10 border-purple-500 text-purple-300 font-semibold';
                       }
                       if (submittedQuiz) {
                         if (isCorrect) {
@@ -139,7 +139,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                         } else if (isSelected) {
                           optionStyle = 'bg-red-500/10 border-red-500 text-red-400';
                         } else {
-                          optionStyle = 'opacity-40 bg-[#0A0A0A] border-white/5 text-zinc-650';
+                          optionStyle = 'opacity-40 bg-[#0A0A0A] border-white/5 text-zinc-600';
                         }
                       }
 
@@ -173,7 +173,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   </div>
 
                   {submittedQuiz && (
-                    <div className="p-4 bg-[#0A0A0A] rounded-xl border border-white/5 text-[11px] leading-relaxed text-zinc-400 font-sans">
+                    <div className="p-4 bg-[#0A0A0A] rounded-xl border border-white/5 text-xs leading-relaxed text-zinc-400 font-sans">
                       <strong className="text-purple-300 font-semibold block mb-0.5">Explanation Matrix:</strong>
                       {q.explanation}
                     </div>
@@ -195,7 +195,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               </div>
             ) : (
               <div className="p-5 rounded-2xl border border-white/5 bg-[#0A0A0A] flex flex-col items-center text-center space-y-2">
-                <span className="text-xs text-zinc-500 uppercase tracking-widest font-bold">Quiz Results Summary</span>
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Quiz Results Summary</span>
                 <p className="text-xl font-bold font-display text-white">
                   Scored: <span className="text-purple-400">{quizScore} / {lesson.quizQuestions?.length || 0}</span> Correct
                 </p>
@@ -224,10 +224,10 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
             <div className="p-5 rounded-2xl bg-[#0A0A0A] border border-white/5 flex flex-col justify-between space-y-4">
               <div className="space-y-4">
                 <div className="border-b border-white/5 pb-3">
-                  <span className="text-[9px] uppercase font-bold text-purple-400 tracking-wider font-mono">Exercise specifications</span>
+                  <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">Exercise specifications</span>
                   <h4 className="font-semibold text-xs md:text-sm text-white">Logic Scripting Objectives</h4>
                 </div>
-                <p className="text-xs text-zinc-350 leading-relaxed max-w-md select-text whitespace-pre-wrap">
+                <p className="text-xs text-zinc-300 leading-relaxed max-w-md select-text whitespace-pre-wrap">
                   {lesson.codingExercise?.instructions}
                 </p>
 
@@ -241,7 +241,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                     <span>{showHint ? 'Hide Logic Hint' : 'Reveal Hint'}</span>
                   </button>
                   {showHint && (
-                    <div className="mt-2 p-3 bg-amber-500/5 rounded-lg border border-amber-500/20 text-[10px] md:text-xs text-amber-300 leading-relaxed font-mono whitespace-pre-wrap select-text">
+                    <div className="mt-2 p-3 bg-amber-500/5 rounded-lg border border-amber-500/20 text-xs text-amber-300 leading-relaxed font-mono whitespace-pre-wrap select-text">
                       {lesson.codingExercise?.hint}
                     </div>
                   )}
@@ -250,16 +250,16 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
               <div className="p-3 rounded-xl bg-white/[0.01] border border-white/5 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-zinc-500 flex-shrink-0" />
-                <span className="text-[10px] text-zinc-500">Submit robust PEP8 scripting parameters. Avoid modifying function headers directly.</span>
+                <span className="text-xs text-zinc-500">Submit robust PEP8 scripting parameters. Avoid modifying function headers directly.</span>
               </div>
             </div>
 
             {/* Right Column: Code input area & terminal result log */}
             <div className="flex flex-col h-full gap-3">
               <div className="flex-1 flex flex-col bg-[#0A0A0A] rounded-2xl overflow-hidden border border-white/5 md:min-h-[220px]">
-                <div className="flex items-center justify-between px-4 py-2.5 bg-[#111111] border-b border-white/5 text-[10px] text-zinc-400 font-mono font-bold">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-[#111111] border-b border-white/5 text-xs text-zinc-400 font-mono font-bold">
                   <span>Interactive Editor (python)</span>
-                  <span className="text-emerald-450">● Live Code validation active</span>
+                  <span className="text-emerald-400">● Live Code validation active</span>
                 </div>
                 <textarea
                   value={userCode}
@@ -292,7 +292,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               {/* Console logs */}
               {codeFeedback && (
                 <motion.div 
-                  className="p-4 rounded-xl bg-[#0A0A0A] border border-white/5 font-mono text-[11px] leading-relaxed space-y-2 select-text selection:bg-purple-500/20 max-h-[160px] overflow-y-auto relative"
+                  className="p-4 rounded-xl bg-[#0A0A0A] border border-white/5 font-mono text-xs leading-relaxed space-y-2 select-text selection:bg-purple-500/20 max-h-[160px] overflow-y-auto relative"
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   transition={{ duration: 0.3, ease: easeInOut }}
@@ -301,10 +301,10 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                     <ConfettiParticles count={15} />
                   )}
                   <div className="flex items-center justify-between border-b border-white/5 pb-1.5 mb-1 bg-transparent">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
                       <Code2 className="w-3.5 h-3.5 text-purple-400" /> Compiler Log Diagnostic
                     </span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                       codeFeedback.passed ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
                     }`}>
                       {codeFeedback.passed ? 'VERIFICATION PASSED' : 'VERIFICATION FAILED'}
@@ -313,7 +313,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   {codeFeedback.passed ? (
                     <div className="space-y-1 bg-transparent">
                       <p className="text-zinc-400"><strong className="text-emerald-400 font-semibold">Status:</strong> {codeFeedback.suggestions}</p>
-                      <p className="text-[10px] text-zinc-500 mt-1"><strong className="text-purple-300 font-semibold">Walkthrough analysis:</strong> {codeFeedback.explanation}</p>
+                      <p className="text-xs text-zinc-500 mt-1"><strong className="text-purple-300 font-semibold">Walkthrough analysis:</strong> {codeFeedback.explanation}</p>
                     </div>
                   ) : (
                     <motion.div 
@@ -322,8 +322,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                       transition={{ duration: 0.4, ease: easeInOut }}
                     >
                       <p className="font-bold">Error Traceback (most recent call last):</p>
-                      <p className="text-zinc-350">{codeFeedback.suggestions}</p>
-                      <p className="text-[10px] text-zinc-500 mt-1.5 font-sans whitespace-pre-wrap">{codeFeedback.explanation}</p>
+                      <p className="text-zinc-300">{codeFeedback.suggestions}</p>
+                      <p className="text-xs text-zinc-500 mt-1.5 font-sans whitespace-pre-wrap">{codeFeedback.explanation}</p>
                     </motion.div>
                   )}
                 </motion.div>
@@ -337,11 +337,11 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
         return (
           <div className="p-6 rounded-3xl bg-[#0A0A0A] border border-white/5 flex flex-col items-center text-center space-y-4 max-w-xl mx-auto relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 via-blue-600 to-emerald-500" />
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5 text-white font-bold font-display text-lg animate-bounce">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5 text-white font-bold font-display text-lg">
               ⚔️
             </div>
             <div>
-              <span className="text-[10px] uppercase tracking-widest font-extrabold text-purple-400">UNLEASH BOSS CHALLENGE Mastery</span>
+              <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">BOSS CHALLENGE</span>
               <h4 className="font-display font-black text-lg text-white mt-1.5">{lesson.name}</h4>
               <p className="text-xs text-zinc-400 leading-relaxed mt-2 select-text">
                 This is the ultimate assessment sandbox. We will synthesize distributed processes and evaluate response accuracies under concurrent workload queues. Continue to trigger.
@@ -395,7 +395,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               </button>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-bold uppercase text-zinc-500 font-mono tracking-wider">{lesson.type} module</span>
+                  <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">{lesson.type} module</span>
                   <XPBadge amount={lesson.xpReward} size="sm" />
                 </div>
                 <h3 className="font-display font-semibold text-sm md:text-base text-white mt-0.5 truncate max-w-xs sm:max-w-md">
@@ -421,18 +421,18 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
           {hasCompleted && (
             <div className="p-5 rounded-2xl bg-gradient-to-tr from-emerald-950/20 to-teal-900/10 border border-emerald-500/20 shadow-[0_4px_30px_rgba(16,185,129,0.15)] flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
               <div className="flex items-center flex-col sm:flex-row gap-3">
-                <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center animate-pulse">
+                <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
                   <h4 className="font-display font-bold text-base text-white">Syllabus Checkpoint Mastered!</h4>
-                  <p className="text-xs text-zinc-450 dark:text-zinc-405 light:text-slate-550 mt-0.5">Epic parameters verified successfully. Click to unlock adjacent modules and claim your XP rewards!</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">Epic parameters verified successfully. Click to unlock adjacent modules and claim your XP rewards!</p>
                 </div>
               </div>
 
               <button
                 onClick={handleFinishLesson}
-                className="px-5 py-2.5 shrink-0 font-bold text-xs text-white bg-gradient-to-r from-emerald-600 to-teal-550 hover:from-emerald-500 hover:to-teal-500 animate-pulse-glow rounded-lg transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                className="px-5 py-2.5 shrink-0 font-bold text-xs text-white bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 rounded-lg transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.3)]"
                 id="btn-claim-rewards"
               >
                 Claim rewards & Unlock Tree

@@ -117,11 +117,11 @@ export function RoadmapsTabContainer({
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900">My Roadmaps</h2>
-            <p className="text-sm text-slate-600 mt-1">
-              Manage your learning paths
-            </p>
-          </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white">My Roadmaps</h2>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                Manage your learning paths
+              </p>
+            </div>
         </div>
 
         <RoadmapsList
@@ -142,34 +142,34 @@ export function RoadmapsTabContainer({
         </button>
 
         {showGenerator && (
-          <form onSubmit={handleCreate} className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-3 border-b border-slate-200 pb-3">
-              <GraduationCap className="w-6 h-6 text-indigo-600" />
+          <form onSubmit={handleCreate} className="p-6 rounded-2xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 shadow-sm space-y-4">
+            <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/10 pb-3">
+              <GraduationCap className="w-6 h-6 text-purple-600 dark:text-purple-400" />
               <div>
-                <h3 className="font-bold text-slate-900">AI Roadmap Architect</h3>
-                <p className="text-xs text-slate-600">Customize your learning journey.</p>
+                <h3 className="font-bold text-zinc-900 dark:text-white">AI Roadmap Architect</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Customize your learning journey.</p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-slate-700">Goal / Project Intent</label>
+              <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Goal / Project Intent</label>
               <input
                 type="text"
                 value={goal}
                 onChange={(e) => setGoal(e.target.value)}
                 placeholder="e.g., Build a full-stack application with React and Node.js"
-                className="w-full px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-4 py-2 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 required
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-slate-700">Experience Level</label>
+                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Experience Level</label>
                 <select
                   value={experienceLevel}
                   onChange={(e) => setExperienceLevel(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900"
+                  className="w-full px-3 py-2 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-white"
                 >
                   <option>Beginner</option>
                   <option>Intermediate</option>
@@ -178,11 +178,11 @@ export function RoadmapsTabContainer({
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-slate-700">Weekly Commitment</label>
+                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Weekly Commitment</label>
                 <select
                   value={weeklyHours}
                   onChange={(e) => setWeeklyHours(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900"
+                  className="w-full px-3 py-2 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-white"
                 >
                   <option value={5}>5 hours</option>
                   <option value={10}>10 hours</option>
@@ -192,11 +192,11 @@ export function RoadmapsTabContainer({
               </div>
 
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-slate-700">Learning Style</label>
+                <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-400">Learning Style</label>
                 <select
                   value={preferredStyle}
                   onChange={(e) => setPreferredStyle(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900"
+                  className="w-full px-3 py-2 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-white"
                 >
                   <option>Hands-on</option>
                   <option>Visual</option>
@@ -219,15 +219,15 @@ export function RoadmapsTabContainer({
         )}
 
         {isGenerating && (
-          <div className="p-8 rounded-2xl bg-indigo-50 border border-indigo-200 text-center space-y-4 shadow-sm flex flex-col items-center">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center animate-spin">
+          <div className="p-8 rounded-2xl bg-purple-500/5 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-500/30 text-center space-y-4 flex flex-col items-center">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center animate-spin">
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <div className="space-y-1">
-              <h3 className="font-bold text-slate-900">Personalizing Your Roadmap</h3>
-              <p className="text-sm text-slate-600">Our AI is tailoring your learning path.</p>
+              <h3 className="font-bold text-zinc-900 dark:text-white">Personalizing Your Roadmap</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">Our AI is tailoring your learning path.</p>
             </div>
-            <div className="px-3 py-1 rounded-md bg-indigo-100 text-xs text-indigo-700 font-mono animate-pulse">
+            <div className="px-3 py-1 rounded-md bg-purple-100 dark:bg-purple-500/10 text-xs text-purple-700 dark:text-purple-300 font-mono">
               {loadingQuotes[quoteIdx]}
             </div>
           </div>

@@ -230,7 +230,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               initial={{ opacity: 0, x: 32, scale: 0.96 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
-              className="animate-float-soft relative mx-auto w-full max-w-[520px] lg:mx-0"
+              className="motion-safe:animate-float-soft relative mx-auto w-full max-w-[520px] lg:mx-0"
             >
               {/* Outer glow halo */}
               <div className="pointer-events-none absolute -inset-4 rounded-[44px] bg-gradient-to-br from-purple-600/20 via-cyan-500/10 to-violet-600/15 blur-3xl" aria-hidden="true" />

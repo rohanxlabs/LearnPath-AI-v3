@@ -69,28 +69,28 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
   const getCardStyles = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-50 border-green-200';
+        return 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20';
       case 'current':
       case 'available':
-        return 'bg-white border-indigo-300 border-l-4 shadow-md';
+        return 'bg-zinc-50 dark:bg-white/[0.04] border-purple-300 dark:border-purple-500/40 border-l-4 shadow-md';
       case 'locked':
-        return 'bg-slate-50 border-slate-200';
+        return 'bg-zinc-50 dark:bg-white/[0.02] border-zinc-200 dark:border-white/10 opacity-70';
       default:
-        return 'bg-white border-slate-200';
+        return 'bg-zinc-50 dark:bg-white/[0.02] border-zinc-200 dark:border-white/10';
     }
   };
 
   const getIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle2 className="w-5 h-5 text-green-600" />;
+        return <CheckCircle2 className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />;
       case 'current':
       case 'available':
-        return <Zap className="w-5 h-5 text-indigo-600" />;
+        return <Zap className="w-5 h-5 text-purple-600 dark:text-purple-400" />;
       case 'locked':
-        return <Lock className="w-5 h-5 text-slate-400" />;
+        return <Lock className="w-5 h-5 text-zinc-400 dark:text-zinc-500" />;
       default:
-        return <BookOpen className="w-5 h-5 text-slate-400" />;
+        return <BookOpen className="w-5 h-5 text-zinc-400 dark:text-zinc-500" />;
     }
   };
 
@@ -101,21 +101,20 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
 
     return (
       <div key={index} className="relative">
-        {/* Module Card */}
-        <div className={`rounded-xl border-2 p-5 transition-all ${getCardStyles(node.status)}`}>
+        <div className={`rounded-xl border-2 p-5 transition-all duration-200 ${getCardStyles(node.status)}`}>
           {/* Module Header */}
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-start gap-3 flex-1">
               <div className="flex-shrink-0 mt-1">{getIcon(node.status)}</div>
               <div className="flex-1">
-                <h4 className={`font-bold text-base ${node.status === 'locked' ? 'text-slate-500' : 'text-slate-900'}`}>
+                <h4 className={`font-bold text-base ${node.status === 'locked' ? 'text-zinc-400 dark:text-zinc-500' : 'text-zinc-900 dark:text-white'}`}>
                   {node.name}
                 </h4>
                 <div className="flex items-center gap-3 mt-1.5">
-                  <span className={`text-xs ${node.status === 'locked' ? 'text-slate-400' : 'text-slate-600'}`}>
+                  <span className={`text-xs ${node.status === 'locked' ? 'text-zinc-400 dark:text-zinc-600' : 'text-zinc-500 dark:text-zinc-400'}`}>
                     {itemCount} {itemCount === 1 ? 'item' : 'items'}
                   </span>
-                  <span className={`text-xs font-semibold ${node.status === 'locked' ? 'text-slate-400' : 'text-indigo-600'}`}>
+                  <span className={`text-xs font-semibold ${node.status === 'locked' ? 'text-zinc-400 dark:text-zinc-600' : 'text-purple-600 dark:text-purple-400'}`}>
                     {completionPercent}% complete
                   </span>
                 </div>
@@ -124,8 +123,9 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
             {onAiAction && (
               <button
                 type="button"
+                aria-label={`Ask AI about ${node.name}`}
                 onClick={() => onAiAction('explain', node.name)}
-                className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold px-2 py-1 rounded hover:bg-indigo-50 transition-colors"
+                className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-semibold px-2 py-1 rounded-lg hover:bg-purple-500/10 dark:hover:bg-purple-500/15 transition-colors"
               >
                 Ask AI
               </button>
@@ -134,25 +134,25 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
 
           {/* Sub-items (Lessons) */}
           {node.children && node.children.length > 0 && (
-            <div className="space-y-2 mt-4 border-t border-slate-200 pt-3">
+            <div className="space-y-2 mt-4 border-t border-zinc-200 dark:border-white/5 pt-3">
               {node.children.map((child, childIndex) => (
                 <div
                   key={childIndex}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
                     child.status === 'completed'
-                      ? 'bg-green-100/50'
+                      ? 'bg-emerald-500/8 dark:bg-emerald-500/10'
                       : child.status === 'current' || child.status === 'available'
-                      ? 'bg-indigo-50/50'
-                      : 'bg-slate-100/50'
+                      ? 'bg-purple-500/8 dark:bg-purple-500/10'
+                      : 'bg-zinc-100/60 dark:bg-white/[0.02]'
                   }`}
                 >
                   <div className="flex-shrink-0">
                     {child.status === 'completed' ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
                     ) : child.status === 'current' || child.status === 'available' ? (
-                      <Brain className="w-4 h-4 text-indigo-600" />
+                      <Brain className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                     ) : (
-                      <Lock className="w-4 h-4 text-slate-400" />
+                      <Lock className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
                     )}
                   </div>
                   <span
@@ -161,7 +161,7 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
                     onClick={child.isLesson && onLessonSelect && child.lessonId ? () => onLessonSelect(child.phaseId!, child.levelId!, child.lessonId!) : undefined}
                     onKeyDown={child.isLesson && onLessonSelect && child.lessonId ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLessonSelect!(child.phaseId!, child.levelId!, child.lessonId!); } } : undefined}
                     className={`text-sm flex-1 ${
-                      child.status === 'locked' ? 'text-slate-400' : 'text-slate-700 font-medium'
+                      child.status === 'locked' ? 'text-zinc-400 dark:text-zinc-600' : 'text-zinc-700 dark:text-zinc-300 font-medium'
                     } ${child.isLesson && onLessonSelect ? 'cursor-pointer hover:underline' : ''}`}
                   >
                     {child.name}
@@ -180,10 +180,10 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
 
     return (
       <div className="relative">
-        {/* Vertical Connector Line */}
-        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-indigo-200 via-purple-200 to-indigo-200 rounded-full" />
-        
-        {/* Cards Container with Left Spacing */}
+        {/* Vertical connector line */}
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-300 via-violet-300 to-purple-300 dark:from-purple-500/40 dark:via-violet-500/30 dark:to-purple-500/40 rounded-full" />
+
+        {/* Cards with left spacing */}
         <div className="pl-6 space-y-4">
           {node.children.map((child, index) => renderModuleCard(child, index))}
         </div>
@@ -192,10 +192,10 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
   };
 
   return (
-    <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
-      <h3 className="text-xl font-bold text-slate-900 mb-6">Learning Path</h3>
+    <div className="p-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm">
+      <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-6">Learning Path</h3>
       {treeData ? renderTree(treeData) : (
-        <p className="text-sm text-slate-500">Generate or select a roadmap to view the learning path.</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">Generate or select a roadmap to view the learning path.</p>
       )}
     </div>
   );

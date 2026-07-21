@@ -195,7 +195,7 @@ export function HomeView({
 
   if (isLoading) {
     return (
-      <div className="home-view space-y-4 pb-2 max-w-full overflow-x-hidden">
+      <div className="home-view space-y-6 pb-2 max-w-full overflow-x-hidden">
         <SkeletonHeader />
         <div className="space-y-3">
           <Skeleton className="h-4 w-32" />
@@ -363,7 +363,7 @@ export function HomeView({
   ];
 
   return (
-    <div className="home-view space-y-4 pb-2 max-w-full overflow-x-hidden">
+    <div className="home-view space-y-6 pb-2 max-w-full overflow-x-hidden">
       {/* SECTION 1 — Personalized Hero */}
       <motion.section {...fadeUp}>
         <GlassCard tint="glass-card-purple" className="p-5 sm:p-6">
@@ -371,7 +371,7 @@ export function HomeView({
           <div className="absolute bottom-0 left-0 w-36 h-36 bg-blue-600 rounded-full blur-[100px] opacity-10 pointer-events-none" />
 
           <div className="relative z-10">
-            <span className="text-xs font-semibold text-purple-300 uppercase tracking-widest font-mono">
+            <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">
               {getTimeGreeting()}, {firstName}
             </span>
             <h1 className="font-display text-xl sm:text-3xl font-bold text-white mt-1 leading-tight">
@@ -404,7 +404,7 @@ export function HomeView({
                 </div>
 
                 {activePhase && (
-                  <p className="text-xs text-zinc-350 mt-3 truncate">
+                  <p className="text-xs text-zinc-300 mt-3 truncate">
                     Goal: <span className="font-medium text-white">{learningGoal}</span>
                     {' · '}
                     Phase: <span className="font-medium text-white">{activePhase.name}</span>
@@ -439,7 +439,7 @@ export function HomeView({
               </>
             ) : (
               <>
-                <p className="text-xs text-zinc-350 mt-3 max-w-lg leading-relaxed">
+                <p className="text-xs text-zinc-300 mt-3 max-w-lg leading-relaxed">
                   Let&apos;s create your first learning roadmap. Tell us your goal and we&apos;ll
                   build a structured path with lessons, quizzes, and projects.
                 </p>
@@ -471,7 +471,7 @@ export function HomeView({
                   </div>
                 </div>
                 <p className="font-display text-xl sm:text-2xl font-bold text-white mt-3">{card.value}</p>
-                <p className="text-[10px] text-zinc-400 mt-1 truncate">{card.sub}</p>
+                <p className="text-xs text-zinc-400 mt-1 truncate">{card.sub}</p>
               </GlassCard>
             );
           })}
@@ -486,7 +486,7 @@ export function HomeView({
             <div className="flex flex-col gap-3.5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-purple-300 font-mono">
+                  <span className="text-xs font-bold uppercase tracking-widest text-purple-400">
                     {activeRoadmap.goal}
                   </span>
                   <h4 className="font-display font-bold text-lg text-white mt-1">
@@ -511,26 +511,26 @@ export function HomeView({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {currentLesson && (
                   <div className="state-current rounded-2xl p-3.5">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 font-mono">
+                    <p className="text-xs font-bold uppercase tracking-widest text-emerald-400">
                       Current Lesson
                     </p>
                     <p className="font-semibold text-sm text-white mt-1 truncate">
                       {currentLesson.lesson.name}
                     </p>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                    <p className="text-xs text-zinc-400 mt-0.5">
                       {estimateLessonDuration(currentLesson.lesson)} · +{currentLesson.lesson.xpReward} XP
                     </p>
                   </div>
                 )}
                 {nextLesson && nextLesson.lesson.id !== currentLesson?.lesson.id && (
                   <div className="state-upcoming rounded-2xl p-3.5 opacity-100">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">
                       Up Next
                     </p>
                     <p className="font-semibold text-sm text-white mt-1 truncate">
                       {nextLesson.lesson.name}
                     </p>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                    <p className="text-xs text-zinc-400 mt-0.5">
                       {nextLesson.lesson.type?.replace('_', ' ') || 'Lesson'} · +{nextLesson.lesson.xpReward || 0} XP
                     </p>
                   </div>
@@ -614,7 +614,7 @@ export function HomeView({
                 <h4 className="font-display font-semibold text-sm text-white">
                   Start learning to unlock insights
                 </h4>
-                <p className="text-xs text-zinc-350 mt-1 leading-relaxed">
+                <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
                   Complete your first lesson and we&apos;ll suggest what to study next, quizzes to
                   take, and topics to revise — all based on your roadmap progress.
                 </p>
@@ -661,7 +661,7 @@ export function HomeView({
 {!task.completed && task.lessonId && task.levelId && task.phaseId && (
                   <button
                     onClick={() => onStartLesson(task.phaseId!, task.levelId!, task.lessonId!)}
-                    className="shrink-0 text-[10px] font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-2 py-1"
+                    className="shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-2 py-1"
                   >
                     Start
                   </button>
@@ -669,7 +669,7 @@ export function HomeView({
                 {!task.completed && !task.lessonId && task.id === 'task-create-roadmap' && (
                   <button
                     onClick={onGenerateRoadmap}
-                    className="shrink-0 text-[10px] font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-2 py-1"
+                    className="shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-2 py-1"
                   >
                     Start
                   </button>
@@ -697,7 +697,7 @@ export function HomeView({
                   <div key={item.label} className="home-nested-glass text-center p-3.5 rounded-2xl">
                     <Icon className="w-4 h-4 text-blue-400 mx-auto mb-1.5" />
                     <p className="font-display text-xl font-bold text-white">{item.value}</p>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">{item.label}</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">{item.label}</p>
                   </div>
                 );
               })}
@@ -717,7 +717,7 @@ export function HomeView({
                     transition={{ duration: 0.8, ease: 'easeOut' }}
                   />
                 </div>
-                <p className="text-[10px] text-zinc-400 mt-2 font-mono">
+                <p className="text-xs text-zinc-400 mt-2">
                   {stats.completedLessons} of {stats.totalLessons} lessons completed
                   {profile.streak > 0 && ` · ${profile.streak}-day streak`}
                 </p>
@@ -771,12 +771,12 @@ export function HomeView({
                   </div>
                   <div className="min-w-0">
                     <h4 className="font-semibold text-sm text-white truncate">{achievement.name}</h4>
-                    <p className="text-xs text-zinc-350 mt-0.5 line-clamp-2">{achievement.description}</p>
-                    <span className="inline-block mt-2 text-[10px] font-bold text-amber-500 font-mono">
+                    <p className="text-xs text-zinc-300 mt-0.5 line-clamp-2">{achievement.description}</p>
+                    <span className="inline-block mt-2 text-xs font-bold text-amber-500">
                       +{achievement.xpReward} XP REWARD
                     </span>
                     {achievement.unlockedAt && (
-                      <p className="text-[9px] text-zinc-500 mt-1 font-mono">
+                      <p className="text-xs text-zinc-500 mt-1">
                         {new Date(achievement.unlockedAt).toLocaleDateString()}
                       </p>
                     )}
@@ -807,7 +807,7 @@ export function HomeView({
                 key={action.id}
                 onClick={action.onClick}
                 disabled={action.disabled}
-                className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-3xl p-4 text-left transition-all duration-300 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0`}
+                className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-3xl p-4 text-left transition-all duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0`}
               >
                 <div className="p-2 rounded-xl border text-purple-400 bg-purple-500/10 border-purple-500/20 w-fit mb-2.5">
                   <Icon className="w-4 h-4" />

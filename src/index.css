@@ -27,7 +27,7 @@ body,
 
 html {
   color-scheme: light;
-  font-size: 17px;
+  font-size: 16px;
   background: #f8fafc;
 }
 
@@ -40,7 +40,7 @@ body {
   color: #0f172a;
   font-family: var(--font-sans);
   font-size: 1rem;
-  line-height: 1.55;
+  line-height: 1.6;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -136,6 +136,22 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(156, 163, 175, 0.45);
+}
+
+/* ==========================================================================
+   Global focus-visible — WCAG AA keyboard accessibility
+   Provides a visible ring on any focusable element when navigating by keyboard.
+   Using :focus-visible means mouse clicks won't show the ring (cleaner UX).
+   ========================================================================== */
+
+:focus-visible {
+  outline: 2px solid rgba(168, 85, 247, 0.7);
+  outline-offset: 2px;
+}
+
+/* Suppress the default blue browser outline (our custom ring replaces it) */
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* ==========================================================================
@@ -356,8 +372,8 @@ body {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3) !important;
-  border-radius: 20px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+  /* border-radius intentionally omitted — controlled by Tailwind rounded-* on each component */
 }
 
 /* Category gradients tints */
@@ -366,8 +382,7 @@ body {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(168, 85, 247, 0.2) !important;
-  box-shadow: 0 8px 32px 0 rgba(168, 85, 247, 0.05) !important;
-  border-radius: 20px !important;
+  box-shadow: 0 4px 16px rgba(168, 85, 247, 0.06) !important;
 }
 
 .glass-card-blue {
@@ -375,8 +390,7 @@ body {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(59, 130, 246, 0.2) !important;
-  box-shadow: 0 8px 32px 0 rgba(59, 130, 246, 0.05) !important;
-  border-radius: 20px !important;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.06) !important;
 }
 
 .glass-card-orange {
@@ -384,8 +398,7 @@ body {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(245, 158, 11, 0.2) !important;
-  box-shadow: 0 8px 32px 0 rgba(245, 158, 11, 0.05) !important;
-  border-radius: 20px !important;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.06) !important;
 }
 
 .glass-card-orange-red {
@@ -393,8 +406,7 @@ body {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(239, 68, 68, 0.2) !important;
-  box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.05) !important;
-  border-radius: 20px !important;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.06) !important;
 }
 
 .glass-card-teal {
@@ -402,8 +414,7 @@ body {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(20, 184, 166, 0.2) !important;
-  box-shadow: 0 8px 32px 0 rgba(20, 184, 166, 0.05) !important;
-  border-radius: 20px !important;
+  box-shadow: 0 4px 16px rgba(20, 184, 166, 0.06) !important;
 }
 
 .glass-card-emerald {
@@ -411,8 +422,7 @@ body {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(16, 185, 129, 0.2) !important;
-  box-shadow: 0 8px 32px 0 rgba(16, 185, 129, 0.05) !important;
-  border-radius: 20px !important;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.06) !important;
 }
 
 .glass-card-rose {
@@ -420,8 +430,7 @@ body {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border: 1px solid rgba(244, 63, 94, 0.2) !important;
-  box-shadow: 0 8px 32px 0 rgba(244, 63, 94, 0.05) !important;
-  border-radius: 20px !important;
+  box-shadow: 0 4px 16px rgba(244, 63, 94, 0.06) !important;
 }
 
 /* Completed state - Green/Success */
@@ -483,9 +492,10 @@ body {
   -webkit-backdrop-filter: blur(18px) saturate(150%) !important;
   border-color: rgba(100, 116, 139, 0.4) !important;
   box-shadow:
-    0 22px 50px rgba(15, 23, 42, 0.12),
+    0 8px 24px rgba(15, 23, 42, 0.08),
     0 1px 0 rgba(255, 255, 255, 0.85) inset !important;
   color: #0f172a !important;
+  /* border-radius controlled by Tailwind rounded-* on each component */
 }
 
 .light .glass-card-purple {
@@ -672,25 +682,8 @@ body {
   --tw-shadow-color: rgba(15, 23, 42, 0.12) !important;
 }
 
-.light :is(.text-\[8px\], .text-\[9px\], .text-\[10px\], .text-\[11px\]) {
-  font-size: 0.78rem !important;
-  line-height: 1.35rem !important;
-}
-
-.light .text-xs {
-  font-size: 0.86rem !important;
-  line-height: 1.45rem !important;
-}
-
-.light .text-sm {
-  font-size: 0.98rem !important;
-  line-height: 1.55rem !important;
-}
-
-.light .text-base {
-  font-size: 1.06rem !important;
-  line-height: 1.65rem !important;
-}
+/* Font-size overrides for light mode removed — the base rem scale (16px) is now correct
+   and Tailwind's text-* utilities produce the right sizes without !important overrides. */
 
 .light .prose-invert {
   --tw-prose-body: #334155;

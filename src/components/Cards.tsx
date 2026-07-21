@@ -18,12 +18,12 @@ export function ProgressCard({ progressPercent, currentPhaseName, totalXp, onCon
   const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
 
   return (
-    <div className="relative overflow-hidden rounded-3xl glass-card glass-card-purple p-8 transition-all duration-300">
+    <div className="relative overflow-hidden rounded-3xl glass-card glass-card-purple p-8 transition-all duration-200">
       <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600 rounded-full blur-[120px] opacity-15 pointer-events-none" />
       
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
         <div className="flex-1 min-w-0 text-center sm:text-left">
-          <span className="text-xs font-semibold text-purple-300 uppercase tracking-widest font-mono">ACTIVE SYLLABUS</span>
+          <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">ACTIVE SYLLABUS</span>
           <h3 className="font-display font-bold text-xl md:text-2xl text-white mt-1 truncate">
             {currentPhaseName}
           </h3>
@@ -42,7 +42,11 @@ export function ProgressCard({ progressPercent, currentPhaseName, totalXp, onCon
         </div>
 
         <div className="relative flex-shrink-0 w-24 h-24 flex items-center justify-center bg-white/5 rounded-full border border-white/10">
-          <svg className="w-20 h-20 transform -rotate-90">
+          <svg
+            role="img"
+            aria-label={`${progressPercent}% complete`}
+            className="w-20 h-20 transform -rotate-90"
+          >
             {/* Background ring */}
             <circle
               cx="40"
@@ -67,7 +71,7 @@ export function ProgressCard({ progressPercent, currentPhaseName, totalXp, onCon
           </svg>
           <div className="absolute text-center">
             <span className="text-base font-extrabold font-display text-white">{progressPercent}%</span>
-            <span className="block text-[8px] tracking-wide font-semibold text-zinc-400 uppercase">DONE</span>
+            <span className="block text-xs tracking-wide font-semibold text-zinc-400 uppercase">DONE</span>
           </div>
         </div>
       </div>
@@ -131,7 +135,7 @@ export function StatsCard({ stats }: StatsCardProps) {
         return (
           <div
             key={item.id}
-            className={`p-5 rounded-3xl ${item.glass} shadow-md flex flex-col justify-between transition-all duration-250`}
+            className={`p-5 rounded-3xl ${item.glass} shadow-md flex flex-col justify-between transition-all duration-200`}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-zinc-300 font-medium">{item.label}</span>
@@ -143,7 +147,7 @@ export function StatsCard({ stats }: StatsCardProps) {
               <span className="text-xl sm:text-2xl font-bold text-white font-display">
                 {item.value}
               </span>
-              <span className="block text-[10px] text-zinc-400 mt-1 truncate">
+              <span className="block text-xs text-zinc-400 mt-1 truncate">
                 {item.desc}
               </span>
             </div>
@@ -183,7 +187,7 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
 
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl p-5 border transition-all duration-300 ${
+      className={`relative overflow-hidden rounded-3xl p-5 border transition-all duration-200 ${
         isUnlocked
           ? 'glass-card glass-card-purple shadow-[0_4px_12px_rgba(168,85,247,0.08)]'
           : 'glass-card opacity-50'
@@ -208,16 +212,16 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
         <div className="flex-shrink-0">
           {isUnlocked ? (
             <div className="flex flex-col items-end gap-1.5">
-              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              <span className="inline-flex items-center gap-1 text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                 <CheckCircle2 className="w-3 h-3" />
                 <span>UNLOCKED</span>
               </span>
-              <span className="text-[9px] text-zinc-400 font-mono">
+              <span className="text-xs text-zinc-400">
                 {achievement.unlockedAt ? new Date(achievement.unlockedAt).toLocaleDateString() : 'Just now'}
               </span>
             </div>
           ) : (
-            <span className="inline-flex items-center gap-1 text-[10px] text-zinc-300 font-bold bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+            <span className="inline-flex items-center gap-1 text-xs text-zinc-300 font-bold bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
               LOCKED
             </span>
           )}
@@ -225,13 +229,13 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
-        <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest font-mono">
+        <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">
           +{achievement.xpReward} XP REWARD
         </span>
 {isUnlocked && onShare && (
            <button
              onClick={onShare}
-             className={`text-[10px] font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer ${buttonStyles.ghost}`}
+             className={`text-xs font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer ${buttonStyles.ghost}`}
            >
              Share Milestone
            </button>
@@ -273,10 +277,10 @@ export function NotificationCard({ notification, onReadToggle, onDelete }: Notif
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full tracking-wider ${getBadgeStyle()}`}>
+            <span className={`text-xs uppercase font-bold px-2 py-0.5 rounded-full tracking-wider ${getBadgeStyle()}`}>
               {notification.category}
             </span>
-            <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+            <span className="text-xs text-zinc-400 flex items-center gap-1">
               <Calendar className="w-3 h-3" />
               {new Date(notification.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
@@ -292,16 +296,16 @@ export function NotificationCard({ notification, onReadToggle, onDelete }: Notif
         <div className="flex h-full items-center gap-2">
           <button
             onClick={() => onReadToggle(notification.id)}
-            className="text-[10px] font-bold text-purple-400 hover:text-purple-300 cursor-pointer p-1"
+            className="text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer p-1"
           >
             {notification.read ? 'Unread' : 'Mark Read'}
           </button>
           <button
             onClick={() => onDelete(notification.id)}
-            className="p-1.5 text-zinc-500 hover:text-rose-450 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+            className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
             aria-label="Delete notification"
           >
-            <Trash2 className="w-4 h-4 text-zinc-400 hover:text-rose-450" />
+            <Trash2 className="w-4 h-4 text-zinc-400 hover:text-rose-400" />
           </button>
         </div>
       </div>
@@ -346,10 +350,10 @@ export function AIRecommendationCard({ recommendation, onLaunch }: AIRecommendat
   };
 
   return (
-    <div className={`p-5 rounded-3xl ${getGlassStyle()} transition-all duration-300 shadow-sm flex flex-col justify-between`}>
+    <div className={`p-5 rounded-3xl ${getGlassStyle()} transition-all duration-200 shadow-sm flex flex-col justify-between`}>
       <div>
         <div className="flex items-center justify-between gap-2.5">
-          <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border tracking-wide ${getBadgeStyle()}`}>
+          <span className={`text-xs uppercase font-bold px-2 py-0.5 rounded border tracking-wide ${getBadgeStyle()}`}>
             {recommendation.difficulty}
           </span>
           <span className="inline-flex items-center text-xs font-bold text-purple-400">
@@ -365,7 +369,7 @@ export function AIRecommendationCard({ recommendation, onLaunch }: AIRecommendat
         </div>
 
         <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
-          <span className="text-[10px] font-semibold text-zinc-400 font-mono capitalize">
+          <span className="text-xs font-semibold text-zinc-400 capitalize">
             Category: {recommendation.category}
           </span>
 <button

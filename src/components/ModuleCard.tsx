@@ -37,21 +37,21 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
     switch (moduleStatus) {
       case 'completed':
         return (
-          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full flex items-center gap-1.5">
+          <span className="px-3 py-1 bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-xs font-bold rounded-full flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5" />
             Completed
           </span>
         );
       case 'in-progress':
         return (
-          <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs font-bold rounded-full flex items-center gap-1.5">
-            <Play className="w-3.5 h-3.5 fill-indigo-700" />
+          <span className="px-3 py-1 bg-purple-500/10 dark:bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20 text-xs font-bold rounded-full flex items-center gap-1.5">
+            <Play className="w-3.5 h-3.5 fill-current" />
             In Progress
           </span>
         );
       default:
         return (
-          <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full flex items-center gap-1.5">
+          <span className="px-3 py-1 bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10 text-xs font-bold rounded-full flex items-center gap-1.5">
             <Circle className="w-3.5 h-3.5" />
             Not Started
           </span>
@@ -64,9 +64,9 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
       case 'completed':
         return 'from-emerald-600 to-teal-700';
       case 'in-progress':
-        return 'from-indigo-600 to-purple-700';
+        return 'from-purple-600 to-violet-700';
       default:
-        return 'from-slate-700 to-slate-800';
+        return 'from-zinc-600 to-zinc-700';
     }
   };
   
@@ -79,7 +79,7 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
   return (
     <motion.div
       layout
-      className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all hover:shadow-md"
+      className="bg-zinc-50 dark:bg-white/[0.03] rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm overflow-hidden transition-all hover:shadow-md"
     >
       <motion.button
         whileTap={{ scale: 0.995 }}
@@ -88,21 +88,21 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1.5">
-            <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">{level.name}</h3>
+            <h3 className="text-lg font-extrabold text-zinc-900 dark:text-white tracking-tight">{level.name}</h3>
           </div>
           
           {phaseName && (
-            <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-widest mb-2">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-widest mb-2">
               {phaseName}
             </p>
           )}
           
-          <div className="flex items-center gap-4 flex-wrap text-xs text-slate-600">
-            <span className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg">
-              <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-4 flex-wrap text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="flex items-center gap-1.5 bg-zinc-100 dark:bg-white/5 px-2.5 py-1 rounded-lg">
+              <BookOpen className="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
               {completedLessons}/{totalLessons} Lessons
             </span>
-            <span className="font-extrabold text-indigo-600">
+            <span className="font-extrabold text-purple-600 dark:text-purple-400">
               {progressPercent}% Complete
             </span>
           </div>
@@ -112,8 +112,8 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
           {getStatusBadge()}
           <motion.div
             animate={{ rotate: expanded ? 180 : 0 }}
-            transition={{ duration: 0.3 }}
-            className="text-slate-400"
+            transition={{ duration: 0.2 }}
+            className="text-zinc-400 dark:text-zinc-500"
           >
             <ChevronDown className="w-5 h-5" />
           </motion.div>
@@ -126,23 +126,23 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeInOut' }}
+            transition={{ duration: 0.25, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-<div className="px-5 pb-5 pt-1">
-               <div className="h-px bg-slate-100 mb-3" />
-               <div className="space-y-2">
-                 {lessons.map((lesson) => (
-                   <LessonItem
-                     key={lesson.id}
-                     lesson={lesson}
-                     displayStatus={getLessonDisplayStatus(lesson)}
-                     onClick={() => onLessonClick(phaseId, level.id, lesson.id)}
-                     isRecommended={lesson.id === recommendedLessonId}
-                   />
-                 ))}
-               </div>
-             </div>
+            <div className="px-5 pb-5 pt-1">
+              <div className="h-px bg-zinc-200 dark:bg-white/5 mb-3" />
+              <div className="space-y-2">
+                {lessons.map((lesson) => (
+                  <LessonItem
+                    key={lesson.id}
+                    lesson={lesson}
+                    displayStatus={getLessonDisplayStatus(lesson)}
+                    onClick={() => onLessonClick(phaseId, level.id, lesson.id)}
+                    isRecommended={lesson.id === recommendedLessonId}
+                  />
+                ))}
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

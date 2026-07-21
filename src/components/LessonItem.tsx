@@ -26,12 +26,12 @@ export const LessonItem: React.FC<LessonItemProps> = ({
         return <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />;
       case 'current':
         return (
-          <div className="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-indigo-200">
+          <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-purple-200 dark:shadow-purple-900/40">
             <Play className="w-3 h-3 text-white fill-white ml-0.5" />
           </div>
         );
       default:
-        return <Circle className="w-5 h-5 text-slate-300 flex-shrink-0" />;
+        return <Circle className="w-5 h-5 text-zinc-300 dark:text-zinc-600 flex-shrink-0" />;
     }
   };
   
@@ -48,10 +48,10 @@ export const LessonItem: React.FC<LessonItemProps> = ({
           onClick();
         }
       }}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
         displayStatus === 'current'
-          ? 'bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/60 hover:border-indigo-300 shadow-sm'
-          : 'hover:bg-slate-50 border border-transparent'
+          ? 'bg-gradient-to-r from-purple-500/10 to-violet-500/10 dark:from-purple-500/15 dark:to-violet-500/10 border border-purple-200/60 dark:border-purple-500/20 hover:border-purple-300 dark:hover:border-purple-500/40 shadow-sm'
+          : 'hover:bg-zinc-100 dark:hover:bg-white/5 border border-transparent'
       }`}
     >
       {getIcon()}
@@ -59,23 +59,23 @@ export const LessonItem: React.FC<LessonItemProps> = ({
       <span
         className={`flex-1 text-sm font-medium truncate ${
           displayStatus === 'completed'
-            ? 'text-slate-400 line-through decoration-slate-300'
+            ? 'text-zinc-400 dark:text-zinc-500 line-through decoration-zinc-300 dark:decoration-zinc-600'
             : displayStatus === 'current'
-            ? 'text-slate-900'
-            : 'text-slate-600 group-hover:text-slate-900'
+            ? 'text-zinc-900 dark:text-white'
+            : 'text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white'
         }`}
       >
         {lesson.name}
       </span>
       
- {isRecommended && (
+      {isRecommended && (
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             (onRecommendedClick || onClick)();
           }}
-          className="flex-shrink-0 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full uppercase tracking-wide hover:bg-indigo-200 transition-colors cursor-pointer"
+          className="flex-shrink-0 px-2.5 py-1 bg-purple-500/10 dark:bg-purple-500/15 text-purple-700 dark:text-purple-400 text-xs font-bold rounded-full uppercase tracking-wide hover:bg-purple-500/20 dark:hover:bg-purple-500/25 border border-purple-200 dark:border-purple-500/20 transition-colors cursor-pointer"
         >
           Continue Learning
         </button>

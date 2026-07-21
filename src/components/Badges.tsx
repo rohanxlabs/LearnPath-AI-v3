@@ -16,7 +16,7 @@ export function XPBadge({ amount, size = 'md' }: XPBadgeProps) {
 
   return (
     <div className={`inline-flex items-center font-semibold rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-[0_0_12px_rgba(168,85,247,0.15)] ${sizeClasses[size]}`}>
-      <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
       <span>+{amount} XP</span>
     </div>
   );
@@ -29,7 +29,7 @@ interface StreakBadgeProps {
 export function StreakBadge({ days }: StreakBadgeProps) {
   return (
     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 font-bold text-sm shadow-[0_0_10px_rgba(245,158,11,0.1)]">
-      <Flame className="w-4 h-4 text-amber-500 animate-bounce" fill="currentColor" />
+      <Flame className="w-4 h-4 text-amber-500" fill="currentColor" />
       <span>{days} Day Streak</span>
     </div>
   );
@@ -51,7 +51,7 @@ export function TierBadge({ isPro, onClick }: TierBadgeProps) {
           : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border-white/10'
       }`}
     >
-      <Award className={`w-3.5 h-3.5 ${isPro ? 'text-white animate-spin-slow' : 'text-zinc-500'}`} />
+      <Award className={`w-3.5 h-3.5 ${isPro ? 'text-white' : 'text-zinc-500'}`} />
       <span>{isPro ? 'LEARNPATH PRO' : 'UPGRADE TO PRO'}</span>
     </button>
   );

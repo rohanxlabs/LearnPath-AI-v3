@@ -66,7 +66,7 @@ export const RoadmapTimeline: React.FC<{
         {onRegenerate && (
           <button
             onClick={onRegenerate}
-            className="px-6 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:brightness-110 transition-all cursor-pointer"
+            className="px-6 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:brightness-110 transition-all cursor-pointer"
           >
             Regenerate Roadmap
           </button>
@@ -77,7 +77,7 @@ export const RoadmapTimeline: React.FC<{
   
   return (
     <div className="relative">
-      <div className="absolute left-[18px] md:left-[22px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-indigo-300 via-purple-300 to-indigo-300" />
+      <div className="absolute left-[18px] md:left-[22px] top-4 bottom-4 w-0.5 bg-gradient-to-b from-purple-300 via-violet-300 to-purple-300 dark:from-purple-500/40 dark:via-violet-500/30 dark:to-purple-500/40" />
       
       <div className="space-y-6">
         {modules.map((mod) => {
@@ -90,8 +90,8 @@ export const RoadmapTimeline: React.FC<{
                   getModuleStatus(mod.level) === 'completed'
                     ? 'bg-gradient-to-br from-emerald-400 to-emerald-500'
                     : getModuleStatus(mod.level) === 'in-progress'
-                    ? 'bg-gradient-to-br from-indigo-400 to-purple-500'
-                    : 'bg-gradient-to-br from-slate-300 to-slate-400'
+                    ? 'bg-gradient-to-br from-purple-400 to-violet-500'
+                    : 'bg-gradient-to-br from-zinc-300 to-zinc-400'
                 }`}
               />
               
