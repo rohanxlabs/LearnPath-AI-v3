@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Sparkles, Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, CheckCircle, ArrowLeft, BookOpen, Brain, Code, BarChart } from 'lucide-react';
 import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, ChatMessage } from './types';
+import { getPhaseUnlockStatus } from './lib/roadmapUtils';
 import { usePWA } from './lib/usePWA';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
 import { AchievementCard, NotificationCard } from './components/Cards';
@@ -40,6 +41,12 @@ const AchievementCelebration = lazy(() =>
 );
 const ResourcesTab = lazy(() =>
   import('./components/ResourcesTab').then(m => ({ default: m.ResourcesTab }))
+);
+const RoadmapOverviewPage = lazy(() =>
+  import('./components/RoadmapOverviewPage').then(m => ({ default: m.RoadmapOverviewPage }))
+);
+const PhaseDetailPage = lazy(() =>
+  import('./components/PhaseDetailPage').then(m => ({ default: m.PhaseDetailPage }))
 );
 const QuizTab = lazy(() => import('./components/QuizTab').then(m => ({ default: m.QuizTab })));
 const ProjectsTab = lazy(() =>
@@ -379,6 +386,7 @@ export default function App() {
 
   const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
 
   // Load roadmap progress from database (parallelized)
   useEffect(() => {
@@ -483,13 +491,14 @@ export default function App() {
        });
 
        setRoadmaps(uniqueList);
-       const hasRoadmap = uniqueList.some(r => r.id === activeRoadmapId);
-       if (!hasRoadmap && uniqueList[0]) {
-         setActiveRoadmapId(uniqueList[0].id);
-       } else if (uniqueList.length === 0) {
-         setActiveRoadmapId('');
-         setSelectedRoadmapId(null);
-       }
+        const hasRoadmap = uniqueList.some(r => r.id === activeRoadmapId);
+        if (!hasRoadmap && uniqueList[0]) {
+          setActiveRoadmapId(uniqueList[0].id);
+        } else if (uniqueList.length === 0) {
+          setActiveRoadmapId('');
+          setSelectedRoadmapId(null);
+          setSelectedPhaseId(null);
+        }
      }
    } catch (err) {
      console.error('Failed to sync roadmaps from database:', err);
@@ -698,6 +707,7 @@ export default function App() {
     setApiCallsCounter(0);
     setRoadmapDetailTab('roadmap');
     setSelectedRoadmapId(null);
+    setSelectedPhaseId(null);
     setShowAuthModal(false);
   };
 
@@ -823,6 +833,7 @@ export default function App() {
         }
         if (selectedRoadmapId === id) {
           setSelectedRoadmapId(null);
+          setSelectedPhaseId(null);
         }
 
         syncRoadmapsFromDatabase();
@@ -1259,125 +1270,79 @@ export default function App() {
           handleSelectRecommendationTask,
         });
 
-      case 'roadmaps':
-        // Show empty state message for other tabs when no roadmap is selected
-        if (!selectedRoadmapId) {
-          if (roadmapDetailTab === 'resources') {
+      case 'roadmaps': {
+        const selectedRm = roadmaps.find(r => r.id === selectedRoadmapId) ?? null;
+
+        // ── resource / quiz / project / insights tabs (roadmap-level, unchanged) ──
+        if (selectedRm && roadmapDetailTab === 'resources') return <ResourcesTab roadmap={selectedRm} />;
+        if (selectedRm && roadmapDetailTab === 'quiz') return <QuizTab roadmap={selectedRm} onAddXp={handleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} onAchievementUnlocked={handleAchievementUnlocked} />;
+        if (selectedRm && roadmapDetailTab === 'projects') return <ProjectsTab roadmap={selectedRm} onAddXp={handleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} />;
+        if (selectedRm && roadmapDetailTab === 'insights') return <AIInsightsTab roadmap={selectedRm} profile={profile} activityLog={activityLog} />;
+
+        // ── Phase Detail Page ──
+        if (selectedRm && selectedPhaseId) {
+          const phaseIndex = selectedRm.phases.findIndex(p => p.id === selectedPhaseId);
+          const phase = selectedRm.phases[phaseIndex];
+          if (phase) {
+            const unlockStatus = getPhaseUnlockStatus(selectedRm.phases, phaseIndex);
             return (
-              <div className="flex flex-col items-center justify-center py-20 px-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10">
-                <div className="w-20 h-20 bg-gradient-to-br from-purple-500/15 to-blue-500/15 rounded-full flex items-center justify-center mb-6">
-                  <BookOpen className="w-10 h-10 text-purple-600 dark:text-purple-400" />
-                </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-2">Select a Roadmap</h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
-                  Choose a roadmap from your list to access curated learning resources tailored to your learning path.
-                </p>
-                <button
-                  onClick={() => setRoadmapDetailTab('roadmap')}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
-                >
-                  View My Roadmaps
-                </button>
-              </div>
-            );
-          }
-          if (roadmapDetailTab === 'quiz') {
-            return (
-              <div className="flex flex-col items-center justify-center py-20 px-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10">
-                <div className="w-20 h-20 bg-gradient-to-br from-purple-500/15 to-blue-500/15 rounded-full flex items-center justify-center mb-6">
-                  <Brain className="w-10 h-10 text-purple-600 dark:text-purple-400" />
-                </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-2">Select a Roadmap</h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
-                  Choose a roadmap to access quizzes and test your knowledge on specific topics.
-                </p>
-                <button
-                  onClick={() => setRoadmapDetailTab('roadmap')}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
-                >
-                  View My Roadmaps
-                </button>
-              </div>
-            );
-          }
-          if (roadmapDetailTab === 'projects') {
-            return (
-              <div className="flex flex-col items-center justify-center py-20 px-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10">
-                <div className="w-20 h-20 bg-gradient-to-br from-purple-500/15 to-blue-500/15 rounded-full flex items-center justify-center mb-6">
-                  <Code className="w-10 h-10 text-purple-600 dark:text-purple-400" />
-                </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-2">Select a Roadmap</h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
-                  Choose a roadmap to access hands-on projects and build your portfolio.
-                </p>
-                <button
-                  onClick={() => setRoadmapDetailTab('roadmap')}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
-                >
-                  View My Roadmaps
-                </button>
-              </div>
-            );
-          }
-          if (roadmapDetailTab === 'insights') {
-            return (
-              <div className="flex flex-col items-center justify-center py-20 px-6 bg-zinc-50 dark:bg-white/[0.02] rounded-2xl border border-zinc-200 dark:border-white/10">
-                <div className="w-20 h-20 bg-gradient-to-br from-purple-500/15 to-blue-500/15 rounded-full flex items-center justify-center mb-6">
-                  <BarChart className="w-10 h-10 text-purple-600 dark:text-purple-400" />
-                </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-2">Select a Roadmap</h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
-                  Choose a roadmap to view personalized AI insights and track your learning progress.
-                </p>
-                <button
-                  onClick={() => setRoadmapDetailTab('roadmap')}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold rounded-xl hover:brightness-110 transition-all"
-                >
-                  View My Roadmaps
-                </button>
-              </div>
+              <PhaseDetailPage
+                roadmap={selectedRm}
+                phase={phase}
+                phaseIndex={phaseIndex}
+                unlockStatus={unlockStatus}
+                onBack={() => setSelectedPhaseId(null)}
+                onLessonClick={(phaseId, levelId, lessonId) => {
+                  setActiveLesson({ phaseId, levelId, lessonId });
+                }}
+                onAddXp={handleAddXp}
+                onRoadmapUpdated={syncRoadmapsFromDatabase}
+              />
             );
           }
         }
-        
-        // Use RoadmapsTabContainer for list and detail views
-        const selectedRm = roadmaps.find(r => r.id === selectedRoadmapId);
-        if (roadmapDetailTab === 'resources') {
-          if (!selectedRm) return null;
-          return <ResourcesTab roadmap={selectedRm} />;
+
+        // ── Roadmap Overview Page ──
+        if (selectedRm) {
+          return (
+            <RoadmapOverviewPage
+              roadmap={selectedRm}
+              profile={profile}
+              onSelectPhase={(phaseId) => setSelectedPhaseId(phaseId)}
+              onBack={() => { setSelectedRoadmapId(null); setSelectedPhaseId(null); }}
+              onContinueLearning={() => {
+                const next = getNextIncompleteLesson(selectedRm);
+                if (next) setActiveLesson(next);
+              }}
+              onGenerateRoadmap={handleGenerateRoadmap}
+              isGenerating={isAiGeneratingRoadmap}
+            />
+          );
         }
-        if (roadmapDetailTab === 'quiz') {
-          if (!selectedRm) return null;
-          return <QuizTab roadmap={selectedRm} onAddXp={handleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} onAchievementUnlocked={handleAchievementUnlocked} />;
-        }
-        if (roadmapDetailTab === 'projects') {
-          if (!selectedRm) return null;
-          return <ProjectsTab roadmap={selectedRm} onAddXp={handleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} />;
-        }
-        if (roadmapDetailTab === 'insights') {
-          if (!selectedRm) return null;
-          return <AIInsightsTab roadmap={selectedRm} profile={profile} activityLog={activityLog} />;
-        }
+
+        // ── Roadmap List (no roadmap selected) ──
         return (
-<RoadmapsTabContainer
-             roadmaps={roadmaps}
-             selectedRoadmapId={selectedRoadmapId}
-             onSelectRoadmap={(id) => {
-               setSelectedRoadmapId(id);
-               setActiveRoadmapId(id);
-             }}
-             onBackToList={() => setSelectedRoadmapId(null)}
-             onDeleteRoadmap={handleDeleteRoadmap}
-             onGenerateRoadmap={handleGenerateRoadmap}
-             isGenerating={isAiGeneratingRoadmap}
-             profile={profile}
-             isLoading={isLoadingAuth}
-             onAiAction={handleAiAction}
-             onLessonClick={(phaseId, levelId, lessonId) => {
-               setActiveLesson({ phaseId, levelId, lessonId });
-             }}
-           />
+          <RoadmapsTabContainer
+            roadmaps={roadmaps}
+            selectedRoadmapId={selectedRoadmapId}
+            onSelectRoadmap={(id) => {
+              setSelectedRoadmapId(id);
+              setActiveRoadmapId(id);
+              setSelectedPhaseId(null);
+            }}
+            onBackToList={() => { setSelectedRoadmapId(null); setSelectedPhaseId(null); }}
+            onDeleteRoadmap={handleDeleteRoadmap}
+            onGenerateRoadmap={handleGenerateRoadmap}
+            isGenerating={isAiGeneratingRoadmap}
+            profile={profile}
+            isLoading={isLoadingAuth}
+            onAiAction={handleAiAction}
+            onLessonClick={(phaseId, levelId, lessonId) => {
+              setActiveLesson({ phaseId, levelId, lessonId });
+            }}
+          />
         );
+      }
 
       case 'mentor':
         return (

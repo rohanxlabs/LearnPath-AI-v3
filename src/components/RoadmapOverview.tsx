@@ -6,42 +6,7 @@ import { RoadmapHero } from './RoadmapHero';
 import RoadmapTree, { transformRoadmapToSkillTree } from './RoadmapTree';
 import { AIMentorAnalysis } from './AIMentorAnalysis';
 import { buttonStyles } from '../styles/theme';
-
-// Helper function to generate AI Mentor Analysis
-const generateMentorAnalysis = (roadmap: Roadmap, profile: UserProfile) => {
-  const completedLessons = (roadmap.phases || [])
-    .flatMap(p => p.levels || [])
-    .flatMap(l => l.lessons || [])
-    .filter(lesson => lesson.status === 'completed').length;
-
-  const totalLessons = (roadmap.phases || [])
-    .flatMap(p => p.levels || [])
-    .flatMap(l => l.lessons || []).length;
-
-  const completionPercentage = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
-
-  let strengths: string[] = [];
-  let weaknesses: string[] = [];
-
-  if (completionPercentage > 75) {
-    strengths.push("High completion rate");
-  } else if (completionPercentage < 25) {
-    weaknesses.push("Low initial progress");
-  }
-
-  if (roadmap.preferredStyle) {
-    strengths.push("Aligned learning style");
-  }
-
-  // This is a simplified example. A real implementation would be more complex.
-  return {
-    strengths,
-    weaknesses,
-    recommendation: completionPercentage < 50 
-      ? "Focus on completing the current module's lessons to build momentum."
-      : "You're making great progress! Consider exploring advanced topics in the resources tab."
-  };
-};
+import { generateMentorAnalysis } from '../lib/roadmapUtils';
 
 // Helper function to transform roadmap data into a skill tree
 // (imported from RoadmapTree so lesson IDs are preserved for selection)
