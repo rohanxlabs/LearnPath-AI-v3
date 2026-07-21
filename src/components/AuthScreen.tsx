@@ -1,5 +1,5 @@
-import React from 'react';
-import { Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sparkles, Eye, EyeOff } from 'lucide-react';
 
 export interface AuthScreenProps {
   // Mode
@@ -40,6 +40,11 @@ export interface AuthScreenProps {
   handleResetPassword: (e: React.FormEvent) => void;
 }
 
+// ── Simple email format check (no round-trip needed) ──────────────────────────
+function isValidEmailFormat(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
 export function AuthScreen({
   authMode, setAuthMode,
   authEmail, setAuthEmail,
@@ -55,11 +60,17 @@ export function AuthScreen({
   resetStatus, setResetStatus,
   handleAuthenticate, handleForgotPassword, handleResetPassword,
 }: AuthScreenProps) {
+  // Local UI-only state — not lifted to App.
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+
   const cardClass = "w-full max-w-sm rounded-[24px] bg-[#111111] border border-white/10 p-6 shadow-2xl space-y-6 relative overflow-hidden";
   const inputClass = "w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500";
   const btnClass = "w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
 
-  // Focus trap: keeps Tab/Shift-Tab cycling within the card
+  // Focus trap: keeps Tab/Shift-Tab cycling within the card.
+  // Note: on touch-only devices (no hardware keyboard) this never fires, so
+  // it is safe and doesn't trap mobile users without a keyboard.
   const handleFocusTrap = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Tab') return;
     const card = e.currentTarget;
@@ -76,6 +87,13 @@ export function AuthScreen({
     }
   };
 
+  // Switch mode and immediately clear any stale error so the new form is clean.
+  const switchMode = () => {
+    setAuthMode(authMode === 'login' ? 'signup' : 'login');
+    setAuthError('');
+    setEmailTouched(false);
+  };
+
   const header = (
     <div className="text-center flex flex-col items-center">
       <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5">
@@ -87,6 +105,12 @@ export function AuthScreen({
       <p className="text-xs text-zinc-400 mt-1">Premium Full-Stack AI Learning Platform</p>
     </div>
   );
+
+  // Inline email format warning (only shown after user has blurred the field).
+  const emailFormatError =
+    emailTouched && authEmail.trim().length > 0 && !isValidEmailFormat(authEmail)
+      ? 'Please enter a valid email address (e.g. you@example.com).'
+      : '';
 
   // ── Password reset confirm form ──
   if (resetToken) {
@@ -105,7 +129,26 @@ export function AuthScreen({
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="block text-xs uppercase font-bold text-zinc-400">New Password</label>
-                <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} placeholder="Min 8 chars, include a number" className={inputClass} required minLength={8} />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={resetPassword}
+                    onChange={e => setResetPassword(e.target.value)}
+                    placeholder="At least 8 characters with a number"
+                    className={`${inputClass} pr-10`}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200 transition-colors"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
               </div>
               <button type="submit" disabled={resetStatus === 'submitting'} className={btnClass}>
                 {resetStatus === 'submitting' ? 'Saving…' : 'Set New Password'}
@@ -133,7 +176,15 @@ export function AuthScreen({
               {forgotStatus === 'error' && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">Something went wrong. Please try again.</div>}
               <div className="space-y-1.5">
                 <label className="block text-xs uppercase font-bold text-zinc-400">Your Email</label>
-                <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="you@example.com" className={inputClass} required />
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={e => setForgotEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className={inputClass}
+                  required
+                  autoComplete="email"
+                />
               </div>
               <button type="submit" disabled={forgotStatus === 'sending'} className={btnClass}>
                 {forgotStatus === 'sending' ? 'Sending…' : 'Send Reset Link'}
@@ -152,50 +203,107 @@ export function AuthScreen({
 
   // ── Normal login / signup form ──
   return (
-    <div role="dialog" aria-modal="true" aria-label={authMode === 'login' ? 'Sign in to LearnPath AI' : 'Create your LearnPath AI account'} className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4" onKeyDown={handleFocusTrap}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={authMode === 'login' ? 'Sign in to LearnPath AI' : 'Create your LearnPath AI account'}
+      className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4"
+      onKeyDown={handleFocusTrap}
+    >
       <div className={cardClass}>
         <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
         {header}
 
         {authError && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">
+          <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">
             {authError}
           </div>
         )}
 
-        <form onSubmit={handleAuthenticate} className="space-y-4">
+        <form onSubmit={handleAuthenticate} className="space-y-4" noValidate>
           {authMode === 'signup' && (
             <div className="space-y-1.5">
-              <label className="block text-xs uppercase font-bold text-zinc-400">Full Name</label>
-              <input type="text" value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder="Jane Smith" className={inputClass} required />
+              <label htmlFor="auth-name" className="block text-xs uppercase font-bold text-zinc-400">Full Name</label>
+              <input
+                id="auth-name"
+                type="text"
+                value={authName}
+                onChange={(e) => setAuthName(e.target.value)}
+                placeholder="Your name"
+                className={inputClass}
+                required
+                autoComplete="name"
+              />
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="block text-xs uppercase font-bold text-zinc-400">Registry Email</label>
-            <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="bobby.fisher@learnpath.ai" className={inputClass} required />
+            <label htmlFor="auth-email" className="block text-xs uppercase font-bold text-zinc-400">Email</label>
+            <input
+              id="auth-email"
+              type="email"
+              value={authEmail}
+              onChange={(e) => { setAuthEmail(e.target.value); if (emailTouched) setEmailTouched(false); }}
+              onBlur={() => setEmailTouched(true)}
+              placeholder="you@example.com"
+              className={`${inputClass} ${emailFormatError ? 'border-red-500/50' : ''}`}
+              required
+              autoComplete="email"
+            />
+            {emailFormatError && (
+              <p role="alert" className="text-[11px] text-red-400 mt-1">{emailFormatError}</p>
+            )}
           </div>
 
           <div className="space-y-1.5 font-sans">
             <div className="flex justify-between items-center text-xs">
-              <label className="block uppercase font-bold text-zinc-400">Security Password</label>
+              <label htmlFor="auth-password" className="block uppercase font-bold text-zinc-400">Password</label>
               {authMode === 'login' && (
-                <button type="button" onClick={() => { setForgotPasswordMode(true); setAuthError(''); }} className="text-zinc-500 hover:text-white cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => { setForgotPasswordMode(true); setAuthError(''); }}
+                  className="text-zinc-500 hover:text-white cursor-pointer underline-offset-2 hover:underline"
+                >
                   Forgot Password?
                 </button>
               )}
             </div>
-            <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" className={inputClass} required />
+            <div className="relative">
+              <input
+                id="auth-password"
+                type={showPassword ? 'text' : 'password'}
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                placeholder={authMode === 'signup' ? 'At least 8 characters with a number' : 'Your password'}
+                className={`${inputClass} pr-10`}
+                required
+                autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200 transition-colors"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                tabIndex={0}
+              >
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </div>
 
-          <button type="submit" disabled={isAuthenticating} className={btnClass}>
-            {isAuthenticating ? 'Processing...' : authMode === 'login' ? 'Confirm Sign In' : 'Create Free Account'}
+          <button
+            type="submit"
+            disabled={isAuthenticating || !!emailFormatError}
+            className={btnClass}
+          >
+            {isAuthenticating ? 'Processing...' : authMode === 'login' ? 'Sign In' : 'Create Free Account'}
           </button>
         </form>
 
         <div className="text-center pt-2 space-y-3.5 border-t border-white/10 pb-1.5">
           <button
-            onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setAuthError(''); }}
+            type="button"
+            onClick={switchMode}
             className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer"
           >
             {authMode === 'login' ? "Don't have an account? Sign Up" : "Already registered? Sign In"}

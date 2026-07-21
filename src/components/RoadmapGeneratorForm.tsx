@@ -52,8 +52,8 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (goal.trim().length < 10) {
-      setGoalError('Please describe your goal in at least 10 characters.');
+    if (goal.trim().length < 3) {
+      setGoalError('Please enter at least 3 characters for your goal.');
       return;
     }
     setGoalError('');
@@ -111,7 +111,6 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
               onChange={e => { setGoal(e.target.value); if (goalError) setGoalError(''); }}
               placeholder="e.g., Build a full-stack application with React and Node.js"
               className={`w-full px-4 py-2.5 bg-white dark:bg-white/5 border rounded-xl text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500 ${goalError ? 'border-red-400 dark:border-red-500' : 'border-zinc-200 dark:border-white/10'}`}
-              minLength={10}
             />
             {goalError && (
               <p className="text-xs text-red-500 dark:text-red-400 mt-1">{goalError}</p>
@@ -172,7 +171,7 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
           <div className="flex gap-3">
             <button
               type="submit"
-              disabled={isGenerating || goal.trim().length < 10}
+                disabled={isGenerating || goal.trim().length < 3}
               className={`flex-1 py-3 rounded-xl text-sm font-bold ${buttonStyles.primary} flex items-center justify-center gap-2 disabled:opacity-50 transition-all`}
             >
               <Sparkles className="w-4 h-4" />
