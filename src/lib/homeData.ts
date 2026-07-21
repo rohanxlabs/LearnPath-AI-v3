@@ -140,6 +140,18 @@ export function getModuleProgress(level: Level): number {
   return Math.round((completed / level.lessons.length) * 100);
 }
 
+// Ebbinghaus forgetting-curve proxy: deterministic spread across completed lessons.
+function isDueForReview(lesson: Lesson): boolean {
+  // We don't have per-lesson completion timestamps in the front-end Lesson type,
+  // so we use a deterministic hash of the lesson id to spread reviews across the set
+  // of completed lessons — this gives a stable, spread-out review suggestion without
+  // needing a timestamp.  Any lesson whose hash mod 14 < 4 is considered "due".
+  if (lesson.status !== 'completed') return false;
+  let h = 0;
+  for (let i = 0; i < lesson.id.length; i++) h = (h * 31 + lesson.id.charCodeAt(i)) >>> 0;
+  return (h % 14) < 4;
+}
+
 export function deriveProgressInsights(roadmap: Roadmap | null): ProgressInsight[] {
   if (!roadmap) return [];
 
@@ -178,22 +190,28 @@ export function deriveProgressInsights(roadmap: Roadmap | null): ProgressInsight
     });
   }
 
-  const completedLearn = getAllLessonsInOrder(roadmap).filter(
-    (ctx) => ctx.lesson.type === 'learn' && ctx.lesson.status === 'completed',
-  );
-  if (completedLearn.length > 0 && insights.length < 3) {
-    const revise = completedLearn[completedLearn.length - 1];
-    insights.push({
-      id: `insight-revise-${revise.lesson.id}`,
-      title: `Revise ${revise.lesson.name}`,
-      description: 'Revisit this topic to strengthen your understanding.',
-      xpReward: Math.max(20, Math.round(revise.lesson.xpReward * 0.5)),
-      category: 'mentor',
-      difficulty: 'Easy',
-      phaseId: revise.phase.id,
-      levelId: revise.level.id,
-      lessonId: revise.lesson.id,
-    });
+  // Spaced repetition: surface a completed lesson due for review (Ebbinghaus curve proxy)
+  if (insights.length < 3) {
+    const completedLearn = getAllLessonsInOrder(roadmap).filter(
+      (ctx) => ctx.lesson.type === 'learn' && ctx.lesson.status === 'completed',
+    );
+    const dueForReview = completedLearn.find((ctx) => isDueForReview(ctx.lesson));
+    const revise = dueForReview ?? (completedLearn.length > 0 ? completedLearn[completedLearn.length - 1] : null);
+    if (revise) {
+      insights.push({
+        id: `insight-revise-${revise.lesson.id}`,
+        title: dueForReview ? `Review: ${revise.lesson.name}` : `Revise ${revise.lesson.name}`,
+        description: dueForReview
+          ? 'Spaced repetition: revisiting this now locks it into long-term memory.'
+          : 'Revisit this topic to strengthen your understanding.',
+        xpReward: Math.max(20, Math.round(revise.lesson.xpReward * 0.5)),
+        category: 'mentor',
+        difficulty: 'Easy',
+        phaseId: revise.phase.id,
+        levelId: revise.level.id,
+        lessonId: revise.lesson.id,
+      });
+    }
   }
 
   if (next && next.lesson.id !== current?.lesson.id && insights.length < 3) {

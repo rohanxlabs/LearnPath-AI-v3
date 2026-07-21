@@ -375,6 +375,24 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                     {topicData.description && (
                       <p className="text-sm text-slate-500 mt-1 leading-relaxed">{topicData.description}</p>
                     )}
+
+                  {/* "Why this matters" goal connector — surfaces purpose to fight drift */}
+                  {roadmap.goal && (
+                    <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-100">
+                      <Target className="w-3.5 h-3.5 text-violet-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        <span className="font-semibold text-violet-700">Why this matters:</span>{' '}
+                        {topicData.type === 'quiz'
+                          ? `Testing yourself on ${topicData.name} reinforces retention and moves you closer to mastering ${roadmap.goal}.`
+                          : topicData.type === 'coding'
+                          ? `Building hands-on experience with ${topicData.name} is a direct skill for ${roadmap.goal}.`
+                          : topicData.type === 'boss_challenge' || topicData.type === 'challenge'
+                          ? `This challenge validates your ${topicData.name} skills — a milestone on the path to ${roadmap.goal}.`
+                          : `Understanding ${topicData.name} is a foundational step toward your goal: ${roadmap.goal}.`
+                        }
+                      </p>
+                    </div>
+                  )}
                     {/* XP badge inline */}
                     <div className="flex items-center gap-3 mt-3">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold">

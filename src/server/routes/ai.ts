@@ -211,10 +211,34 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
     return res.json(parsed);
   } catch (error: any) {
     console.error('OpenRouter recommendations fallback:', error.message);
+    // Goal-aware fallback recs: derive action titles from the activeGoal string
+    const goal = sanitizeForPrompt(activeGoal || '', 120);
+    const goalLabel = goal || 'your learning goal';
     const fallback = [
-      { id: 'rec-numpy', title: 'Complete: NumPy Index Exercises', description: 'Level up your Python status by completing vector slice operations.', xpReward: 75, category: 'coding', difficulty: 'Medium' },
-      { id: 'rec-quiz', title: 'Quiz: Neural Forward Propagation', description: 'Prove your Foundations awareness! Complete the 4-question checkpoint.', xpReward: 50, category: 'quiz', difficulty: 'Easy' },
-      { id: 'rec-mentor', title: 'Ask AI Mentor about MCP Specs', description: 'Explore Model Context Protocol schemas by asking our AI tutor.', xpReward: 30, category: 'mentor', difficulty: 'Hard' }
+      {
+        id: 'rec-practice',
+        title: `Practice: Apply a concept from ${goalLabel}`,
+        description: `Pick one topic you've covered and build a small example from scratch — active recall beats re-reading.`,
+        xpReward: 75,
+        category: 'coding',
+        difficulty: 'Medium',
+      },
+      {
+        id: 'rec-quiz',
+        title: `Quiz yourself on ${goalLabel}`,
+        description: `Testing your knowledge with a quick quiz is the fastest way to find gaps before they become blockers.`,
+        xpReward: 50,
+        category: 'quiz',
+        difficulty: 'Easy',
+      },
+      {
+        id: 'rec-mentor',
+        title: `Ask the AI Mentor a question about ${goalLabel}`,
+        description: `Something unclear? Getting a direct explanation from your AI mentor saves hours of confusion.`,
+        xpReward: 30,
+        category: 'mentor',
+        difficulty: 'Easy',
+      },
     ];
     recCache.set(cacheKey, { data: fallback, timestamp: Date.now() });
     return res.json(fallback);

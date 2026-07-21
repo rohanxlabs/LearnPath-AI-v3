@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Play,
   Sparkles,
@@ -20,6 +20,8 @@ import {
   LayoutDashboard,
   ClipboardList,
   Zap,
+  RefreshCw,
+  X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserProfile, Roadmap, Phase, Achievement } from '../types';
@@ -64,6 +66,12 @@ export interface HomeViewProps {
   onOpenMentor: () => void;
   onViewProgress: () => void;
   roadmapProgress?: Record<string, any>;
+}
+
+interface UserStatsWithVisit {
+  streak: number;
+  lessonsCompleted: number;
+  daysSinceLastVisit: number | null;
 }
 
 function getTimeGreeting(): string {
@@ -154,6 +162,23 @@ export function HomeView({
 }: HomeViewProps) {
   const firstName = profile.name.split(' ')[0] || profile.name;
 
+  // Fetch live stats for welcome-back banner (daysSinceLastVisit)
+  const [liveStats, setLiveStats] = useState<UserStatsWithVisit | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  useEffect(() => {
+    fetch('/api/user-stats')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setLiveStats({ streak: d.streak ?? 0, lessonsCompleted: d.lessonsCompleted ?? 0, daysSinceLastVisit: d.daysSinceLastVisit ?? null }); })
+      .catch(() => {});
+  }, []);
+
+  // Welcome-back: show when streak is 0 AND user has prior activity AND was away 2+ days
+  const showWelcomeBack = !bannerDismissed &&
+    liveStats !== null &&
+    liveStats.daysSinceLastVisit !== null &&
+    liveStats.daysSinceLastVisit >= 2 &&
+    liveStats.lessonsCompleted > 0;
+
   const stats = useMemo(() => computeRoadmapStats(activeRoadmap), [activeRoadmap]);
   const currentLesson = useMemo(
     () => (activeRoadmap ? findCurrentLesson(activeRoadmap) : null),
@@ -177,8 +202,9 @@ export function HomeView({
     [achievements],
   );
 
+  const usingLocalInsights = progressInsights.length > 0;
   const displayInsights =
-    progressInsights.length > 0
+    usingLocalInsights
       ? progressInsights
       : Array.isArray(aiRecommendations) ? aiRecommendations.slice(0, 2).map((rec) => ({
           id: rec.id,
@@ -364,6 +390,47 @@ export function HomeView({
 
   return (
     <div className="home-view space-y-8 pb-4 max-w-full overflow-x-hidden">
+
+      {/* Welcome-back re-engagement banner */}
+      {showWelcomeBack && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="relative flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-sm"
+        >
+          <RefreshCw className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-amber-300">
+              Welcome back, {firstName}!{' '}
+              {liveStats!.daysSinceLastVisit === 1
+                ? "You were away yesterday."
+                : `You've been away for ${liveStats!.daysSinceLastVisit} days.`}
+            </p>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              {liveStats!.lessonsCompleted > 0
+                ? `You've completed ${liveStats!.lessonsCompleted} lesson${liveStats!.lessonsCompleted === 1 ? '' : 's'} — that work doesn't disappear. Pick up where you left off.`
+                : "Your roadmap is waiting. Every day you come back counts."}
+            </p>
+            {activeRoadmap && (
+              <button
+                onClick={onContinueLearning}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+              >
+                <Play className="w-3 h-3 fill-current" /> Resume learning
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="flex-shrink-0 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer p-0.5"
+            aria-label="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </motion.div>
+      )}
+
       {/* SECTION 1 — Personalized Hero */}
       <motion.section {...fadeUp}>
         <GlassCard tint="glass-card-purple" className="p-5 sm:p-6">
@@ -581,7 +648,7 @@ export function HomeView({
         <SectionHeader
           icon={Sparkles}
           title="AI Insights"
-          subtitle="Recommendations based on your actual progress"
+          subtitle={usingLocalInsights ? "Suggested from your roadmap progress" : "Personalised AI recommendations"}
         />
         {isRecsLoading && displayInsights.length === 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -44,13 +44,30 @@ router.get('/user-stats', requireAuth, async (req, res) => {
   const userEmail = req.session.userEmail!;
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    if (!dbData) return res.json({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0 });
+    if (!dbData) return res.json({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0, daysSinceLastVisit: null });
     const { totalLessons, completedLessons } = await getUserLessonCompletionStats(userEmail);
     const overallMastery = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
-    return res.json({ xp: dbData.xp || 0, streak: dbData.streak ?? 0, hoursStudied: (dbData.profile as any)?.hoursStudied || 0, lessonsCompleted: completedLessons, overallMastery: Math.round(overallMastery) });
+
+    // Compute days since last active date (null = no prior visit recorded)
+    let daysSinceLastVisit: number | null = null;
+    if (dbData.last_active_date) {
+      const last = new Date(dbData.last_active_date);
+      const today = new Date();
+      const diffMs = today.setHours(0,0,0,0) - last.setHours(0,0,0,0);
+      daysSinceLastVisit = Math.max(0, Math.floor(diffMs / 86_400_000));
+    }
+
+    return res.json({
+      xp: dbData.xp || 0,
+      streak: dbData.streak ?? 0,
+      hoursStudied: (dbData.profile as any)?.hoursStudied || 0,
+      lessonsCompleted: completedLessons,
+      overallMastery: Math.round(overallMastery),
+      daysSinceLastVisit,
+    });
   } catch (error) {
     console.error('Get user stats error:', error);
-    return res.json({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0 });
+    return res.json({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0, daysSinceLastVisit: null });
   }
 });
 

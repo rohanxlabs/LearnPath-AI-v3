@@ -351,7 +351,7 @@ type LessonContentCacheEntry = {
   lessonMeta: { id: string; title: string; content_status: string; generated_at: string | null; learning_objectives: any; skill_tags: any; prerequisites: any; estimated_minutes: any; difficulty: any };
 };
 
-const LESSON_CONTENT_CACHE_TTL = 5 * 60 * 1000;
+const LESSON_CONTENT_CACHE_TTL = 30 * 60 * 1000; // 30 min — survives short redeploys and browser tab switches
 const LESSON_CONTENT_CACHE_MAX = 500;
 const lessonContentCache = new Map<string, LessonContentCacheEntry>();
 
