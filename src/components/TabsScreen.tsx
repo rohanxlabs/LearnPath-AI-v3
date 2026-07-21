@@ -16,9 +16,10 @@ type ActivityLog = Record<string, { xp: number; lessonsCompleted: number }>;
 interface AnalyticsViewProps {
   profile: UserProfile;
   activityLog?: ActivityLog;
+  onNavigate?: (tab: string) => void;
 }
 
-export function AnalyticsView({ profile, activityLog = {} }: AnalyticsViewProps) {
+export function AnalyticsView({ profile, activityLog = {}, onNavigate }: AnalyticsViewProps) {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -349,10 +350,13 @@ export function AnalyticsView({ profile, activityLog = {} }: AnalyticsViewProps)
                   <h4 className="font-semibold text-sm text-white mt-2">{action.title}</h4>
                   <p className="text-xs text-zinc-300 mt-1 line-clamp-2">{action.description}</p>
                 </div>
-                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs font-bold text-purple-400 hover:brightness-110 cursor-pointer">
+                <button
+                  onClick={() => onNavigate?.('roadmaps')}
+                  className="mt-4 pt-3 border-t border-white/5 w-full flex items-center justify-between text-xs font-bold text-purple-400 hover:brightness-110 cursor-pointer"
+                >
                   <span>+{action.xpReward} XP Reward</span>
-                  <span>{action.difficulty === 'easy' ? 'Launch Quiz' : 'Configure Environment'}</span>
-                </div>
+                  <span>{action.difficulty === 'easy' ? 'Go to Roadmaps →' : 'Go to Roadmaps →'}</span>
+                </button>
               </div>
             ))}
           </div>
@@ -377,6 +381,7 @@ interface ProfileViewProps {
   isInstalled?: boolean;
   onInstall?: () => void;
   onRequestNotificationPermission?: () => Promise<string>;
+  resolvedTheme?: 'light' | 'dark';
 }
 
 export function ProfileView({
@@ -444,14 +449,27 @@ export function ProfileView({
             <span>Preferences Menu</span>
           </h4>
 
-          {/* Theme mode — dark/system switching isn't implemented yet, so we show the
-              one supported theme honestly instead of a selector that silently does nothing. */}
+          {/* Theme mode selector — Light / Dark / System */}
           <div className="space-y-1.5 border-b border-white/10 pb-3">
             <span className="block text-xs font-bold text-zinc-300 uppercase tracking-widest">Theme Mode</span>
-            <div className="p-3 rounded-xl text-xs font-semibold gap-1.5 flex items-center border bg-gradient-to-r from-purple-500 to-blue-600 text-white border-transparent shadow-[0_4px_12px_rgba(168,85,247,0.3)]">
-              <Sun className="w-4 h-4" />
-              <span>Light Mode</span>
-              <span className="ml-auto text-xs font-normal opacity-80">Dark mode coming soon</span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['light', 'dark', 'system'] as const).map((t) => {
+                const active = settings.theme === t;
+                const label = t.charAt(0).toUpperCase() + t.slice(1);
+                return (
+                  <button
+                    key={t}
+                    onClick={() => onUpdateSettings({ theme: t })}
+                    className={`py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                      active
+                        ? 'bg-gradient-to-r from-purple-500 to-blue-600 text-white border-transparent shadow-[0_4px_12px_rgba(168,85,247,0.3)]'
+                        : 'bg-white/5 text-zinc-400 border-white/10 hover:bg-white/10 hover:text-zinc-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

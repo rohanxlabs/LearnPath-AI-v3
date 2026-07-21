@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { Bot, Shield, Zap, Search, PlusCircle, AlertCircle, Info, Landmark, Terminal, CheckCircle, ArrowLeft, BookOpen, Brain, Code, BarChart } from 'lucide-react';
+import { Toast } from './components/Toast';
+import type { ToastMessage } from './components/Toast';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { AuthScreen } from './components/AuthScreen';
 import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, ChatMessage } from './types';
 import { getPhaseUnlockStatus } from './lib/roadmapUtils';
@@ -245,10 +248,15 @@ export default function App() {
   const [isAiGeneratingRoadmap, setIsAiGeneratingRoadmap] = useState(false);
   const [isAiChatGenerating, setIsAiChatGenerating] = useState(false);
   const [roadmapProgress, setRoadmapProgress] = useState<Record<string, any>>({});
-  
-  // Simulated stats
   const [stripeCheckoutStatus, setStripeCheckoutStatus] = useState<string | null>(null);
-  const [apiCallsCounter, setApiCallsCounter] = useState(0);
+
+  // In-app toast replaces all native alert() calls.
+  const [activeToast, setActiveToast] = useState<ToastMessage | null>(null);
+  const showToast = (message: string, type: ToastMessage['type'] = 'error') =>
+    setActiveToast({ message, type });
+
+  // Confirm dialog before destructive roadmap deletion.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -364,7 +372,7 @@ export default function App() {
     try {
       await fetch('/api/user-profile', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutatingHeaders(),
         body: JSON.stringify({
           profile,
           settings,
@@ -508,6 +516,18 @@ export default function App() {
 
   const getStoredUserEmail = () => profile.email;
 
+  /** Read the csrf-token cookie value set by the server on login/bootstrap. */
+  const getCsrfToken = (): string => {
+    const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrf-token='));
+    return match ? decodeURIComponent(match.split('=')[1]) : '';
+  };
+
+  /** Default headers for all mutating fetch requests. */
+  const mutatingHeaders = (): Record<string, string> => ({
+    'Content-Type': 'application/json',
+    'x-csrf-token': getCsrfToken(),
+  });
+
   // Fetch from Express recommendations API
   const fetchRecommendations = async () => {
     if (!isAuthenticated) return;
@@ -517,7 +537,7 @@ export default function App() {
       const activeGoal = roadmaps.find(r => r.id === activeRoadmapId)?.goal || "";
       const response = await fetch('/api/ai-recommendations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutatingHeaders(),
         body: JSON.stringify({
           currentXp: profile.xp,
           level: profile.level,
@@ -559,7 +579,7 @@ export default function App() {
     try {
       const response = await fetch(mode === 'login' ? '/api/login' : '/api/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutatingHeaders(),
         body: JSON.stringify(
           mode === 'signup'
             ? { email, password, name: authName.trim() }
@@ -621,7 +641,7 @@ export default function App() {
     try {
       await fetch('/api/password-reset/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutatingHeaders(),
         body: JSON.stringify({ email: forgotEmail.trim().toLowerCase() })
       });
       setForgotStatus('sent');
@@ -637,7 +657,7 @@ export default function App() {
     try {
       const res = await fetch('/api/password-reset/confirm', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutatingHeaders(),
         body: JSON.stringify({ token: resetToken, password: resetPassword })
       });
       const data = await res.json().catch(() => ({}));
@@ -705,7 +725,6 @@ export default function App() {
     setIsAiGeneratingRoadmap(false);
     setIsAiChatGenerating(false);
     setStripeCheckoutStatus(null);
-    setApiCallsCounter(0);
     setRoadmapDetailTab('roadmap');
     setSelectedRoadmapId(null);
     setSelectedPhaseId(null);
@@ -720,11 +739,10 @@ export default function App() {
     preferredStyle: string;
   }) => {
     setIsAiGeneratingRoadmap(true);
-    setApiCallsCounter(prev => prev + 1);
     try {
       const response = await fetch('/api/generate-roadmap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutatingHeaders(),
         body: JSON.stringify({ ...params, userEmail: getStoredUserEmail() })
       });
       if (!response.ok) {
@@ -757,7 +775,7 @@ export default function App() {
        // error instead of silently ignoring it.
        const persistResponse = await fetch('/api/roadmaps', {
          method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
+         headers: mutatingHeaders(),
          body: JSON.stringify(newRoadmap)
        });
        const persistData = await persistResponse.json().catch(() => ({}));
@@ -770,7 +788,7 @@ export default function App() {
        try {
          const validationResponse = await fetch('/api/validate-progression', {
            method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
+           headers: mutatingHeaders(),
            body: JSON.stringify({ roadmap: newRoadmap })
          });
          if (validationResponse.ok) {
@@ -804,7 +822,7 @@ export default function App() {
       setActiveTab('roadmaps');
     } catch (err) {
       console.error('Failed to generate roadmap:', err);
-      alert('Failed to generate roadmap. Please try again.');
+      showToast('Failed to generate roadmap. Please try again.');
     } finally {
       setIsAiGeneratingRoadmap(false);
     }
@@ -851,11 +869,11 @@ export default function App() {
       } else {
         const errorText = await response.text();
         console.error('Failed to delete roadmap:', errorText);
-        alert('Failed to delete roadmap. Please try again.');
+        showToast('Failed to delete roadmap. Please try again.');
       }
     } catch (err) {
       console.error('Failed to delete roadmap:', err);
-      alert('Failed to delete roadmap. Please check your connection.');
+      showToast('Failed to delete roadmap. Please check your connection.');
     }
   };
 
@@ -872,7 +890,6 @@ export default function App() {
     const updatedChats = [...chats, userMsg];
     setChats(updatedChats);
     setIsAiChatGenerating(true);
-    setApiCallsCounter(prev => prev + 1);
 
     const aiMsgId = `chat-ai-${Date.now()}`;
     let aiMsg: ChatMessage = {
@@ -886,7 +903,7 @@ export default function App() {
     try {
       const response = await fetch('/api/mentor-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: mutatingHeaders(),
         body: JSON.stringify({
           message: text,
           history: chats.slice(-6),
@@ -1067,7 +1084,7 @@ export default function App() {
 
         fetch('/api/complete-lesson', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: mutatingHeaders(),
           body: JSON.stringify({
             lessonId: targetLessonId,
             xpEarned: xpValue,
@@ -1078,79 +1095,61 @@ export default function App() {
         }).catch(err => console.warn('Failed to complete lesson:', err));
       }
 
-    // Unlocking preset accomplishments
-    const countCompletedLessons = updatedRoadmaps.find(r => r.id === targetRoadmapId)?.lessonsCompleted || 0;
-    if (countCompletedLessons === 5 || countCompletedLessons === 15 || countCompletedLessons === 25) {
-      setAchievements(prev => {
-        const lockedIdx = prev.findIndex(a => !a.unlocked);
-        if (lockedIdx !== -1) {
-          const cpy = [...prev];
-          cpy[lockedIdx] = {
-            ...cpy[lockedIdx],
-            unlocked: true,
-            unlockedAt: new Date().toISOString()
-          };
-          
-          const achNotif: SystemNotification = {
-            id: `notif-ach-${Date.now()}`,
-            title: `Achievement Unlocked: ${cpy[lockedIdx].name} 🏆`,
-            message: `Milestone gained: "${cpy[lockedIdx].description}". +${cpy[lockedIdx].xpReward} XP awarded!`,
-            category: 'achievement',
-            read: false,
-            timestamp: new Date().toISOString()
-          };
-          setNotifications(prevNotifs => [achNotif, ...prevNotifs]);
-          
-          // Show achievement celebration
-          setUnlockedAchievement(cpy[lockedIdx]);
-          
-          setProfile(p => ({ ...p, xp: p.xp + cpy[lockedIdx].xpReward }));
-          return cpy;
-        }
-        return prev;
-      });
-    }
-
     // Exit active practice screen on complete, unless completing a subpart in consolidated detail view
     if (!specificLessonId) {
       setActiveLesson(null);
     }
   };
 
-  // Demo-only Pro upgrade — no payment processor is wired up. This flips the local
-  // isPro flag so the Pro experience can be previewed, but does not charge anyone
-  // or talk to Stripe/Razorpay. See P0 audit item: relabel or wire a real processor.
-  const handleStripeCheckout = () => {
-    setStripeCheckoutStatus("Simulating checkout (demo mode, no real charge)...");
-    setTimeout(() => {
-      setStripeCheckoutStatus("Demo complete — Pro features unlocked for this session. No payment was processed.");
-      setProfile(p => ({ ...p, isPro: true }));
-      
-      const newNotif: SystemNotification = {
-        id: `notif-pro-${Date.now()}`,
-        title: 'LearnPath AI Pro Gained! 👑',
-        message: 'Welcome to Pro! You now have unlimited AI curriculum generators, priority mentor queries, and continuous quiz modules.',
-        category: 'system',
-        read: false,
-        timestamp: new Date().toISOString()
-      };
-      setNotifications(prev => [newNotif, ...prev]);
-    }, 2000);
+  // Pro upgrade — calls real backend endpoint. Payment processor not yet wired;
+  // the server returns 503 with a clear message so users never see silent fake state.
+  const handleStripeCheckout = async () => {
+    setStripeCheckoutStatus('Processing…');
+    try {
+      const res = await fetch('/api/checkout', { method: 'POST', headers: mutatingHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setProfile(p => ({ ...p, isPro: true }));
+        setStripeCheckoutStatus(data.message || 'Pro unlocked!');
+        setNotifications(prev => [{
+          id: `notif-pro-${Date.now()}`,
+          title: 'LearnPath AI Pro Gained! 👑',
+          message: data.message || 'Pro subscription activated.',
+          category: 'system',
+          read: false,
+          timestamp: new Date().toISOString()
+        }, ...prev]);
+      } else {
+        setStripeCheckoutStatus(data.error || 'Checkout unavailable — please try again later.');
+      }
+    } catch {
+      setStripeCheckoutStatus('Network error — please check your connection and retry.');
+    }
   };
 
-  // Active theme application style
-  const [resolvedTheme, setResolvedTheme] = useState<'light'>('light');
+  // Active theme application — responds to settings.theme ('light' | 'dark' | 'system').
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
-    setResolvedTheme('light');
-    document.documentElement.classList.add('light');
-    document.documentElement.classList.remove('dark');
-    document.body.classList.add('light');
-    document.body.classList.remove('dark');
-  }, []);
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const effective: 'light' | 'dark' =
+        settings.theme === 'system'
+          ? (mq.matches ? 'dark' : 'light')
+          : (settings.theme === 'dark' ? 'dark' : 'light');
+      setResolvedTheme(effective);
+      document.documentElement.classList.toggle('dark', effective === 'dark');
+      document.documentElement.classList.toggle('light', effective === 'light');
+      document.body.classList.toggle('dark', effective === 'dark');
+      document.body.classList.toggle('light', effective === 'light');
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [settings.theme]);
 
-  const themeClass = `${resolvedTheme} text-slate-950`;
-  const customBackground = { backgroundColor: '#F8FAFC' };
+  const themeClass = `${resolvedTheme} ${resolvedTheme === 'dark' ? 'text-zinc-100' : 'text-slate-950'}`;
+  const customBackground = resolvedTheme === 'dark' ? { backgroundColor: '#0A0A0A' } : { backgroundColor: '#F8FAFC' };
 
   // Phase AI Action handlers from Sidebar
   const handleAiAction = async (actionType: 'explain' | 'quiz' | 'study_plan' | 'projects', phaseName: string) => {
@@ -1211,7 +1210,7 @@ export default function App() {
         );
       }
       if (activeTab === 'progress') {
-        return <AnalyticsView profile={profile} activityLog={activityLog} />;
+        return <AnalyticsView profile={profile} activityLog={activityLog} onNavigate={(tab) => { setActiveTab(tab); setActiveLesson(null); }} />;
       }
       if (activeTab === 'profile') {
         return (
@@ -1333,7 +1332,7 @@ export default function App() {
               setSelectedPhaseId(null);
             }}
             onBackToList={() => { setSelectedRoadmapId(null); setSelectedPhaseId(null); }}
-            onDeleteRoadmap={handleDeleteRoadmap}
+            onDeleteRoadmap={(id) => setConfirmDeleteId(id)}
             onGenerateRoadmap={handleGenerateRoadmap}
             isGenerating={isAiGeneratingRoadmap}
             profile={profile}
@@ -1359,7 +1358,7 @@ export default function App() {
         );
 
       case 'progress':
-        return <AnalyticsView profile={profile} activityLog={activityLog} />;
+        return <AnalyticsView profile={profile} activityLog={activityLog} onNavigate={(tab) => { setActiveTab(tab); setActiveLesson(null); }} />;
 
       case 'achievements':
         return (
@@ -1374,7 +1373,7 @@ export default function App() {
                   key={ach.id}
                   achievement={ach}
                   onShare={() => {
-                    alert(`Copied certificate to clipboard! Gained: "${ach.name}"`);
+                    showToast(`Achievement "${ach.name}" shared!`, 'success');
                   }}
                 />
               ))}
@@ -1734,6 +1733,19 @@ export default function App() {
       {/* Legal pages accessible from authenticated app via footer in profile or sidebar */}
       {legalPage === 'terms' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-[#0A0A0A]"><TermsPage onBack={() => setLegalPage(null)} /></div>}
       {legalPage === 'privacy' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-[#0A0A0A]"><PrivacyPage onBack={() => setLegalPage(null)} /></div>}
+
+      {/* In-app toast — replaces native alert() everywhere in the app */}
+      <Toast toast={activeToast} onDismiss={() => setActiveToast(null)} />
+
+      {/* Confirm delete roadmap dialog */}
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Delete Roadmap"
+        message="This will permanently delete the roadmap and all its lessons, progress, and quizzes. This cannot be undone."
+        confirmLabel="Delete Roadmap"
+        onConfirm={() => { if (confirmDeleteId) handleDeleteRoadmap(confirmDeleteId); setConfirmDeleteId(null); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
     </ErrorBoundary>
   );

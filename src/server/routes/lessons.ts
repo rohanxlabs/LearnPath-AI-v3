@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, aiLimiter, HttpError, withUserLock } from '../lib/middleware';
+import { requireAuth, aiLimiter, lessonLimiter, HttpError, withUserLock } from '../lib/middleware';
 import { loadUserDB, saveUserDB, updateStreak, unlockAchievement } from '../lib/db';
 import {
   findLessonContext,
@@ -141,7 +141,9 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
 });
 
 // Complete a lesson
-router.post('/complete-lesson', requireAuth, async (req, res) => {
+// Note: any `xpEarned` value the client sends in the body is intentionally not
+// destructured here. XP is authoritative from `lessonCtx.xp_reward` in the DB.
+router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => {
   const { lessonId, roadmapId } = req.body;
   const userEmail = req.session.userEmail!;
   if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });

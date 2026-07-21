@@ -350,6 +350,8 @@ export const users = pgTable('users', {
   roadmap: jsonb('roadmap'),
   progress: jsonb('progress'),
   xp: integer('xp').notNull().default(0),
+  streak: integer('streak').notNull().default(0),
+  emailVerified: boolean('email_verified').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

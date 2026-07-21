@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { RefreshCw, AlertTriangle, Send } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Send, Check } from 'lucide-react';
 import { buttonStyles, glassCardClass } from '../styles/theme';
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  reported: boolean;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -18,10 +19,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, reported: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
@@ -30,12 +31,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false, error: null, reported: false });
   };
 
   handleReportIssue = () => {
-    console.log('Reporting issue:', this.state.error);
-    alert('Issue reported! Our team will investigate.');
+    console.info('[ErrorBoundary] Issue reported by user:', this.state.error?.message);
+    this.setState({ reported: true });
   };
 
   render() {
@@ -62,10 +63,10 @@ export class ErrorBoundary extends Component<Props, State> {
             </button>
             <button
               onClick={this.handleReportIssue}
-              className={`px-6 py-3 ${buttonStyles.secondary} rounded-xl font-bold text-sm inline-flex items-center gap-2`}
+              disabled={this.state.reported}
+              className={`px-6 py-3 ${buttonStyles.secondary} rounded-xl font-bold text-sm inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              <Send className="w-4 h-4" />
-              Report Issue
+              {this.state.reported ? <><Check className="w-4 h-4" /> Reported</> : <><Send className="w-4 h-4" /> Report Issue</>}
             </button>
           </div>
           {this.state.error && (

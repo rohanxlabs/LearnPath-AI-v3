@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { authLimiter, loginLimiter, isValidEmail, validatePassword } from '../lib/middleware';
+import { authLimiter, loginLimiter, isValidEmail, validatePassword, generateCsrfToken } from '../lib/middleware';
 import { loadUserDB, saveUserDB } from '../lib/db';
 import { getUserRoadmapsReconstructed } from '../db/schema';
 import { sendVerificationEmail } from './email';
@@ -29,6 +29,8 @@ router.post('/register', authLimiter, async (req, res) => {
     req.session.regenerate((err) => {
       if (err) return res.status(500).json({ error: 'Session initialization failed' });
       req.session.userEmail = email;
+      const csrfToken = generateCsrfToken();
+      res.cookie('csrf-token', csrfToken, { httpOnly: false, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
       // Fire-and-forget — never delays or blocks registration response.
       sendVerificationEmail(email.toLowerCase()).catch(() => {});
       return res.json({ success: true, email, name });
@@ -56,6 +58,8 @@ router.post('/login', loginLimiter, async (req, res) => {
   req.session.regenerate((err) => {
     if (err) return res.status(500).json({ error: 'Session initialization failed' });
     req.session.userEmail = normalizedEmail;
+    const csrfToken = generateCsrfToken();
+    res.cookie('csrf-token', csrfToken, { httpOnly: false, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
     return res.json({ ok: true, name: storedName });
   });
 });
@@ -63,7 +67,8 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) return res.status(500).json({ error: 'Failed to logout' });
-    res.clearCookie('connect.sid');
+    res.clearCookie('learnpath.sid');
+    res.clearCookie('csrf-token');
     return res.json({ ok: true });
   });
 });
@@ -78,6 +83,13 @@ router.get('/session', (req, res) => {
 router.get('/bootstrap', async (req, res) => {
   const userEmail = req.session.userEmail;
   if (!userEmail) return res.status(401).json({ authenticated: false });
+
+  // Ensure a fresh CSRF token is always set when the session is active.
+  // httpOnly: false so the frontend JS can read and attach it as a header.
+  if (!(req as any).cookies?.['csrf-token']) {
+    const csrfToken = generateCsrfToken();
+    res.cookie('csrf-token', csrfToken, { httpOnly: false, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
+  }
 
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });

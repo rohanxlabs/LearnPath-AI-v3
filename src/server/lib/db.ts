@@ -48,6 +48,7 @@ export async function ensureUsersTable(): Promise<void> {
       .then(async () => {
         await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date DATE`;
         await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0`;
+        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`;
         console.log('[Database] Connected to Neon PostgreSQL successfully');
         return undefined;
       })

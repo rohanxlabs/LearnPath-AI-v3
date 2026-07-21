@@ -21,6 +21,7 @@ export interface ProfileMenuProps {
   onTabChange: (tab: string) => void;
   onUpgradeClick: () => void;
   onSettingsClick?: () => void;
+  onLegalClick?: (page: 'terms' | 'privacy') => void;
   onLogout?: () => void;
 }
 
@@ -49,7 +50,7 @@ const itemVariants = {
   }),
 };
 
-export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsClick, onLogout }: ProfileMenuProps) {
+export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsClick, onLegalClick, onLogout }: ProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -79,7 +80,7 @@ export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsCl
       onClick: () => { onUpgradeClick(); close(); },
     },
     { label: 'Settings', icon: <Settings className="w-4 h-4" />, onClick: () => { onSettingsClick?.(); close(); } },
-    { label: 'Terms & Policies', icon: <FileText className="w-4 h-4" />, onClick: close },
+    { label: 'Terms & Policies', icon: <FileText className="w-4 h-4" />, onClick: () => { onLegalClick?.('terms'); close(); } },
   ];
 
   return (

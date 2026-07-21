@@ -73,8 +73,17 @@ Response Structure:
 
 Use clean formatting without markdown symbols like ** or ##.`;
 
-    const prompt = `${systemInstruction}\n\nUser question: ${message}\n\nPrevious messages:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}`;
-    const responseText = await callOpenRouterChatCompletion(prompt, { temperature: 0.5 });
+    // Build a prompt that includes only the conversation history + current message.
+    // The system persona is passed via the systemPrompt option so it lands in the
+    // system role of the OpenRouter request rather than being prepended to the user turn.
+    const historyText = messages.length > 0
+      ? `\n\nConversation so far:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}`
+      : '';
+    const prompt = `User question: ${sanitizeForPrompt(message, 500)}${historyText}`;
+    const responseText = await callOpenRouterChatCompletion(prompt, {
+      temperature: 0.5,
+      systemPrompt: systemInstruction,
+    });
 
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' });
     res.end(responseText);

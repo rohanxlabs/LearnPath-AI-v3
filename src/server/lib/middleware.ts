@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomBytes } from 'node:crypto';
 import express from 'express';
 import { rateLimit } from 'express-rate-limit';
 
@@ -43,6 +44,37 @@ export async function withUserLock<T>(email: string, fn: () => Promise<T>): Prom
     }
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// CSRF — double-submit cookie pattern
+// ---------------------------------------------------------------------------
+
+/** Generate a fresh CSRF token (32 random bytes, hex-encoded). */
+export function generateCsrfToken(): string {
+  return randomBytes(32).toString('hex');
+}
+
+/**
+ * Validate CSRF for all state-mutating methods (POST / PUT / DELETE / PATCH).
+ * The client must echo the `csrf-token` cookie value back in the `x-csrf-token`
+ * request header. Safe methods (GET / HEAD / OPTIONS) are always allowed.
+ *
+ * Skip validation when NODE_ENV === 'test' so existing test suites continue to
+ * pass without changes.
+ */
+export function validateCsrf(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+  if (process.env.NODE_ENV === 'test' || SAFE_METHODS.has(req.method)) {
+    return next();
+  }
+  const cookieToken = (req as any).cookies?.['csrf-token'] as string | undefined;
+  const headerToken = req.headers['x-csrf-token'] as string | undefined;
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    res.status(403).json({ error: 'Invalid CSRF token' });
+    return;
+  }
+  next();
 }
 
 // ---------------------------------------------------------------------------
@@ -107,4 +139,11 @@ export const loginLimiter = createLimiter({
   windowMs: 15 * 60 * 1000,
   max: process.env.NODE_ENV === 'test' ? 1000 : 5,
   message: { error: 'Too many authentication attempts. Please try again later.' }
+});
+
+// 30 lesson completions per minute per IP — prevents XP farming via rapid-fire requests.
+export const lessonLimiter = createLimiter({
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 1000 : 30,
+  message: { error: 'Too many lesson completions. Please slow down.' }
 });

@@ -164,7 +164,9 @@ router.get('/verify-email/:token', async (req, res) => {
     await sql`
       UPDATE users SET email_verified = TRUE, updated_at = NOW()
       WHERE email = ${email}
-    `.catch(() => { /* column may not exist yet — best-effort */ });
+    `.catch((err: any) => {
+      logger.warn({ err: err?.message }, '[Email] email_verified UPDATE failed');
+    });
     return res.redirect(`${APP_URL}/?verified=success`);
   } catch (err: any) {
     logger.error({ err: err?.message }, '[Email] Verification update failed');

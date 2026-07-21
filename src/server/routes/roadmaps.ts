@@ -134,6 +134,10 @@ router.get('/roadmaps/:roadmapId', requireAuth, async (req, res) => {
   try {
     const roadmap = await reconstructRoadmapJson(roadmapId);
     if (!roadmap) return res.status(404).json({ error: 'Roadmap not found' });
+    // Ownership check — return 404 (not 403) to avoid roadmap ID enumeration.
+    if (roadmap.ownerEmail?.toLowerCase() !== userEmail.toLowerCase()) {
+      return res.status(404).json({ error: 'Roadmap not found' });
+    }
 
     const workspaceRoadmap = {
       ...roadmap,

@@ -63,13 +63,13 @@ export function sanitizeForPrompt(input: string | number | undefined | null, max
 // ---------------------------------------------------------------------------
 
 export const OPENROUTER_MODELS = [
-  'openrouter/free',
+  'deepseek/deepseek-r1-0528:free',          // primary — strong reasoning, free tier
   'nvidia/nemotron-3-super-120b-a12b:free',
   'meta-llama/llama-3.3-70b-instruct:free',
   'qwen/qwen3-next-80b-a3b-instruct:free',
   'google/gemma-2-27b-it:free',
   'tencent/hy3:free',
-  'openrouter/free'
+  'openrouter/free'                           // generic catch-all fallback
 ];
 
 // Models known NOT to support the `response_format: json_object` request param.
@@ -88,6 +88,8 @@ export interface OpenRouterOptions {
   asJSON?: boolean;
   timeoutMs?: number;
   maxTokens?: number;
+  /** Override the default system prompt for this request. */
+  systemPrompt?: string;
 }
 
 export async function callOpenRouterChatCompletion(
@@ -99,9 +101,10 @@ export async function callOpenRouterChatCompletion(
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error('OPENROUTER_API_KEY is not configured');
 
-  const systemContent = asJSON
-    ? 'You are a precise data generator. Output a single valid JSON object only, with no markdown fences, comments, or prose.'
-    : 'You are a helpful AI assistant. Provide responses in markdown format with clear headings and bullet points.';
+  const systemContent = options.systemPrompt
+    ?? (asJSON
+      ? 'You are a precise data generator. Output a single valid JSON object only, with no markdown fences, comments, or prose.'
+      : 'You are a helpful AI assistant. Provide responses in markdown format with clear headings and bullet points.');
 
   const tryModel = async (model: string, useJsonFormat: boolean): Promise<string> => {
     const controller = new AbortController();

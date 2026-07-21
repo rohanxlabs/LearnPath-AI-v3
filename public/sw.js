@@ -1,15 +1,17 @@
-const CACHE_NAME = 'learnpath-ai-cache-v2';
+const CACHE_NAME = 'learnpath-ai-cache-v3';
 const OFFLINE_URL = '/offline.html';
 
+// External URLs (e.g. Google Fonts) are intentionally excluded from addAll().
+// addAll() must succeed 100% during install; any failed fetch aborts the
+// entire SW installation. Fonts load normally via <link> in index.html.
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/offline.html',
   '/manifest.json',
   '/icon.svg',
-  '/icon-192.jpg',
-  '/icon-512.jpg',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap'
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {

@@ -5,6 +5,31 @@ import {
   getUserLessonCompletionStats,
   getRoadmapProgressSnapshot
 } from '../db/schema';
+import { logger } from '../lib/logger';
+
+// ---------------------------------------------------------------------------
+// Feedback table bootstrap (idempotent) — called at module load, never inside handlers.
+// ---------------------------------------------------------------------------
+let feedbackTableReady: Promise<void> | null = null;
+function ensureFeedbackTable(): Promise<void> {
+  if (!feedbackTableReady) {
+    feedbackTableReady = sql`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id SERIAL PRIMARY KEY,
+        user_email TEXT,
+        sentiment TEXT NOT NULL,
+        message TEXT,
+        context TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `.then(() => undefined as void).catch((err: any) => {
+      logger.warn({ err: err?.message }, '[Feedback] Table setup failed — feedback writes will silently fail');
+    });
+  }
+  return feedbackTableReady!;
+}
+// Kick off table creation at module load time (fire-and-forget).
+ensureFeedbackTable();
 
 const router = Router();
 
@@ -187,18 +212,7 @@ router.post('/feedback', async (req, res) => {
   }
   try {
     const userEmail = req.session.userEmail || 'anonymous';
-    const { sql } = await import('../lib/db');
-    // Best-effort — table may not exist yet; ignore errors
-    await sql`
-      CREATE TABLE IF NOT EXISTS feedback (
-        id SERIAL PRIMARY KEY,
-        user_email TEXT,
-        sentiment TEXT NOT NULL,
-        message TEXT,
-        context TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `.catch(() => {});
+    await ensureFeedbackTable();
     await sql`
       INSERT INTO feedback (user_email, sentiment, message, context)
       VALUES (${userEmail}, ${sentiment}, ${(message || '').slice(0, 500)}, ${(context || '').slice(0, 200)})
@@ -266,6 +280,13 @@ router.get('/user-analytics', requireAuth, async (req, res) => {
     console.error('User analytics error:', error);
     return res.json({ weeklyHoursPerDay: [0, 0, 0, 0, 0, 0, 0], overallMasteryPercent: 0 });
   }
+});
+
+// Checkout / subscription endpoint.
+// Payment processor (Stripe/Razorpay) is not yet integrated. Return a clear
+// 503 so the frontend can show an honest message rather than fake state.
+router.post('/checkout', requireAuth, async (_req, res) => {
+  return res.status(503).json({ error: 'Payments are not yet enabled. Pro features are coming soon.' });
 });
 
 export default router;
