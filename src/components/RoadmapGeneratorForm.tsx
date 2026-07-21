@@ -182,7 +182,7 @@ export function RoadmapGeneratorForm({ onSubmit, isGenerating, onCancel }: Roadm
 
       {/* loading indicator */}
       {isGenerating && (
-        <div className="px-6 pb-6 pt-2 border-t border-zinc-100 dark:border-white/5">
+        <div className="px-6 pb-6 pt-2 border-t border-zinc-100 dark:border-white/10">
           <div className="flex items-center gap-4 p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-500/30">
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center animate-spin flex-shrink-0">
               <Sparkles className="w-4 h-4 text-white" />

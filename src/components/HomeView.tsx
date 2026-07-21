@@ -95,10 +95,10 @@ function SectionHeader({
   return (
     <div className="mb-3">
       <div className="flex items-center gap-2">
-        <div className={`p-1.5 rounded-lg border text-purple-400 bg-purple-500/10 border-purple-500/20`}>
+        <div className={`p-1.5 rounded-lg text-purple-400 bg-purple-500/10`}>
           <Icon className="w-4 h-4" />
         </div>
-        <h3 className={`font-display font-semibold text-sm text-white`}>{title}</h3>
+        <h3 className={`font-display font-semibold text-base text-white`}>{title}</h3>
       </div>
       {subtitle && <p className={`text-xs text-zinc-400 mt-1 ml-9`}>{subtitle}</p>}
     </div>
@@ -119,7 +119,7 @@ function GlassCard({
 }) {
   return (
     <div
-      className={`${tint} ${glassCardClass()} rounded-3xl relative overflow-hidden ${interactive ? 'home-glass-interactive' : ''} ${className}`}
+      className={`${tint} ${glassCardClass()} rounded-2xl relative overflow-hidden ${interactive ? 'home-glass-interactive' : ''} ${className}`}
     >
       {children}
     </div>
@@ -363,7 +363,7 @@ export function HomeView({
   ];
 
   return (
-    <div className="home-view space-y-6 pb-2 max-w-full overflow-x-hidden">
+    <div className="home-view space-y-8 pb-2 max-w-full overflow-x-hidden">
       {/* SECTION 1 — Personalized Hero */}
       <motion.section {...fadeUp}>
         <GlassCard tint="glass-card-purple" className="p-5 sm:p-6">
@@ -423,14 +423,14 @@ export function HomeView({
                             )
                         : onContinueLearning
                     }
-                    className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-white font-bold text-base rounded-xl active:scale-[0.98] transition-all cursor-pointer ${buttonStyles.primary}`}
+                    className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-white font-bold text-sm rounded-xl active:scale-[0.98] transition-all cursor-pointer ${buttonStyles.primary}`}
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                     Continue Learning
                   </button>
                   <button
                     onClick={onOpenMentor}
-                    className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-purple-400 font-bold text-base rounded-xl transition-all cursor-pointer ${buttonStyles.secondary}`}
+                    className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-purple-400 font-bold text-sm rounded-xl transition-all cursor-pointer ${buttonStyles.secondary}`}
                   >
                     <Bot className="w-4 h-4" />
                     Open AI Mentor
@@ -546,7 +546,7 @@ export function HomeView({
                       currentLesson.lesson.id,
                     )
                   }
-                  className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_15px_rgba(168,85,247,0.4)] w-full sm:w-auto self-start`}
+                  className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 font-bold text-sm text-white bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_14px_rgba(124,58,237,0.30)] w-full sm:w-auto self-start`}
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                   Continue Learning
@@ -639,7 +639,7 @@ export function HomeView({
             {todaysTasks.map((task) => (
               <li
                 key={task.id}
-                className={`flex items-start gap-3 p-3.5 rounded-2xl transition-all duration-200 ${
+                className={`flex items-start gap-3 p-4 rounded-xl transition-all duration-200 ${
                   task.completed ? 'state-completed' : 'home-nested-glass hover:border-purple-500/20'
                 }`}
               >
@@ -709,7 +709,7 @@ export function HomeView({
                   <p className="text-xs font-semibold text-zinc-300">Roadmap completion</p>
                   <span className="text-xs font-bold text-blue-400 font-mono">{stats.progressPercent}%</span>
                 </div>
-                <div className="h-2.5 rounded-full bg-white/5 border border-white/5 overflow-hidden">
+                <div className="h-2 rounded-full bg-white/10 overflow-hidden">
                   <motion.div
                     className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
                     initial={{ width: 0 }}

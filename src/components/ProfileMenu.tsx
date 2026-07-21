@@ -94,7 +94,7 @@ export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsCl
         <div
           ref={panelRef}
           role="menu"
-          className="absolute right-0 top-full mt-2 w-64 origin-top-right rounded-2xl border border-white/10 bg-[#161616]/95 backdrop-blur-md p-2 shadow-xl shadow-black/40 z-50 opacity-0"
+          className="absolute right-0 top-full mt-2 w-64 origin-top-right rounded-2xl border border-white/10 bg-[#161616]/95 backdrop-blur-md p-2 shadow-[0_8px_24px_rgba(0,0,0,0.14)] z-50 opacity-0"
         >
           <div className="px-3 py-2 mb-1 border-b border-white/5">
             <div className="text-sm font-semibold text-white truncate">{profile.name}</div>
@@ -131,7 +131,7 @@ export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsCl
             ))}
           </div>
 
-          <div className="my-2 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <div className="my-2 h-px bg-white/10" />
 
           <button
             data-menu-item

@@ -254,7 +254,7 @@ export function PhaseDetailPage({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0
               ${activeTab === tab.id
                 ? 'bg-purple-600 text-white shadow-sm'
                 : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10'
@@ -630,9 +630,9 @@ function InlineQuiz({ questions, onComplete, onExit }: {
           <span>Question {currentIdx + 1} of {questions.length}</span>
           <span className="font-bold text-emerald-600 dark:text-emerald-400">{correctCount} Correct</span>
         </div>
-        <div className="w-full bg-zinc-100 dark:bg-white/10 rounded-full h-1.5">
+        <div className="w-full bg-zinc-100 dark:bg-white/10 rounded-full h-2">
           <div
-            className="bg-gradient-to-r from-purple-500 to-blue-500 h-1.5 rounded-full transition-all"
+            className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full transition-all"
             style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}
           />
         </div>
@@ -654,7 +654,7 @@ function InlineQuiz({ questions, onComplete, onExit }: {
               }
               return (
                 <button key={oIdx} onClick={() => { if (!showFeedback) setSelectedOpt(oIdx); }} disabled={showFeedback}
-                  className={`w-full text-left p-3.5 rounded-xl border text-sm font-medium transition-all flex items-center gap-3 ${cls}`}>
+                  className={`w-full text-left p-4 rounded-xl border text-sm font-medium transition-all flex items-center gap-3 ${cls}`}>
                   <span className="w-6 h-6 rounded-md flex-shrink-0 flex items-center justify-center font-bold text-xs bg-zinc-100 dark:bg-white/10 text-zinc-500 dark:text-zinc-400">
                     {String.fromCharCode(65 + oIdx)}
                   </span>
@@ -777,7 +777,7 @@ function ProjectSection({ project, roadmap, phase, onRoadmapUpdated }: any) {
 
         {/* features */}
         {(project.features || []).length > 0 && (
-          <div className="p-4 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/5 space-y-2">
+          <div className="p-4 rounded-xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/[0.06] space-y-2">
             <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Key Features</h4>
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-sm text-zinc-600 dark:text-zinc-400 list-disc list-inside">
               {project.features.map((feat: string, i: number) => <li key={i}>{feat}</li>)}
@@ -794,7 +794,7 @@ function ProjectSection({ project, roadmap, phase, onRoadmapUpdated }: any) {
               value={githubUrl}
               onChange={e => setGithubUrl(e.target.value)}
               placeholder="https://github.com/you/project"
-              className="flex-1 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-lg text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="flex-1 px-3 py-2 text-sm bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl text-zinc-900 dark:text-white placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
             {githubUrl && (
               <a href={githubUrl} target="_blank" rel="noopener noreferrer"

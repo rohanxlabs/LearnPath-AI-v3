@@ -311,7 +311,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
 }
 
 const Header = () => (
-  <div className="p-6 bg-white/5 rounded-2xl border border-white/10 shadow-lg">
+  <div className="p-6 bg-white/5 rounded-2xl border border-white/10">
     <h2 className="font-display font-bold text-xl sm:text-2xl bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-blue-400">Mastery Center</h2>
     <p className="text-sm text-zinc-400 mt-1">Test your knowledge, track your progress, and master new skills.</p>
   </div>
@@ -326,7 +326,7 @@ const QuizList = ({ quizzes, onStartQuiz }: { quizzes: any[]; onStartQuiz: any }
 );
 
 const QuizCard = ({ quiz, onStartQuiz }: { quiz: any; onStartQuiz: any }) => (
-  <div className="p-5 rounded-2xl border border-white/10 bg-white/5 shadow-lg flex flex-col gap-4">
+  <div className="p-5 rounded-2xl border border-white/10 bg-white/5 flex flex-col gap-4">
     <div className="flex-grow space-y-4">
       <div className="flex justify-between items-start">
         <div>
@@ -339,7 +339,7 @@ const QuizCard = ({ quiz, onStartQuiz }: { quiz: any; onStartQuiz: any }) => (
           </div>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4 text-sm bg-white/5 p-3 rounded-lg border border-white/10">
+      <div className="grid grid-cols-2 gap-4 text-sm bg-white/5 p-3 rounded-xl border border-white/10">
         <div className="flex items-center gap-2"><BarChart2 size={16} className="text-zinc-400" /><div><div className="text-xs text-zinc-400">Attempts</div><div className="font-bold text-white">{quiz.attemptsCount}</div></div></div>
         <div className="flex items-center gap-2"><Calendar size={16} className="text-zinc-400" /><div><div className="text-xs text-zinc-400">Last Run</div><div className="font-bold text-white text-xs">{quiz.lastAttemptedAt}</div></div></div>
       </div>
@@ -409,43 +409,43 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
   const currentQ = questions[currentIdx];
 
   return (
-    <div className="p-6 rounded-2xl border border-white/10 bg-white/5 shadow-lg">
+    <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
       <div className="mb-6">
         <div className="flex justify-between items-center text-sm text-zinc-400 mb-2">
           <span>Question {currentIdx + 1} of {questions.length}</span>
           <span className="font-bold text-green-400">{correctCount} Correct</span>
         </div>
-        <div className="w-full bg-white/10 rounded-full h-2"><div className="bg-gradient-to-r from-violet-500 to-blue-500 h-2 rounded-full" style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}></div></div>
+        <div className="w-full bg-white/10 rounded-full h-2"><div className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full" style={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }}></div></div>
       </div>
       
       <AnimatePresence mode="wait">
         <motion.div key={currentIdx} initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="space-y-6">
-          <h3 className="font-bold text-xl text-white">{currentQ.question}</h3>
+          <h3 className="font-bold text-base text-white">{currentQ.question}</h3>
 <div className="space-y-3">
              {(currentQ.options || []).map((opt, oIdx) => {
               const isSelected = selectedOpt === oIdx;
               const isCorrect = oIdx === currentQ.correctIndex;
               let stateClass = 'border-white/10 bg-white/5 hover:bg-white/10';
               if (showFeedback) {
-                if (isCorrect) stateClass = 'border-green-500/50 bg-green-500/10 text-white';
+                if (isCorrect) stateClass = 'border-emerald-500/50 bg-emerald-500/10 text-white';
                 else if (isSelected) stateClass = 'border-red-500/50 bg-red-500/10';
               } else if (isSelected) {
-                stateClass = 'border-blue-500/50 bg-blue-500/10 text-white';
+                stateClass = 'border-purple-500/50 bg-purple-500/10 text-white';
               }
               return (
-                <button key={oIdx} onClick={() => handleSelectOption(oIdx)} disabled={showFeedback} className={`w-full text-left p-4 rounded-xl border text-base font-semibold transition-all flex items-center gap-4 ${stateClass}`}>
+                <button key={oIdx} onClick={() => handleSelectOption(oIdx)} disabled={showFeedback} className={`w-full text-left p-4 rounded-xl border text-sm font-medium transition-all flex items-center gap-4 ${stateClass}`}>
                   <div className={`w-6 h-6 rounded-md flex-shrink-0 flex items-center justify-center font-bold text-sm ${isSelected || (showFeedback && isCorrect) ? 'text-white' : 'text-zinc-400'}`}>
                     {String.fromCharCode(65 + oIdx)}
                   </div>
                   <span>{opt}</span>
-                  {showFeedback && isCorrect && <CheckCircle className="ml-auto text-green-400" />}
+                  {showFeedback && isCorrect && <CheckCircle className="ml-auto text-emerald-400" />}
                   {showFeedback && isSelected && !isCorrect && <XCircle className="ml-auto text-red-400" />}
                 </button>
               );
             })}
           </div>
 {showFeedback && (
-             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-white/5 border border-white/10 rounded-lg text-zinc-300 text-sm space-y-3">
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 bg-white/5 border border-white/10 rounded-xl text-zinc-300 text-sm space-y-3">
                <p className="font-bold text-white mb-1">Explanation</p>
                <p>{currentQ.explanation}</p>
                
@@ -464,9 +464,9 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
            <div className="flex justify-between items-center pt-4 border-t border-white/10">
              <button onClick={onExit} className="text-sm text-zinc-400 hover:text-white">Exit Quiz</button>
              {showFeedback ? (
-               <button onClick={handleNext} className="px-6 py-2 bg-gradient-to-r from-violet-600 to-blue-600 font-bold text-white rounded-lg">{currentIdx === questions.length - 1 ? 'Finish' : 'Next Question'}</button>
+               <button onClick={handleNext} className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 font-bold text-white rounded-xl text-sm">{currentIdx === questions.length - 1 ? 'Finish' : 'Next Question'}</button>
              ) : (
-               <button onClick={handleSubmit} disabled={selectedOpt === null} className="px-6 py-2 bg-white/10 text-white font-bold rounded-lg disabled:opacity-50">Submit</button>
+               <button onClick={handleSubmit} disabled={selectedOpt === null} className="px-6 py-2 bg-white/10 border border-white/10 text-white font-bold rounded-xl text-sm disabled:opacity-50">Submit</button>
              )}
            </div>
         </motion.div>
@@ -476,12 +476,12 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
 };
 
 const QuizResultDisplay = ({ result, onDismiss }) => (
-  <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="p-6 mb-6 rounded-2xl border border-violet-500/30 bg-violet-500/10 shadow-lg text-center relative">
+  <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="p-6 mb-6 rounded-2xl border border-purple-500/30 bg-purple-500/10 text-center relative">
     <button onClick={onDismiss} className="absolute top-3 right-3 text-zinc-400 hover:text-white"><XCircle size={20} /></button>
-    <Trophy className="w-16 h-16 text-amber-400 mx-auto mb-4" />
+    <Trophy className="w-12 h-12 text-amber-400 mx-auto mb-4" />
     <h3 className="text-xl sm:text-2xl font-bold text-white">Quiz Complete!</h3>
     <p className="text-zinc-300">You scored <span className="font-bold text-white">{result.score}%</span>, answering {result.correct} of {result.total} questions correctly.</p>
-    {result.xp > 0 && <p className="mt-2 text-lg font-bold text-green-400">+ {result.xp} XP Earned!</p>}
+    {result.xp > 0 && <p className="mt-2 text-base font-bold text-emerald-400">+ {result.xp} XP Earned!</p>}
   </motion.div>
 );
 

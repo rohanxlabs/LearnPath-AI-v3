@@ -95,7 +95,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
       case 'learn':
         return (
           <div className="space-y-4">
-            <div className="prose prose-invert max-w-none text-zinc-300 text-xs md:text-sm leading-relaxed whitespace-pre-wrap select-text selection:bg-purple-500/20">
+            <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap select-text selection:bg-purple-500/20">
               {lesson.content}
             </div>
 
@@ -118,7 +118,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
             <div className="space-y-6">
               {lesson.quizQuestions?.map((q, qidx) => (
-                <div key={q.id} className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
+                <div key={q.id} className="p-5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3">
                   <h4 className="font-semibold text-xs md:text-sm text-zinc-200">
                     <span className="text-purple-400 font-mono text-xs mr-1">Q{qidx + 1}.</span>
                     {q.question}
@@ -150,10 +150,10 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
                       return (
                         <motion.button
-                          key={opt}
-                          disabled={submittedQuiz}
-                          onClick={() => setQuizAnswers({ ...quizAnswers, [q.id]: oidx })}
-                          className={`px-3.5 py-3 rounded-lg border text-xs text-left transition-all duration-150 flex items-center justify-between ${optionStyle} cursor-pointer`}
+                         key={opt}
+                         disabled={submittedQuiz}
+                         onClick={() => setQuizAnswers({ ...quizAnswers, [q.id]: oidx })}
+                         className={`px-4 py-3 rounded-xl border text-sm text-left transition-all duration-150 flex items-center justify-between ${optionStyle} cursor-pointer`}
                           whileTap={isSelected ? undefined : { scale: 0.98 }}
                           animate={wrongAnswerShake}
                         >
@@ -173,7 +173,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   </div>
 
                   {submittedQuiz && (
-                    <div className="p-4 bg-[#0A0A0A] rounded-xl border border-white/5 text-xs leading-relaxed text-zinc-400 font-sans">
+                    <div className="p-4 bg-white/[0.03] rounded-xl border border-white/10 text-xs leading-relaxed text-zinc-400 font-sans">
                       <strong className="text-purple-300 font-semibold block mb-0.5">Explanation Matrix:</strong>
                       {q.explanation}
                     </div>
@@ -187,14 +187,14 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                 <button
                   onClick={handleQuizSubmit}
                   disabled={Object.keys(quizAnswers).length < (lesson.quizQuestions?.length || 0)}
-                  className="px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-115 rounded-xl disabled:opacity-50 transition-all cursor-pointer"
+                  className="px-5 py-2.5 font-bold text-sm text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl disabled:opacity-50 transition-all cursor-pointer"
                   id="btn-quiz-submit"
                 >
                   Verify Quiz Answers
                 </button>
               </div>
             ) : (
-              <div className="p-5 rounded-2xl border border-white/5 bg-[#0A0A0A] flex flex-col items-center text-center space-y-2">
+              <div className="p-5 rounded-2xl border border-white/10 bg-white/[0.03] flex flex-col items-center text-center space-y-2">
                 <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Quiz Results Summary</span>
                 <p className="text-xl font-bold font-display text-white">
                   Scored: <span className="text-purple-400">{quizScore} / {lesson.quizQuestions?.length || 0}</span> Correct
@@ -221,9 +221,9 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
         return (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch h-full">
             {/* Left Column: instructions & hint */}
-            <div className="p-5 rounded-2xl bg-[#0A0A0A] border border-white/5 flex flex-col justify-between space-y-4">
+            <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col justify-between space-y-4">
               <div className="space-y-4">
-                <div className="border-b border-white/5 pb-3">
+                <div className="border-b border-white/10 pb-3">
                   <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">Exercise specifications</span>
                   <h4 className="font-semibold text-xs md:text-sm text-white">Logic Scripting Objectives</h4>
                 </div>
@@ -248,7 +248,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-white/[0.01] border border-white/5 flex items-center gap-2">
+              <div className="p-3 rounded-xl bg-white/[0.02] border border-white/10 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-zinc-500 flex-shrink-0" />
                 <span className="text-xs text-zinc-500">Submit robust PEP8 scripting parameters. Avoid modifying function headers directly.</span>
               </div>
@@ -256,8 +256,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
             {/* Right Column: Code input area & terminal result log */}
             <div className="flex flex-col h-full gap-3">
-              <div className="flex-1 flex flex-col bg-[#0A0A0A] rounded-2xl overflow-hidden border border-white/5 md:min-h-[220px]">
-                <div className="flex items-center justify-between px-4 py-2.5 bg-[#111111] border-b border-white/5 text-xs text-zinc-400 font-mono font-bold">
+              <div className="flex-1 flex flex-col bg-white/[0.03] rounded-2xl overflow-hidden border border-white/10 md:min-h-[220px]">
+                <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.04] border-b border-white/10 text-xs text-zinc-400 font-mono font-bold">
                   <span>Interactive Editor (python)</span>
                   <span className="text-emerald-400">● Live Code validation active</span>
                 </div>
@@ -267,7 +267,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   className="flex-1 p-4 font-mono text-xs text-zinc-300 bg-transparent resize-none focus:outline-hidden leading-relaxed h-full focus:ring-0"
                   spellCheck="false"
                 />
-                <div className="p-3 bg-[#111111] border-t border-white/5 flex justify-end">
+                <div className="p-3 bg-white/[0.04] border-t border-white/10 flex justify-end">
                   <button
                     onClick={handleVerifyCode}
                     disabled={codeIsVerifying}
@@ -292,7 +292,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               {/* Console logs */}
               {codeFeedback && (
                 <motion.div 
-                  className="p-4 rounded-xl bg-[#0A0A0A] border border-white/5 font-mono text-xs leading-relaxed space-y-2 select-text selection:bg-purple-500/20 max-h-[160px] overflow-y-auto relative"
+                  className="p-4 rounded-xl bg-white/[0.03] border border-white/10 font-mono text-xs leading-relaxed space-y-2 select-text selection:bg-purple-500/20 max-h-[160px] overflow-y-auto relative"
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   transition={{ duration: 0.3, ease: easeInOut }}
@@ -335,7 +335,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
       case 'boss_challenge':
       case 'challenge':
         return (
-          <div className="p-6 rounded-3xl bg-[#0A0A0A] border border-white/5 flex flex-col items-center text-center space-y-4 max-w-xl mx-auto relative overflow-hidden shadow-2xl">
+          <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col items-center text-center space-y-4 max-w-xl mx-auto relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
             <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 via-blue-600 to-emerald-500" />
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5 text-white font-bold font-display text-lg">
               ⚔️
@@ -383,7 +383,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
           className="space-y-6"
         >
           {/* Immersive Header panel */}
-          <div className="flex items-center justify-between p-4 bg-[#111111] border border-white/5 rounded-2xl shadow-md">
+          <div className="flex items-center justify-between p-4 bg-white/[0.03] border border-white/10 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.08)]">
             <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
@@ -413,13 +413,13 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
           </div>
 
           {/* Primary viewport content */}
-          <div className="bg-[#111111]/45 border border-white/5 rounded-3xl p-6 shadow-inner">
+          <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5">
             {renderActiveChapter()}
           </div>
 
           {/* Verification completed congrats overlay */}
           {hasCompleted && (
-            <div className="p-5 rounded-2xl bg-gradient-to-tr from-emerald-950/20 to-teal-900/10 border border-emerald-500/20 shadow-[0_4px_30px_rgba(16,185,129,0.15)] flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+            <div className="p-5 rounded-2xl bg-gradient-to-tr from-emerald-950/20 to-teal-900/10 border border-emerald-500/20 shadow-[0_4px_16px_rgba(16,185,129,0.12)] flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
               <div className="flex items-center flex-col sm:flex-row gap-3">
                 <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
                   <CheckCircle2 className="w-5 h-5" />
@@ -432,7 +432,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
               <button
                 onClick={handleFinishLesson}
-                className="px-5 py-2.5 shrink-0 font-bold text-xs text-white bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 rounded-lg transition-all cursor-pointer shadow-[0_0_12px_rgba(16,185,129,0.3)]"
+                className="px-5 py-2.5 shrink-0 font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 rounded-xl transition-all cursor-pointer shadow-[0_4px_14px_rgba(16,185,129,0.25)]"
                 id="btn-claim-rewards"
               >
                 Claim rewards & Unlock Tree

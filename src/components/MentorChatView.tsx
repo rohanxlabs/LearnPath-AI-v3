@@ -38,11 +38,11 @@ const ChatMessageItem = memo(({ ch, isGenerating }: { ch: ChatMessage; isGenerat
                   const codeElement = React.Children.toArray(children).find(React.isValidElement) as React.ReactElement<{ className?: string }> | null;
                   const match = /language-(\w+)/.exec(codeElement?.props.className || '');
                   return (
-                    <div className="my-3 max-w-full rounded-lg overflow-hidden border border-zinc-700">
-                      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900 border-b border-zinc-700 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                        <span>{match ? match[1] : 'code'} example</span>
-                        <span className="text-[9px] bg-zinc-800 px-1 py-0.5 rounded">Code Walkthrough</span>
-                      </div>
+                    <div className="my-3 max-w-full rounded-xl overflow-hidden border border-white/10">
+                                      <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.06] border-b border-white/10 text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                                        <span>{match ? match[1] : 'code'} example</span>
+                                        <span className="text-xs bg-white/[0.08] px-1.5 py-0.5 rounded-md">walkthrough</span>
+                                      </div>
                       <pre className="p-3 bg-zinc-950 overflow-x-auto whitespace-pre-wrap text-zinc-300 text-[11px]">
                         {children}
                       </pre>
@@ -209,7 +209,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
   return (
     <div className="flex flex-col h-full w-full relative overflow-hidden">
       {/* Upper info panel */}
-      <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-zinc-950/25 backdrop-blur-md">
+      <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between bg-zinc-950/25 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
           <motion.div 
             className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-600 text-white flex items-center justify-center shadow-[0_4px_12px_rgba(168,85,247,0.35)]"
@@ -246,7 +246,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
             <div className="p-1.5 h-8 w-8 rounded-xl flex items-center justify-center bg-white/5 border border-white/5 text-purple-400">
               <Bot className="w-4 h-4 animate-spin" />
             </div>
-            <div className="p-4 rounded-2xl glass-card glass-card-purple border border-purple-500/10 flex items-center gap-1 text-zinc-400">
+            <div className="p-4 rounded-2xl glass-card glass-card-purple border-purple-500/10 flex items-center gap-1 text-zinc-400">
               <FloatingParticles />
               <span className="text-xs text-zinc-400 font-medium ml-2 animate-pulse">Formulating AI feedback...</span>
             </div>
@@ -258,7 +258,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
 
       {/* Suggested fast click starting prompt bubbles */}
       {chats.length <= 1 && (
-        <div className="p-4 border-t border-white/5 bg-zinc-950/20 backdrop-blur-md">
+        <div className="p-4 border-t border-white/10 bg-zinc-950/20 backdrop-blur-md">
           <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 px-1">Suggested discussions</label>
           <div className="grid grid-cols-2 gap-2">
             {suggestedPrompts.map((p) => {
@@ -267,7 +267,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
                 <button
                   key={p.text}
                   onClick={() => handleSuggestedPrompt(p.text)}
-                  className="flex items-center gap-2.5 p-2.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10 text-sm text-left text-zinc-300 hover:text-white transition-all cursor-pointer"
+                  className="flex items-center gap-2.5 p-2.5 rounded-xl border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10 text-sm text-left text-zinc-300 hover:text-white transition-all cursor-pointer"
                 >
                   <Icon className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
                   <span className="truncate">{p.text}</span>
@@ -279,15 +279,15 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
       )}
 
       {/* Side drawer controls sheets for prompt helpers */}
-      <div className="relative border-t border-white/5 bg-zinc-950/10 backdrop-blur-sm">
+      <div className="relative border-t border-white/10 bg-zinc-950/10 backdrop-blur-sm">
         {/* Right fade mask to hint overflow */}
         <div className="pointer-events-none absolute right-0 inset-y-0 w-8 bg-gradient-to-l from-zinc-950/80 to-transparent z-10" />
-      <div className="p-3 flex gap-1.5 overflow-x-auto scrollbar-none">
+      <div className="px-4 py-2 flex gap-1.5 overflow-x-auto scrollbar-none">
         {helperActions.map((act) => (
           <button
             key={act.label}
             onClick={() => onSelectAction(act.topic)}
-            className="px-3 py-1.5 rounded-full text-xs font-bold border border-white/5 bg-white/[0.02] hover:bg-white/[0.05] text-zinc-300 hover:text-white whitespace-nowrap transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-full text-xs font-bold border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] text-zinc-300 hover:text-white whitespace-nowrap transition-all cursor-pointer"
           >
             {act.label}
           </button>
@@ -296,7 +296,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
       </div>
 
       {/* Active input form bar with frosted background */}
-      <form onSubmit={handleSubmit} className="p-3 bg-zinc-950/45 border-t border-white/5 backdrop-blur-md">
+      <form onSubmit={handleSubmit} className="px-4 py-3 bg-zinc-950/45 border-t border-white/10 backdrop-blur-md">
         {attachmentName && (
           <div className="mb-2 py-1 px-2.5 rounded border border-purple-500/30 bg-purple-500/10 flex items-center justify-between max-w-sm">
             <span className="text-xs text-zinc-300 select-none flex items-center gap-1.5">
@@ -362,7 +362,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder={isVoiceActive ? "Listening..." : "Ask Mentor anything about your roadmap..."}
-            className="flex-1 px-4 py-2.5 bg-black/40 border border-white/5 text-sm rounded-xl text-white focus:outline-hidden focus:border-purple-500/50"
+            className="flex-1 px-4 py-2.5 bg-white/[0.05] border border-white/10 text-sm rounded-xl text-white focus:outline-hidden focus:border-purple-500/50"
             disabled={isGenerating || isVoiceActive}
           />
 

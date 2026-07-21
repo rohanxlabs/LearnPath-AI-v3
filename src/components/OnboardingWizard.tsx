@@ -63,7 +63,7 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">
@@ -78,14 +78,14 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
 
         <StepDots current={step} />
 
-        <div className="bg-[#111] border border-white/8 rounded-2xl p-8 min-h-[340px] relative overflow-hidden">
+        <div className="bg-zinc-900 border border-white/10 rounded-2xl p-8 min-h-[340px] relative overflow-hidden">
           <AnimatePresence mode="wait">
             {/* Step 0 — Goal */}
             {step === 0 && (
               <motion.div key="step0" variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.25 }}>
                 <div className="flex items-center gap-2 mb-6">
                   <Target className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-lg font-semibold text-white">What do you want to learn?</h2>
+                  <h2 className="text-xl font-semibold text-white">What do you want to learn?</h2>
                 </div>
                 <p className="text-xs text-zinc-500 mb-4">
                   Be specific — e.g. "Build a full-stack app with React & Node", "Master Python for Data Science", "Learn System Design for interviews".
@@ -107,7 +107,7 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
               <motion.div key="step1" variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.25 }}>
                 <div className="flex items-center gap-2 mb-6">
                   <BookOpen className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-lg font-semibold text-white">Your experience level?</h2>
+                  <h2 className="text-xl font-semibold text-white">Your experience level?</h2>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {EXPERIENCE_LEVELS.map(level => (
@@ -137,7 +137,7 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
               <motion.div key="step2" variants={variants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.25 }}>
                 <div className="flex items-center gap-2 mb-5">
                   <Clock className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-lg font-semibold text-white">Your learning pace & style</h2>
+                  <h2 className="text-xl font-semibold text-white">Your learning pace & style</h2>
                 </div>
 
                 <p className="text-xs text-zinc-500 mb-2">Hours per week</p>
@@ -146,7 +146,7 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
                     <button
                       key={h}
                       onClick={() => setWeeklyHours(h)}
-                      className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition-all ${
+                      className={`flex-1 py-2 rounded-xl border text-sm font-semibold transition-all ${
                         weeklyHours === h
                           ? 'border-purple-500 bg-purple-500/15 text-white'
                           : 'border-white/10 text-zinc-400 hover:text-white hover:border-white/20'

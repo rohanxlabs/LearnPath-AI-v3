@@ -91,7 +91,7 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-zinc-950/85 border-t border-zinc-200 dark:border-white/5 pb-safe shadow-[0_-10px_35px_rgba(0,0,0,0.05)] dark:shadow-[0_-15px_35px_rgba(0,0,0,0.6)] backdrop-blur-lg transition-all duration-300">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-zinc-950/85 border-t border-zinc-200 dark:border-transparent pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-12px_32px_rgba(0,0,0,0.5)] backdrop-blur-lg transition-all duration-300">
       <div className="grid grid-cols-5 items-center h-16 max-w-xl mx-auto px-2">
         {tabs.map((tab) => {
           const IconComponent = tab.icon;
@@ -101,7 +101,7 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`relative flex flex-col items-center justify-center flex-1 min-w-0 py-1 px-1 sm:px-3.5 rounded-2xl transition-all duration-300 cursor-pointer ${
+              className={`relative flex flex-col items-center justify-center flex-1 min-w-0 py-1 px-1 sm:px-3.5 rounded-xl transition-all duration-300 cursor-pointer ${
                 isActive
                   ? 'text-zinc-900 dark:text-white font-bold scale-102'
                   : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
@@ -110,7 +110,7 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
             >
               {/* Active indicator pill */}
               {isActive && (
-                <div className="absolute inset-x-1 sm:inset-0 bg-gradient-to-r from-purple-500/15 to-blue-500/15 border border-purple-500/25 rounded-xl sm:rounded-2xl -z-10" />
+                <div className="absolute inset-x-1 sm:inset-0 bg-gradient-to-r from-purple-500/15 to-blue-500/15 border border-purple-500/25 rounded-xl -z-10" />
               )}
               <IconComponent className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400 dark:drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'stroke-[2px]'}`} />
               <span className="text-xs tracking-wide font-medium whitespace-nowrap truncate w-full text-center">{displayLabel}</span>
@@ -171,7 +171,7 @@ export function SideDrawer({
       />
 
       {/* Drawer Panel */}
-      <div className={`absolute inset-y-0 left-0 max-w-xs w-full bg-[#f8fafc] dark:bg-[#111111] text-zinc-900 dark:text-white shadow-2xl flex flex-col border-r border-zinc-300 dark:border-white/10 transition-transform duration-300 ease-out ${mounted ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className={`absolute inset-y-0 left-0 max-w-xs w-full bg-[#f8fafc] dark:bg-[#111111] text-zinc-900 dark:text-white shadow-[0_8px_40px_rgba(0,0,0,0.18)] flex flex-col border-r border-zinc-200 dark:border-white/10 transition-transform duration-300 ease-out ${mounted ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Drawer Header */}
         <div className="p-5 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -250,7 +250,7 @@ export function SideDrawer({
                 onUpgradeClick();
                 onClose();
               }}
-              className="w-full py-1.5 font-bold text-xs rounded-lg text-center bg-purple-600 dark:bg-white text-white dark:text-black hover:bg-purple-700 dark:hover:bg-zinc-100 transition-all cursor-pointer"
+              className="w-full py-2 font-bold text-xs rounded-xl text-center bg-purple-600 dark:bg-white text-white dark:text-black hover:bg-purple-700 dark:hover:bg-zinc-100 transition-all cursor-pointer"
             >
               Get Unlimited Access
             </button>
@@ -258,13 +258,13 @@ export function SideDrawer({
         )}
 
         {/* Drawer footer buttons */}
-        <div className="p-4 border-t border-zinc-200 dark:border-zinc-700 space-y-1 bg-zinc-100/40 dark:bg-zinc-950/15">
+        <div className="p-5 border-t border-zinc-200 dark:border-white/10 space-y-1 bg-zinc-50/60 dark:bg-white/[0.02]">
           <button
             onClick={() => {
               onTabChange('profile');
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-zinc-100 rounded-lg text-left"
+            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-white/5 rounded-xl text-left"
           >
             <Settings className="w-3.5 h-3.5 text-zinc-500" />
             <span>Settings Preferences</span>
@@ -274,7 +274,7 @@ export function SideDrawer({
               onLogoutClick();
               onClose();
             }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-900 dark:hover:text-white hover:bg-rose-500/10 rounded-lg text-left"
+            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-900 dark:hover:text-white hover:bg-rose-500/10 rounded-xl text-left"
           >
             <LogOut className="w-3.5 h-3.5 text-rose-500" />
             <span className="text-rose-600 dark:text-red-400">Logout</span>

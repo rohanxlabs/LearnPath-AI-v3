@@ -98,12 +98,12 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* 1. Header with title */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
         <div>
           <h2 className="font-display font-bold text-xl sm:text-2xl text-white">Progress & Analytics</h2>
-          <p className="text-xs text-zinc-300">Track your consistency and see how your learning pace is trending.</p>
+          <p className="text-sm text-zinc-400">Track your consistency and see how your learning pace is trending.</p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl glass-card text-xs text-zinc-300 font-bold">
           <span>Current Study Level: {profile.level}</span>
@@ -111,7 +111,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       </div>
 
       {/* 2. Overall completion ring card */}
-      <div className="p-6 rounded-3xl glass-card glass-card-purple flex flex-col sm:flex-row items-center justify-between gap-6 transition-all duration-200">
+      <div className="p-6 rounded-2xl glass-card glass-card-purple flex flex-col sm:flex-row items-center justify-between gap-6 transition-all duration-200">
         <div className="flex-1 text-center sm:text-left">
           <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">OVERALL PROGRESS</span>
           <h3 className="font-display font-bold text-xl text-white mt-1">Your Roadmap Progress</h3>
@@ -148,11 +148,11 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
           return (
             <div
               key={item.id}
-              className={`p-5 rounded-3xl ${item.glass} shadow-md flex flex-col justify-between transition-all duration-200`}
+              className={`p-5 rounded-2xl ${item.glass} flex flex-col justify-between transition-all duration-200`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-zinc-300 font-medium">{item.label}</span>
-                <div className={`p-1.5 rounded-lg border flex-shrink-0 ${item.color}`}>
+                <div className={`p-1.5 rounded-lg flex-shrink-0 ${item.color}`}>
                   <IconComponent className="w-4 h-4" />
                 </div>
               </div>
@@ -172,7 +172,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       {/* 4. Primary Analytics Grid metrics with custom gradients */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Weekly hours studied bar charts custom built in SVG with gradient fills */}
-        <div className="p-5 rounded-3xl glass-card glass-card-blue flex flex-col justify-between col-span-1 md:col-span-2">
+        <div className="p-5 rounded-2xl glass-card glass-card-blue flex flex-col justify-between col-span-1 md:col-span-2">
           <div className="flex items-center justify-between gap-4 mb-4">
             <div>
               <h4 className="font-display font-semibold text-sm text-white">Weekly Study Consistency</h4>
@@ -208,7 +208,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
         </div>
 
         {/* Dynamic Consistency Score wheel styled with glass-card-purple */}
-        <div className="p-5 rounded-3xl glass-card glass-card-purple flex flex-col justify-between">
+        <div className="p-5 rounded-2xl glass-card glass-card-purple flex flex-col justify-between">
           <div>
             <h4 className="font-display font-semibold text-sm text-white">Platform Learning Score</h4>
             <p className="text-xs text-zinc-400 mt-0.5">Calculated based on streaks & speed answers</p>
@@ -235,7 +235,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
       </div>
 
       {/* Advanced performance analytics widgets styled with glass-card-teal */}
-      <div className="p-5 rounded-3xl glass-card glass-card-teal">
+      <div className="p-5 rounded-2xl glass-card glass-card-teal">
         <h4 className="font-display font-semibold text-sm text-white mb-4">Completion Speed</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* This section can now be powered by analytics or other dynamic data */}
@@ -245,7 +245,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
                 <span className="text-zinc-300 font-medium">Monthly Practice Hours Goal</span>
                 <span className="font-mono text-white font-semibold">{(stats?.hoursStudied ?? 0).toFixed(1)} / 45 hrs Completion</span>
               </div>
-              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                   <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(((stats?.hoursStudied ?? 0) / 45) * 100)}%` }} />
               </div>
             </div>
@@ -255,7 +255,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
                 <span className="text-zinc-300 font-medium">Assessments Verified</span>
                  <span className="font-mono text-white font-semibold">{stats?.lessonsCompleted ?? 0} / 20 steps done</span>
               </div>
-              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                   <div className="h-full bg-blue-500 rounded-full" style={{ width: `${((stats?.lessonsCompleted ?? 0) / 20) * 100}%` }} />
               </div>
             </div>
@@ -277,7 +277,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
                   );
                 })()}
               </div>
-              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                 {(() => {
                   const quizzes = (profile?.topicWiseQuizzes || []) as any[];
                   const total = quizzes.reduce((s: number, q: any) => s + (q.totalQuestions || 0), 0);
@@ -293,7 +293,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
                 <span className="text-zinc-300 font-medium">Lessons Completed</span>
                 <span className="font-mono text-white font-semibold">{stats?.lessonsCompleted ?? 0} lessons done</span>
               </div>
-              <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                 <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, (stats?.lessonsCompleted ?? 0) * 5)}%` }} />
               </div>
             </div>
@@ -313,7 +313,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
               ? [{ title: 'Complete more lessons', description: 'Keep learning to unlock personalized recommendations.', difficulty: 'easy', xpReward: 50 }]
               : []
             ).map((action, index) => (
-              <div key={index} className={`p-5 rounded-3xl glass-card ${action.difficulty === 'easy' ? 'glass-card-emerald' : 'glass-card-rose'} flex flex-col justify-between`}>
+              <div key={index} className={`p-5 rounded-2xl glass-card ${action.difficulty === 'easy' ? 'glass-card-emerald' : 'glass-card-rose'} flex flex-col justify-between`}>
                 <div>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded border ${action.difficulty === 'easy' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20'} uppercase tracking-wide`}>
                     {action.difficulty}
@@ -330,7 +330,7 @@ export function AnalyticsView({ profile }: AnalyticsViewProps) {
           </div>
         </div>
       ) : (
-        <div className="p-5 rounded-3xl glass-card text-center">
+        <div className="p-5 rounded-2xl glass-card text-center">
           <p className="text-xs text-zinc-400">Complete your first lesson to unlock personalized recommendations.</p>
         </div>
       )}
@@ -370,9 +370,9 @@ export function ProfileView({
   };
 
   return (
-    <div className="space-y-6 flex-1">
+    <div className="space-y-8 flex-1">
       {/* 1. Primary info card */}
-      <div className="p-6 rounded-3xl glass-card glass-card-purple flex flex-col md:flex-row items-center md:items-start justify-between gap-4">
+      <div className="p-6 rounded-2xl glass-card glass-card-purple flex flex-col md:flex-row items-center md:items-start justify-between gap-4">
         <div className="flex items-center flex-col md:flex-row gap-4 text-center md:text-left">
           {/* Avatar with gradient ring border */}
           <div className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-tr from-purple-500 via-violet-500 to-blue-500 shadow-[0_0_15px_rgba(168,85,247,0.35)]">
@@ -383,7 +383,7 @@ export function ProfileView({
           <div>
             <div className="flex items-center gap-2 flex-col md:flex-row">
               <h3 className="font-display font-bold text-lg text-white">{profile.name}</h3>
-              <span className="text-xs font-extrabold uppercase px-2 py-0.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-300">
+              <span className="text-xs font-semibold uppercase px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-300">
                 {profile.isPro ? 'Pro Subscription' : 'Free Tier'}
               </span>
             </div>
@@ -410,7 +410,7 @@ export function ProfileView({
       {/* Grid Settings detail panels */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Settings preference form list */}
-        <div className="p-5 rounded-3xl glass-card glass-card-purple space-y-4">
+        <div className="p-5 rounded-2xl glass-card glass-card-purple space-y-4">
           <h4 className="font-display font-semibold text-sm text-white flex items-center gap-2">
             <Settings className="w-4 h-4 text-purple-400" />
             <span>Preferences Menu</span>
@@ -418,7 +418,7 @@ export function ProfileView({
 
           {/* Theme mode — dark/system switching isn't implemented yet, so we show the
               one supported theme honestly instead of a selector that silently does nothing. */}
-          <div className="space-y-1.5 border-b border-white/5 pb-3">
+          <div className="space-y-1.5 border-b border-white/10 pb-3">
             <span className="block text-xs font-bold text-zinc-300 uppercase tracking-widest">Theme Mode</span>
             <div className="p-3 rounded-xl text-xs font-semibold gap-1.5 flex items-center border bg-gradient-to-r from-purple-500 to-blue-600 text-white border-transparent shadow-[0_4px_12px_rgba(168,85,247,0.3)]">
               <Sun className="w-4 h-4" />
@@ -473,7 +473,7 @@ export function ProfileView({
         </div>
 
         {/* Subscription payment screen */}
-        <div className="p-5 rounded-3xl glass-card glass-card-blue flex flex-col justify-between space-y-4">
+        <div className="p-5 rounded-2xl glass-card glass-card-blue flex flex-col justify-between space-y-4">
           <div>
             <h4 className="font-display font-semibold text-sm text-white flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-purple-400" />
@@ -527,7 +527,7 @@ export function ProfileView({
 
         {/* Elegant Install App Section inside Profile Settings */}
         {isInstallAvailable && !isInstalled && (
-          <div className="p-5 rounded-3xl glass-card glass-card-purple flex flex-col sm:flex-row justify-between items-start sm:items-center md:col-span-2 gap-4 animate-pulse-glow">
+          <div className="p-5 rounded-2xl glass-card glass-card-purple flex flex-col sm:flex-row justify-between items-start sm:items-center md:col-span-2 gap-4 animate-pulse-glow">
             <div className="flex-1">
               <h4 className="font-display font-semibold text-sm text-white flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-purple-400" />

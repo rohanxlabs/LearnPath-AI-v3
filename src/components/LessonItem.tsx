@@ -37,18 +37,18 @@ export const LessonItem: React.FC<LessonItemProps> = ({
   
    return (
     <motion.div
-      whileTap={{ scale: 0.98 }}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open lesson: ${lesson.name}`}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all duration-200 group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+     whileTap={{ scale: 0.98 }}
+     role="button"
+     tabIndex={0}
+     aria-label={`Open lesson: ${lesson.name}`}
+     onClick={onClick}
+     onKeyDown={(e) => {
+       if (e.key === 'Enter' || e.key === ' ') {
+         e.preventDefault();
+         onClick();
+       }
+     }}
+     className={`w-full flex items-center gap-3 px-4 py-3 min-h-[44px] rounded-xl text-left transition-all duration-200 group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
         displayStatus === 'current'
           ? 'bg-gradient-to-r from-purple-500/10 to-violet-500/10 dark:from-purple-500/15 dark:to-violet-500/10 border border-purple-200/60 dark:border-purple-500/20 hover:border-purple-300 dark:hover:border-purple-500/40 shadow-sm'
           : 'hover:bg-zinc-100 dark:hover:bg-white/5 border border-transparent'

@@ -79,7 +79,7 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
   return (
     <motion.div
       layout
-      className="bg-zinc-50 dark:bg-white/[0.03] rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm overflow-hidden transition-all hover:shadow-md"
+      className="bg-zinc-50 dark:bg-white/[0.03] rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm overflow-hidden transition-all hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
     >
       <motion.button
         whileTap={{ scale: 0.995 }}
@@ -130,7 +130,7 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 pt-1">
-              <div className="h-px bg-zinc-200 dark:bg-white/5 mb-3" />
+              <div className="h-px bg-zinc-200 dark:bg-white/10 mb-3" />
               <div className="space-y-2">
                 {lessons.map((lesson) => (
                   <LessonItem

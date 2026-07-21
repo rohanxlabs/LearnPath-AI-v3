@@ -81,7 +81,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
       {roadmaps.map((roadmap) => (
         <div
           key={roadmap.id}
-          className="group glass-card rounded-2xl p-5 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer relative"
+          className="group glass-card rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] transition-all duration-200 cursor-pointer relative"
           onClick={() => onSelectRoadmap(roadmap.id)}
         >
           {/* Delete Button */}
@@ -121,9 +121,9 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
                 <span>Progress</span>
                 <span className="font-semibold text-white">{roadmap.progressPercent}%</span>
               </div>
-              <div className="w-full bg-white/5 rounded-full h-1.5">
+              <div className="w-full bg-white/10 rounded-full h-2">
                 <div
-                  className="bg-gradient-to-r from-purple-500 to-blue-500 h-1.5 rounded-full transition-all duration-300"
+                  className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${roadmap.progressPercent}%` }}
                 />
               </div>

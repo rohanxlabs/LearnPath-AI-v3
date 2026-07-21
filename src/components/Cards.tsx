@@ -18,7 +18,7 @@ export function ProgressCard({ progressPercent, currentPhaseName, totalXp, onCon
   const strokeDashoffset = circumference - (progressPercent / 100) * circumference;
 
   return (
-    <div className="relative overflow-hidden rounded-3xl glass-card glass-card-purple p-8 transition-all duration-200">
+    <div className="relative overflow-hidden rounded-2xl glass-card glass-card-purple p-6 transition-all duration-200">
       <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600 rounded-full blur-[120px] opacity-15 pointer-events-none" />
       
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
@@ -135,11 +135,11 @@ export function StatsCard({ stats }: StatsCardProps) {
         return (
           <div
             key={item.id}
-            className={`p-5 rounded-3xl ${item.glass} shadow-md flex flex-col justify-between transition-all duration-200`}
+            className={`p-5 rounded-2xl ${item.glass} flex flex-col justify-between transition-all duration-200`}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs text-zinc-300 font-medium">{item.label}</span>
-              <div className={`p-1.5 rounded-lg border flex-shrink-0 ${item.color}`}>
+              <div className={`p-1.5 rounded-lg flex-shrink-0 ${item.color}`}>
                 <IconComponent className="w-4 h-4" />
               </div>
             </div>
@@ -187,7 +187,7 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
 
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl p-5 border transition-all duration-200 ${
+      className={`relative overflow-hidden rounded-2xl p-5 border transition-all duration-200 ${
         isUnlocked
           ? 'glass-card glass-card-purple shadow-[0_4px_12px_rgba(168,85,247,0.08)]'
           : 'glass-card opacity-50'
@@ -204,7 +204,7 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
             <h4 className="font-semibold text-sm text-white truncate">
               {achievement.name}
             </h4>
-            <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+            <p className="text-sm text-zinc-300 mt-1 leading-relaxed">
               {achievement.description}
             </p>
           </div>
@@ -228,7 +228,7 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3">
+      <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
         <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">
           +{achievement.xpReward} XP REWARD
         </span>
@@ -268,7 +268,7 @@ export function NotificationCard({ notification, onReadToggle, onDelete }: Notif
 
   return (
     <div
-      className={`p-5 rounded-3xl transition-all duration-200 ${
+      className={`p-5 rounded-2xl transition-all duration-200 ${
         notification.read
           ? 'glass-card opacity-60'
           : 'glass-card glass-card-blue text-white shadow-sm'
@@ -288,7 +288,7 @@ export function NotificationCard({ notification, onReadToggle, onDelete }: Notif
           <h4 className={`text-sm font-semibold mt-2 ${notification.read ? 'text-zinc-300' : 'text-white'}`}>
             {notification.title}
           </h4>
-          <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
+          <p className="text-sm text-zinc-300 mt-1 leading-relaxed">
             {notification.message}
           </p>
         </div>
@@ -350,7 +350,7 @@ export function AIRecommendationCard({ recommendation, onLaunch }: AIRecommendat
   };
 
   return (
-    <div className={`p-5 rounded-3xl ${getGlassStyle()} transition-all duration-200 shadow-sm flex flex-col justify-between`}>
+    <div className={`p-5 rounded-2xl ${getGlassStyle()} transition-all duration-200 flex flex-col justify-between`}>
       <div>
         <div className="flex items-center justify-between gap-2.5">
           <span className={`text-xs uppercase font-bold px-2 py-0.5 rounded border tracking-wide ${getBadgeStyle()}`}>
@@ -363,12 +363,12 @@ export function AIRecommendationCard({ recommendation, onLaunch }: AIRecommendat
         <h4 className="font-semibold text-sm text-white mt-2.5">
           {recommendation.title}
         </h4>
-          <p className="text-xs text-zinc-300 mt-1 line-clamp-2 leading-relaxed">
+          <p className="text-sm text-zinc-300 mt-1 line-clamp-2 leading-relaxed">
             {recommendation.description}
           </p>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+        <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
           <span className="text-xs font-semibold text-zinc-400 capitalize">
             Category: {recommendation.category}
           </span>
@@ -403,7 +403,7 @@ export function LearningScoreCard({ profile }: LearningScoreCardProps) {
   ];
 
   return (
-    <div className="p-5 rounded-3xl glass-card glass-card-purple shadow-sm">
+    <div className="p-5 rounded-2xl glass-card glass-card-purple">
       <div className="flex items-center justify-between gap-2.5 mb-4">
         <div className="flex items-center gap-2">
           <BrainCircuit className="w-5 h-5 text-purple-400" />
@@ -423,7 +423,7 @@ export function LearningScoreCard({ profile }: LearningScoreCardProps) {
                 {skill.score}%
               </span>
             </div>
-            <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden border border-white/5">
+            <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-[800ms] ease-out"
                 style={{

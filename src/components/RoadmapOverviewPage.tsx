@@ -80,7 +80,7 @@ export function RoadmapOverviewPage({
         initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-600 p-6 md:p-8 shadow-xl"
+        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-600 p-6 md:p-8 shadow-[0_4px_20px_rgba(79,70,229,0.18)]"
       >
         {/* decorative blobs */}
         <div className="pointer-events-none absolute top-0 right-0 w-56 h-56 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
@@ -126,7 +126,7 @@ export function RoadmapOverviewPage({
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-lg font-extrabold text-white leading-none">{roadmap.progressPercent}%</span>
-                  <span className="text-[9px] text-white/70 font-medium uppercase tracking-wide">done</span>
+                  <span className="text-xs text-white/70 font-medium uppercase tracking-wide">done</span>
                 </div>
               </div>
             </div>
@@ -207,7 +207,7 @@ export function RoadmapOverviewPage({
                 className={`relative rounded-2xl border p-5 transition-all duration-200 overflow-hidden
                   ${status === 'locked'
                     ? 'border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/[0.02] cursor-not-allowed'
-                    : 'border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.03] cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-purple-300 dark:hover:border-purple-500/40'
+                    : 'border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.03] cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] hover:border-purple-300 dark:hover:border-purple-500/40'
                   }
                   ${status === 'unlocked' ? 'ring-2 ring-purple-400/40 dark:ring-purple-500/30' : ''}
                 `}
@@ -237,12 +237,12 @@ export function RoadmapOverviewPage({
 
                     {/* status badge */}
                     {status === 'completed' && (
-                      <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                      <span className="flex-shrink-0 flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                         <CheckCircle2 className="w-3 h-3" /> Done
                       </span>
                     )}
                     {status === 'unlocked' && (
-                      <span className="flex-shrink-0 flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20">
+                      <span className="flex-shrink-0 flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20">
                         <Play className="w-2.5 h-2.5 fill-current" /> Active
                       </span>
                     )}

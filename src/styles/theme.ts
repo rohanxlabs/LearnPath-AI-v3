@@ -133,6 +133,15 @@ export const colors = {
   },
 } as const;
 
+// Shadow scale
+export const shadows = {
+  card:      '0 4px 16px rgba(0,0,0,0.08)',
+  cardHover: '0 8px 24px rgba(0,0,0,0.10)',
+  modal:     '0 8px 40px rgba(0,0,0,0.18)',
+  floating:  '0 4px 14px rgba(124,58,237,0.30)',
+  glow:      '0 4px 20px rgba(79,70,229,0.18)',
+} as const;
+
 // Glass card variants
 export const glassCardStyles = {
   base: 'bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-white/10',

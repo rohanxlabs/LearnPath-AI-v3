@@ -12,7 +12,7 @@ import { SkeletonStatGrid, LoadingSpinner, SkeletonChart } from './Skeleton';
 // Shown instead of a chart when there isn't enough real activity history yet —
 // honest empty state rather than a fabricated trend line.
 const NoHistoryYet = ({ label }: { label: string }) => (
-  <div className="flex h-full min-h-[200px] w-full flex-col items-center justify-center gap-1.5 rounded-lg bg-black/20 border border-white/10 text-center px-4">
+  <div className="flex h-full min-h-[200px] w-full flex-col items-center justify-center gap-1.5 rounded-xl bg-white/[0.03] border border-white/10 text-center px-4">
     <p className="text-sm text-zinc-400">Not enough history yet to show {label}.</p>
     <p className="text-xs text-zinc-500">This builds up as you complete lessons — check back after a few study sessions.</p>
   </div>
@@ -38,14 +38,14 @@ export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabPr
   }, [roadmap, profile, activityLog]);
 
   const StatCard = ({ icon, title, value, change }: { icon: React.ReactNode, title: string, value: string, change?: string }) => (
-    <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex flex-col justify-between">
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between">
       <div className="flex items-center justify-between text-zinc-400">
         <p className="text-sm font-medium">{title}</p>
         {icon}
       </div>
       <div className="mt-2">
         <p className="text-xl sm:text-2xl font-bold text-white">{value}</p>
-        {change && <p className="text-xs text-green-400">{change}</p>}
+        {change && <p className="text-xs text-emerald-400">{change}</p>}
       </div>
     </div>
   );
@@ -128,7 +128,7 @@ export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabPr
             </h3>
             <div className="space-y-3">
               {insightsData.aiInsights.map(insight => (
-                <div key={insight.id} className="bg-black/20 border border-white/10 rounded-lg p-3">
+                <div key={insight.id} className="bg-white/[0.03] border border-white/10 rounded-xl p-3">
                   <p className="text-sm font-semibold text-white flex items-center gap-2">
                     {insight.type === 'strength' && <ShieldCheck size={14} className="text-green-400" />}
                     {insight.type === 'weakness' && <Eye size={14} className="text-amber-400" />}
