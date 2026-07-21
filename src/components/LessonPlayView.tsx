@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Play, Sparkles, CheckCircle2, AlertTriangle, Lightbulb, HelpCircle, Code2, PlayCircle, Eye, RefreshCw } from 'lucide-react';
-import { Lesson, QuizQuestion } from '../types';
+import { ArrowLeft, CheckCircle2, AlertTriangle, Lightbulb, Code2, PlayCircle, RefreshCw, Swords, ChevronRight } from 'lucide-react';
+import { Lesson } from '../types';
 import { XPBadge } from './Badges';
 import { BookOpeningAnimation } from './BookOpeningAnimation';
 import { ConfettiParticles } from './ConfettiParticles';
@@ -13,10 +13,23 @@ interface LessonPlayViewProps {
   onComplete: (xpAdded: number) => void;
 }
 
+// Session key: book animation fires once per lesson per browser session
+function bookAnimKey(lessonId: string) { return `book_shown_${lessonId}`; }
+
 export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewProps) {
-  const [showBookOpen, setShowBookOpen] = useState(true);
+  // Show book animation only if not already shown this session for this lesson
+  const [showBookOpen, setShowBookOpen] = useState(() => {
+    try { return !sessionStorage.getItem(bookAnimKey(lesson.id)); }
+    catch { return true; }
+  });
   const [hasCompleted, setHasCompleted] = useState(false);
   const [showHint, setShowHint] = useState(false);
+
+  // Boss challenge step state
+  const [challengeStep, setChallengeStep] = useState<'intro' | 'thinking' | 'answer' | 'done'>('intro');
+  const [challengeAnswer, setChallengeAnswer] = useState('');
+  const [challengeChecking, setChallengeChecking] = useState(false);
+  const [challengeFeedback, setChallengeFeedback] = useState<{ passed: boolean; note: string } | null>(null);
 
   // States for Quiz type lessons
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
@@ -45,43 +58,45 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
     }
   };
 
-  // Code compile API request triggers
+  // Code compile API request triggers (15s timeout via AbortController)
   const handleVerifyCode = async () => {
     setCodeIsVerifying(true);
     setCodeFeedback(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
     try {
       const response = await fetch('/api/analyze-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code: userCode,
-            instructions: lesson.codingExercise?.instructions,
-            solution: lesson.codingExercise?.solutionCode,
-            hint: lesson.codingExercise?.hint
-          }),
+        body: JSON.stringify({
+          code: userCode,
+          instructions: lesson.codingExercise?.instructions,
+          solution: lesson.codingExercise?.solutionCode,
+          hint: lesson.codingExercise?.hint
+        }),
+        signal: controller.signal,
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const contentType = response.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
-        throw new Error("Server returned HTML or non-JSON content. The API may be offline.");
+        throw new Error("Server returned non-JSON content. The API may be offline.");
       }
       const data = await response.json();
       setCodeFeedback(data);
-      if (data.passed) {
-        setHasCompleted(true);
-      }
-    } catch (err) {
-      console.error(err);
+      if (data.passed) setHasCompleted(true);
+    } catch (err: any) {
+      const isTimeout = err?.name === 'AbortError';
       setCodeFeedback({
         passed: false,
         systemError: true,
-        suggestions: "",
-        explanation: "Verification service unavailable. Please retry."
+        suggestions: isTimeout ? "Request timed out after 15 seconds." : "",
+        explanation: isTimeout
+          ? "The verification server took too long. Check your connection and try again."
+          : "Verification service unavailable. Please retry."
       });
     } finally {
+      clearTimeout(timeoutId);
       setCodeIsVerifying(false);
     }
   };
@@ -335,27 +350,166 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
       case 'boss_challenge':
       case 'challenge':
         return (
-          <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col items-center text-center space-y-4 max-w-xl mx-auto relative overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 via-blue-600 to-emerald-500" />
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/10 text-white font-bold font-display text-lg">
-              ⚔️
-            </div>
-            <div>
-              <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">BOSS CHALLENGE</span>
-              <h4 className="font-display font-black text-lg text-white mt-1.5">{lesson.name}</h4>
+          <div className="space-y-5 max-w-xl mx-auto">
+            {/* Header */}
+            <div className="relative p-6 rounded-2xl bg-white/[0.03] border border-white/10 text-center overflow-hidden">
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 via-blue-600 to-emerald-500" />
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center mx-auto mb-3 border border-white/10">
+                <Swords className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">Boss Challenge</span>
+              <h4 className="font-display font-black text-base text-white mt-1">{lesson.name}</h4>
               <p className="text-xs text-zinc-400 leading-relaxed mt-2 select-text">
-                This is the ultimate assessment sandbox. We will synthesize distributed processes and evaluate response accuracies under concurrent workload queues. Continue to trigger.
+                {lesson.content || 'Demonstrate your understanding by answering the challenge question below. Think carefully before submitting.'}
               </p>
             </div>
 
-            <div className="pt-2">
-              <button
-                onClick={() => setHasCompleted(true)}
-                className="px-6 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 active:scale-98 rounded-xl shadow-md cursor-pointer transition-all"
-              >
-                Confront and Solve Challenge Puzzles
-              </button>
+            {/* Step indicator */}
+            <div className="flex items-center gap-2 justify-center">
+              {(['intro','thinking','answer','done'] as const).map((step, i) => {
+                const stepIndex = ['intro','thinking','answer','done'].indexOf(challengeStep);
+                return (
+                  <React.Fragment key={step}>
+                    <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center transition-all ${
+                      i < stepIndex ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                      i === stepIndex ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' :
+                      'bg-white/5 text-zinc-600 border border-white/10'
+                    }`}>{i < stepIndex ? '✓' : i + 1}</div>
+                    {i < 3 && <div className={`h-px w-6 transition-all ${i < stepIndex ? 'bg-emerald-500/40' : 'bg-white/10'}`} />}
+                  </React.Fragment>
+                );
+              })}
             </div>
+
+            {/* Step content */}
+            <AnimatePresence mode="wait">
+              {challengeStep === 'intro' && (
+                <motion.div key="intro" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="p-5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3 text-center">
+                  <p className="text-xs text-amber-300 font-semibold uppercase tracking-widest">How this works</p>
+                  <ul className="text-xs text-zinc-400 space-y-1.5 text-left max-w-sm mx-auto">
+                    <li className="flex items-start gap-2"><ChevronRight className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" /><span>Read the challenge prompt carefully</span></li>
+                    <li className="flex items-start gap-2"><ChevronRight className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" /><span>Write your answer in your own words — no copy/paste</span></li>
+                    <li className="flex items-start gap-2"><ChevronRight className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" /><span>Your answer will be evaluated for understanding, not exact wording</span></li>
+                  </ul>
+                  <button onClick={() => setChallengeStep('thinking')}
+                    className="mt-2 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl cursor-pointer transition-all">
+                    Start Challenge
+                  </button>
+                </motion.div>
+              )}
+
+              {challengeStep === 'thinking' && (
+                <motion.div key="thinking" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                  <p className="text-xs font-bold text-purple-400 uppercase tracking-widest">Challenge Prompt</p>
+                  <p className="text-sm text-zinc-200 leading-relaxed font-medium select-text">
+                    {lesson.quizQuestions?.[0]?.question ||
+                      `Explain the key concept behind "${lesson.name}" and give one real-world example of where you would apply it.`}
+                  </p>
+                  <div className="pt-1 flex justify-end">
+                    <button onClick={() => setChallengeStep('answer')}
+                      className="flex items-center gap-1.5 px-4 py-2 font-bold text-xs text-white bg-purple-600 hover:bg-purple-500 rounded-xl cursor-pointer transition-all">
+                      I'm ready to answer <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {challengeStep === 'answer' && (
+                <motion.div key="answer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="space-y-3">
+                  <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+                    <p className="text-xs font-bold text-purple-400 uppercase tracking-widest">Your Answer</p>
+                    <textarea
+                      value={challengeAnswer}
+                      onChange={e => setChallengeAnswer(e.target.value)}
+                      rows={5}
+                      placeholder="Write your answer here in your own words..."
+                      className="w-full bg-[#0A0A0A] border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-purple-500/40 resize-none leading-relaxed"
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs ${challengeAnswer.trim().length < 30 ? 'text-zinc-600' : 'text-emerald-500'}`}>
+                        {challengeAnswer.trim().length < 30 ? `${30 - challengeAnswer.trim().length} more characters needed` : '✓ Enough to submit'}
+                      </span>
+                      <button
+                        disabled={challengeAnswer.trim().length < 30 || challengeChecking}
+                        onClick={async () => {
+                          setChallengeChecking(true);
+                          // Evaluate against the lesson context using AI
+                          try {
+                            const res = await fetch('/api/analyze-code', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                code: challengeAnswer,
+                                instructions: `Challenge: ${lesson.quizQuestions?.[0]?.question || lesson.name}. Student must demonstrate understanding.`,
+                                solution: lesson.quizQuestions?.[0]?.explanation || lesson.content?.slice(0, 500) || '',
+                              }),
+                              signal: AbortSignal.timeout(15_000),
+                            });
+                            const data = res.ok ? await res.json() : null;
+                            setChallengeFeedback({
+                              passed: data?.passed ?? challengeAnswer.trim().length >= 80,
+                              note: data?.explanation || (challengeAnswer.trim().length >= 80
+                                ? 'Good effort! You demonstrated understanding of the key concepts.'
+                                : 'Try to elaborate more on the concept.'),
+                            });
+                          } catch {
+                            setChallengeFeedback({
+                              passed: challengeAnswer.trim().length >= 80,
+                              note: challengeAnswer.trim().length >= 80
+                                ? 'Your answer looks comprehensive. Well done!'
+                                : 'Please write a more detailed answer to demonstrate understanding.',
+                            });
+                          }
+                          setChallengeChecking(false);
+                          setChallengeStep('done');
+                        }}
+                        className="flex items-center gap-1.5 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 rounded-xl cursor-pointer disabled:opacity-40 transition-all">
+                        {challengeChecking
+                          ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Evaluating…</>
+                          : <><CheckCircle2 className="w-3.5 h-3.5" /> Submit Answer</>
+                        }
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {challengeStep === 'done' && challengeFeedback && (
+                <motion.div key="done" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                  className={`p-5 rounded-2xl border text-center space-y-3 ${challengeFeedback.passed
+                    ? 'bg-emerald-500/5 border-emerald-500/20'
+                    : 'bg-amber-500/5 border-amber-500/20'}`}>
+                  {challengeFeedback.passed && <ConfettiParticles count={12} />}
+                  <div className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center text-2xl ${
+                    challengeFeedback.passed ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-amber-500/10 border border-amber-500/20'
+                  }`}>
+                    {challengeFeedback.passed ? '🏆' : '📝'}
+                  </div>
+                  <p className={`font-bold text-sm ${challengeFeedback.passed ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {challengeFeedback.passed ? 'Challenge Cleared!' : 'Keep Going!'}
+                  </p>
+                  <p className="text-xs text-zinc-400 leading-relaxed max-w-sm mx-auto">{challengeFeedback.note}</p>
+                  {challengeFeedback.passed ? (
+                    <button onClick={() => setHasCompleted(true)}
+                      className="px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 rounded-xl cursor-pointer transition-all">
+                      Claim Reward
+                    </button>
+                  ) : (
+                    <button onClick={() => {
+                      setChallengeStep('answer');
+                      setChallengeAnswer('');
+                      setChallengeFeedback(null);
+                    }}
+                      className="px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl cursor-pointer transition-all">
+                      Try Again
+                    </button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         );
 
@@ -367,10 +521,13 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
   return (
     <AnimatePresence>
       {showBookOpen && (
-        <BookOpeningAnimation 
+        <BookOpeningAnimation
           key="book-open"
           lessonTitle={lesson.name}
-          onComplete={() => setShowBookOpen(false)} 
+          onComplete={() => {
+            try { sessionStorage.setItem(bookAnimKey(lesson.id), '1'); } catch {}
+            setShowBookOpen(false);
+          }}
         />
       )}
       

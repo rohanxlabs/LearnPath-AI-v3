@@ -267,28 +267,47 @@ export function AnalyticsView({ profile, activityLog = {}, onNavigate }: Analyti
       <div className="p-5 rounded-2xl glass-card glass-card-teal">
         <h4 className="font-display font-semibold text-sm text-white mb-4">Completion Speed</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* This section can now be powered by analytics or other dynamic data */}
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
-                <span className="text-zinc-300 font-medium">Monthly Practice Hours Goal</span>
-                <span className="font-mono text-white font-semibold">{(stats?.hoursStudied ?? 0).toFixed(1)} / 45 hrs Completion</span>
+        {/* This section can now be powered by analytics or other dynamic data */}
+        <div className="space-y-4">
+          {(() => {
+            // Monthly goal: based on user's actual hours. A reasonable monthly target is
+            // 20 hours (≈5 hrs/week). We show the real studied hours vs that target.
+            const monthlyGoal = 20;
+            const hoursStudied = stats?.hoursStudied ?? 0;
+            const hoursPercent = Math.min(100, (hoursStudied / monthlyGoal) * 100);
+            return (
+              <div>
+                <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
+                  <span className="text-zinc-300 font-medium">Monthly Practice Hours</span>
+                  <span className="font-mono text-white font-semibold">{hoursStudied.toFixed(1)} / {monthlyGoal} hrs</span>
+                </div>
+                <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-purple-500 rounded-full transition-all duration-700" style={{ width: `${hoursPercent}%` }} />
+                </div>
               </div>
-              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(((stats?.hoursStudied ?? 0) / 45) * 100)}%` }} />
-              </div>
-            </div>
+            );
+          })()}
 
-            <div>
-              <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
-                <span className="text-zinc-300 font-medium">Assessments Verified</span>
-                 <span className="font-mono text-white font-semibold">{stats?.lessonsCompleted ?? 0} / 20 steps done</span>
+          {(() => {
+            // Assessments: show actual completed vs total roadmap lessons (derived from profile)
+            const done = stats?.lessonsCompleted ?? 0;
+            // Estimate total from profile roadmaps — use overallMastery to back-calculate if possible
+            const mastery = stats?.overallMastery ?? 0;
+            const total = mastery > 0 ? Math.round(done / (mastery / 100)) : Math.max(done + 5, 20);
+            const pct = total > 0 ? Math.min(100, (done / total) * 100) : 0;
+            return (
+              <div>
+                <div className="flex justify-between items-center text-xs mb-1.5 font-sans">
+                  <span className="text-zinc-300 font-medium">Assessments Verified</span>
+                  <span className="font-mono text-white font-semibold">{done} / {total} lessons</span>
+                </div>
+                <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
+                </div>
               </div>
-              <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${((stats?.lessonsCompleted ?? 0) / 20) * 100}%` }} />
-              </div>
-            </div>
-          </div>
+            );
+          })()}
+        </div>
 
           <div className="space-y-4">
             <div>

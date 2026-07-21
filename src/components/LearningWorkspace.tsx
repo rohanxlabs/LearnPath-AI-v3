@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import {
   ChevronRight, CheckCircle2, Play, Code2, Brain, Trophy,
   Target, BookOpen, Zap, Youtube, Library, Rocket, ExternalLink, Github,
+  Clock, RefreshCw,
 } from 'lucide-react';
 import { Roadmap, Lesson } from '../types';
 
@@ -132,6 +133,15 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [contentTab, setContentTab] = useState<ContentTab>('learn');
 
+  // Engagement gate: require 30s on page before Mark Complete activates
+  const [secondsOnPage, setSecondsOnPage] = useState(0);
+  const COMPLETE_GATE_SECONDS = 30;
+  const canMarkComplete = secondsOnPage >= COMPLETE_GATE_SECONDS;
+
+  // Content-generating poll: retry up to 3 times every 8s when content is placeholder
+  const [contentPollCount, setContentPollCount] = useState(0);
+  const MAX_CONTENT_POLLS = 3;
+
   // Phase accordion — default-expand phase containing active lesson
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(() => {
     if (activeLesson?.phaseId) return new Set([activeLesson.phaseId]);
@@ -139,12 +149,41 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
     return first ? new Set([first.id]) : new Set<string>();
   });
 
-  // Reset tab/quiz state when topic changes
+  // Derived early so useEffect closures can reference it
+  const isCompletedForTimer = completedInLevel.includes(selectedTopicId) || topicData?.status === 'completed';
+
+  // Reset tab/quiz state + timer when topic changes
   useEffect(() => {
     setContentTab('learn');
     setQuizScore(null);
     setQuizAnswers({});
+    setSecondsOnPage(0);
+    setContentPollCount(0);
   }, [selectedTopicId]);
+
+  // Engagement timer: tick every second while a topic is open and not yet completed
+  useEffect(() => {
+    if (!selectedTopicId || isCompletedForTimer) return;
+    const id = setInterval(() => setSecondsOnPage(s => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [selectedTopicId, isCompletedForTimer]);
+
+  // Auto-poll for content when placeholder is detected (max 3 retries, every 8s)
+  useEffect(() => {
+    const isPlaceholder = topicData?.content === 'Content is being generated for this topic...' || !topicData?.content;
+    if (!topicData || !isPlaceholder || contentPollCount >= MAX_CONTENT_POLLS) return;
+    const pollId = setTimeout(async () => {
+      setContentPollCount(c => c + 1);
+      const res = await fetch(`/api/topics/${topicData.id}`).catch(() => null);
+      if (res?.ok) {
+        const d = await res.json();
+        if (d.topic?.content && d.topic.content !== 'Content is being generated for this topic...') {
+          setTopicData(d.topic);
+        }
+      }
+    }, 8_000);
+    return () => clearTimeout(pollId);
+  }, [topicData, contentPollCount]);
 
   useEffect(() => {
     if (activeLesson?.lessonId && !selectedTopicId) {
@@ -223,6 +262,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   };
 
   const handleMarkComplete = () => {
+    if (!canMarkComplete) return; // engagement gate
     if (topicData && !completedInLevel.includes(topicData.id)) {
       onCompleteLesson(topicData.xpReward || 20, topicData.id);
       setCompletedInLevel(prev => [...prev, topicData.id]);
@@ -244,7 +284,13 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   const prevTopic = currentIdx > 0 ? allTopics[currentIdx - 1] : null;
   const nextTopic = currentIdx >= 0 && currentIdx < allTopics.length - 1 ? allTopics[currentIdx + 1] : null;
 
-  const isCompleted = completedInLevel.includes(selectedTopicId) || topicData?.status === 'completed';
+  const isCompleted = isCompletedForTimer;
+
+  // Derive a display duration for a lesson from XP (every 10 XP ≈ 1 min, min 5 min)
+  const lessonDurationLabel = (xpReward: number) => {
+    const mins = Math.max(5, Math.round(xpReward / 10) * 5);
+    return `${mins} min`;
+  };
 
   // -------------------------------------------------------------------------
   // Render
@@ -404,9 +450,26 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                         </ReactMarkdown>
                       </div>
                     ) : (
-                      <div className="p-5 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-2">
-                        <div className="w-7 h-7 rounded-full border-2 border-violet-300 border-t-violet-600 animate-spin mx-auto" />
-                        <p className="text-sm text-slate-500">Lesson content is being generated…</p>
+                      <div className="p-5 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-3">
+                        {contentPollCount < MAX_CONTENT_POLLS ? (
+                          <>
+                            <div className="w-7 h-7 rounded-full border-2 border-violet-300 border-t-violet-600 animate-spin mx-auto" />
+                            <p className="text-sm text-slate-500">Generating lesson content…</p>
+                            <p className="text-xs text-slate-400">
+                              {contentPollCount === 0 ? 'This usually takes a few seconds.' : `Retry ${contentPollCount}/${MAX_CONTENT_POLLS} — checking again shortly…`}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-slate-500">Content couldn't be loaded automatically.</p>
+                            <button
+                              onClick={() => { setContentPollCount(0); }}
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-700 transition-colors"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" /> Retry
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -457,12 +520,21 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                         Lesson Complete · +{topicData.xpReward || 20} XP earned
                       </div>
                     ) : (
-                      <button
-                        onClick={handleMarkComplete}
-                        className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white rounded-xl font-bold text-sm transition-all shadow-[0_4px_12px_rgba(124,58,237,0.25)]"
-                      >
-                        Mark Lesson Complete
-                      </button>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                          onClick={handleMarkComplete}
+                          disabled={!canMarkComplete}
+                          className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white rounded-xl font-bold text-sm transition-all shadow-[0_4px_12px_rgba(124,58,237,0.25)] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Mark Lesson Complete
+                        </button>
+                        {!canMarkComplete && (
+                          <span className="text-xs text-slate-400 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            Available in {COMPLETE_GATE_SECONDS - secondsOnPage}s
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </>
@@ -727,7 +799,14 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                                 : <Play className={`w-3 h-3 flex-shrink-0 ${isActive ? 'text-violet-500' : 'text-slate-300'}`} />
                               }
                               <span className="truncate flex-1 leading-snug">{lesson.name}</span>
-                              {isActive && <span className="text-violet-500 text-xs font-bold flex-shrink-0">NOW</span>}
+                              {isActive
+                                ? <span className="text-violet-500 text-xs font-bold flex-shrink-0">NOW</span>
+                                : status !== 'completed' && (
+                                  <span className="text-slate-400 text-[10px] flex-shrink-0 tabular-nums">
+                                    {lessonDurationLabel(lesson.xpReward)}
+                                  </span>
+                                )
+                              }
                             </motion.button>
                           );
                         })}

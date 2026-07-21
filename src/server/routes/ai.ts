@@ -95,10 +95,52 @@ Use clean formatting without markdown symbols like ** or ##.`;
     res.end(responseText);
   } catch (error: any) {
     console.error('OpenRouter Chat Error:', error.message);
-    const lowercaseMessage = message.toLowerCase();
-    let reply = `### AI Mentor Ready to Help 🤖\n\nYou asked: *"${sanitizeForPrompt(message)}"* - let me break this down!\n\n**My Approach**:\n- **Explain**: Concepts in plain English with practical analogies\n- **Show**: Code examples with line-by-line walkthroughs\n- **Practice**: Quick exercises to reinforce learning\n- **Extend**: Next steps and pro tips\n\n**Quick Exercise**: Pick any AI topic - I'll give you a 3-minute hands-on task\n**Next Step**: Share what you're learning, and I'll suggest a personalized path\n**Pro Tip**: Active recall (quizzing yourself) beats passive reading 3x for retention`;
+    const q = sanitizeForPrompt(message, 200);
+    const lc = message.toLowerCase();
 
-    if (lowercaseMessage.includes('python')) reply = `### Python for AI Mastery 🐍\n\nPython is the foundation of modern AI development.\n\n**Key Points**:\n- NumPy Vectorization: Replace slow loops with array operations\n- Pandas DataFrames: Handle structured data efficiently\n- Object-Oriented Patterns: Write reusable ML components\n\n**Quick Exercise**: Write NumPy array subtraction to compute MSE\n**Next Step**: Explore PyTorch tensor operations\n**Pro Tip**: Always vectorize — avoid native Python loops in numerical code`;
+    // Build a topic-aware fallback based on keywords in the user's message
+    let topic = 'this topic';
+    let keyPoints = [
+      'Break the concept into smaller sub-problems',
+      'Look for a real-world analogy that maps to the idea',
+      'Build a minimal working example to test your understanding',
+    ];
+    let exercise = 'Write a 3-bullet summary of what you just read, then quiz yourself without looking.';
+    let proTip = 'Active recall (testing yourself) beats passive re-reading by 3x for long-term retention.';
+
+    if (lc.includes('python') || lc.includes('pip') || lc.includes('django') || lc.includes('flask')) {
+      topic = 'Python';
+      keyPoints = ['Use list comprehensions over explicit loops for clarity', 'Lean on the standard library before reaching for third-party packages', 'Write small pure functions — they are easier to test and reuse'];
+      exercise = 'Open a REPL and implement the concept you asked about in under 10 lines.';
+      proTip = 'Read the official Python docs for a function before Stack Overflow — they are more accurate.';
+    } else if (lc.includes('javascript') || lc.includes(' js ') || lc.includes('typescript') || lc.includes('react') || lc.includes('node')) {
+      topic = 'JavaScript / TypeScript';
+      keyPoints = ['Understand the event loop before diving into async/await', 'TypeScript interfaces document intent and catch bugs at compile time', 'Prefer immutable data patterns to reduce side-effect bugs'];
+      exercise = 'Rewrite a callback-based snippet using async/await and compare readability.';
+      proTip = 'Use browser DevTools Sources tab to step through async code — it makes the execution order visible.';
+    } else if (lc.includes('machine learning') || lc.includes(' ml ') || lc.includes('neural') || lc.includes('model training')) {
+      topic = 'Machine Learning';
+      keyPoints = ['Start with the simplest model that could work, then add complexity only if needed', 'Data quality matters more than model sophistication in most real projects', 'Validation split is your sanity check — never tune on the test set'];
+      exercise = 'Describe the bias-variance tradeoff in one sentence using a non-technical analogy.';
+      proTip = 'Plot your loss curves before drawing any conclusions — spikes often reveal data issues, not model issues.';
+    } else if (lc.includes('sql') || lc.includes('database') || lc.includes('postgres') || lc.includes('query')) {
+      topic = 'SQL / Databases';
+      keyPoints = ['Understand EXPLAIN ANALYZE output before optimizing any query', 'Indexes speed up reads but slow down writes — choose deliberately', 'Normalize to third normal form first, then denormalize only with a measured reason'];
+      exercise = 'Write a query that uses a JOIN, a WHERE filter, and an aggregate (COUNT/SUM) on any table you have.';
+      proTip = 'N+1 query problems are the most common performance killer in web apps — learn to spot them early.';
+    } else if (lc.includes('algorithm') || lc.includes('data structure') || lc.includes('complexity') || lc.includes('big o')) {
+      topic = 'Algorithms & Data Structures';
+      keyPoints = ['Time complexity tells you how an algorithm scales, not how fast it is on one input', 'Most interview problems reduce to a handful of patterns: sliding window, two-pointer, BFS/DFS, DP', 'Space complexity is often the hidden cost — always account for the call stack in recursion'];
+      exercise = 'Trace through a binary search on paper for an array of 8 elements, counting comparisons.';
+      proTip = 'Solving the brute-force solution first gives you a correctness baseline to optimize from.';
+    } else if (lc.includes('css') || lc.includes('html') || lc.includes('tailwind') || lc.includes('flexbox') || lc.includes('grid')) {
+      topic = 'CSS / Frontend Styling';
+      keyPoints = ['Learn the box model deeply — margin, border, padding, content', 'Flexbox handles one-dimensional layouts; CSS Grid handles two-dimensional ones', 'Mobile-first media queries are easier to maintain than desktop-first overrides'];
+      exercise = 'Build a centered card with a title, body text, and a button using only Flexbox — no absolute positioning.';
+      proTip = 'Browser DevTools computed styles panel shows exactly which rule is winning — use it before guessing.';
+    }
+
+    const reply = `AI Mentor (offline mode)\n\nYou asked: "${q}"\n\nHere is what I know about ${topic}:\n\n${keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nQuick Exercise: ${exercise}\n\nPro Tip: ${proTip}\n\nNote: The AI mentor is temporarily offline. These are curated study notes. Reconnect for a personalised answer to your exact question.`;
 
     if (!res.headersSent) res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(reply);
