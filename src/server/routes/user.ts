@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../lib/middleware';
-import { loadUserDB, saveUserDB, updateStreak } from '../lib/db';
+import { loadUserDB, saveUserDB, updateStreak, unlockAchievement, sql } from '../lib/db';
 import {
   getUserLessonCompletionStats,
   getRoadmapProgressSnapshot
@@ -130,7 +130,14 @@ router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
     }
     dbData.topic_wise_quizzes = quizzes;
     await saveUserDB(userEmail, dbData);
-    return res.json({ success: true, attempt: quizzes[idx >= 0 ? idx : quizzes.length - 1] });
+
+    // Unlock "Quiz Master" achievement when user scores 100% on any quiz.
+    let newAchievement: { id: string; name: string; icon: string; xpReward: number } | null = null;
+    if (attempt.totalQuestions > 0 && attempt.score === attempt.totalQuestions) {
+      newAchievement = await unlockAchievement(userEmail, 'ach-2');
+    }
+
+    return res.json({ success: true, attempt: quizzes[idx >= 0 ? idx : quizzes.length - 1], newAchievement });
   } catch (error) {
     console.error('Upsert topic wise quiz error:', error);
     return res.status(500).json({ error: 'Failed to save quiz attempt' });
@@ -211,6 +218,53 @@ router.get('/progress/:roadmapId', requireAuth, async (req, res) => {
   } catch (error: any) {
     console.error('Get progress error:', error);
     return res.json({ progress: null });
+  }
+});
+
+// Real user analytics from DB — replaces synthetic data in userDataService.ts
+router.get('/user-analytics', requireAuth, async (req, res) => {
+  const userEmail = req.session.userEmail!;
+  try {
+    // Last 7 days of study hours per day from user_lesson_progress
+    const today = new Date();
+    const days: string[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      days.push(d.toISOString().split('T')[0]);
+    }
+
+    const rows = await sql`
+      SELECT
+        DATE(completed_at) AS day,
+        COALESCE(SUM(study_minutes), 0) AS total_minutes
+      FROM user_lesson_progress
+      WHERE owner_email = ${userEmail.toLowerCase()}
+        AND completed_at >= NOW() - INTERVAL '7 days'
+        AND completed = TRUE
+      GROUP BY DATE(completed_at)
+    `.catch(() => [] as any[]);
+
+    const minutesByDay: Record<string, number> = {};
+    for (const row of rows) {
+      const dayStr = typeof row.day === 'string' ? row.day : new Date(row.day).toISOString().split('T')[0];
+      minutesByDay[dayStr] = Number(row.total_minutes) || 0;
+    }
+
+    const weeklyHoursPerDay = days.map(d =>
+      Math.round(((minutesByDay[d] || 0) / 60) * 10) / 10
+    );
+
+    // Overall mastery %
+    const { totalLessons, completedLessons } = await getUserLessonCompletionStats(userEmail);
+    const overallMasteryPercent = totalLessons > 0
+      ? Math.round((completedLessons / totalLessons) * 100)
+      : 0;
+
+    return res.json({ weeklyHoursPerDay, overallMasteryPercent });
+  } catch (error) {
+    console.error('User analytics error:', error);
+    return res.json({ weeklyHoursPerDay: [0, 0, 0, 0, 0, 0, 0], overallMasteryPercent: 0 });
   }
 });
 

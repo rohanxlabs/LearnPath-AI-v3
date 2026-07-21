@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { authLimiter, loginLimiter, isValidEmail, validatePassword } from '../lib/middleware';
 import { loadUserDB, saveUserDB } from '../lib/db';
 import { getUserRoadmapsReconstructed } from '../db/schema';
+import { sendVerificationEmail } from './email';
 
 const router = Router();
 
@@ -28,6 +29,8 @@ router.post('/register', authLimiter, async (req, res) => {
     req.session.regenerate((err) => {
       if (err) return res.status(500).json({ error: 'Session initialization failed' });
       req.session.userEmail = email;
+      // Fire-and-forget — never delays or blocks registration response.
+      sendVerificationEmail(email.toLowerCase()).catch(() => {});
       return res.json({ success: true, email, name });
     });
   } catch (error) {

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, aiLimiter, HttpError, withUserLock } from '../lib/middleware';
-import { loadUserDB, saveUserDB, updateStreak } from '../lib/db';
+import { loadUserDB, saveUserDB, updateStreak, unlockAchievement } from '../lib/db';
 import {
   findLessonContext,
   completeLessonForUser,
@@ -186,7 +186,14 @@ router.post('/complete-lesson', requireAuth, async (req, res) => {
       await saveUserDB(userEmail, dbData);
 
       const newStreak = await updateStreak(userEmail);
-      return { xp: newXP, streak: newStreak, completionPercent: counters.progressPercent, message: 'Lesson complete!' };
+
+      // Unlock "First Steps" achievement on first ever lesson completion.
+      let newAchievement: { id: string; name: string; icon: string; xpReward: number } | null = null;
+      if (counters.completedLessons === 1) {
+        newAchievement = await unlockAchievement(userEmail, 'ach-1');
+      }
+
+      return { xp: newXP, streak: newStreak, completionPercent: counters.progressPercent, message: 'Lesson complete!', newAchievement };
     });
 
     return res.json(result);

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, aiLimiter } from '../lib/middleware';
+import { unlockAchievement } from '../lib/db';
 import {
   reconstructRoadmapJson,
   getRoadmapsByOwner,
@@ -176,9 +177,18 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
   const roadmap = req.body;
   if (!roadmap || !roadmap.id || !roadmap.goal) return res.status(400).json({ error: 'Valid roadmap object with id and goal is required' });
   try {
+    // Check BEFORE inserting so we know if this is the user's first roadmap.
+    const existingBefore = await getRoadmapsByOwner(userEmail);
     await createRoadmapFromJson(userEmail, roadmap);
     const saved = await reconstructRoadmapJson(roadmap.id);
-    return res.json({ success: true, roadmap: saved || roadmap });
+
+    // Unlock "Roadmap Builder" on first roadmap creation.
+    let newAchievement: { id: string; name: string; icon: string; xpReward: number } | null = null;
+    if (existingBefore.length === 0) {
+      newAchievement = await unlockAchievement(userEmail, 'ach-3');
+    }
+
+    return res.json({ success: true, roadmap: saved || roadmap, newAchievement });
   } catch (error) {
     console.error('Create roadmap error:', error);
     return res.status(500).json({ error: 'Failed to create roadmap' });

@@ -248,12 +248,14 @@ export function normalizeResources(
     .map((r: any, ri: number) => {
       const url = typeof r.url === 'string' && /^https?:\/\//i.test(r.url) ? r.url : '';
       const provider = cleanProvider(r);
+      // Fallback: search MDN or freeCodeCamp based on topic, never show a dead example.com link.
+      const fallbackUrl = `https://developer.mozilla.org/en-US/search?q=${encodeURIComponent(ctx.moduleName || ctx.goal)}`;
       return {
         id: typeof r.id === 'string' ? r.id : `res-${ctx.phase}-${ctx.module}-${ri + 1}`,
         title: typeof r.title === 'string' && r.title.trim() ? r.title.trim() : `${ctx.moduleName || 'Topic'} reference`,
         type: inferResourceType(r),
         provider,
-        url: url || 'https://example.com',
+        url: url || fallbackUrl,
         description: typeof r.description === 'string' ? r.description.trim() : '',
         reputable: REPUTABLE_PROVIDERS.some((p) => provider.toLowerCase().includes(p))
       };
@@ -364,6 +366,9 @@ export function validateAndNormalizeCurriculum(
         const estMinutes = clampInt(lesson.estimatedMinutes, CURRICULUM_LIMITS.minLessonMinutes, CURRICULUM_LIMITS.maxLessonMinutes, 20 + ((globalLessonCounter * 5) % 20));
         phaseEstimatedMinutes += estMinutes;
 
+        // Derive XP from estimated study time: ~1 XP per minute, min 15, max 50.
+        const derivedXp = Math.min(50, Math.max(15, Math.round(estMinutes)));
+
         normalizedLessons.push({
           id: lessonId,
           name: lessonName,
@@ -376,7 +381,7 @@ export function validateAndNormalizeCurriculum(
           type: 'learn',
           status: isFirstOverall ? 'available' : 'locked',
           contentStatus: 'pending',
-          xpReward: 0
+          xpReward: derivedXp
         });
         previousLessonId = lessonId;
       }
@@ -472,6 +477,38 @@ export function validateAndNormalizeCurriculum(
 // Offline fallback curriculum
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Real fallback resource URLs keyed by goal keyword.
+// Used when AI generation fails so users never see example.com dead links.
+// ---------------------------------------------------------------------------
+const FALLBACK_RESOURCE_MAP: Record<string, { doc: string; docProvider: string; video: string; videoProvider: string; practice: string; practiceProvider: string }> = {
+  python:     { doc: 'https://docs.python.org/3/tutorial/', docProvider: 'Python Docs', video: 'https://www.youtube.com/watch?v=_uQrJ0TkZlc', videoProvider: 'Programming with Mosh', practice: 'https://www.hackerrank.com/domains/python', practiceProvider: 'HackerRank' },
+  javascript: { doc: 'https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide', docProvider: 'MDN Web Docs', video: 'https://www.youtube.com/watch?v=W6NZfCO5SIk', videoProvider: 'Programming with Mosh', practice: 'https://www.hackerrank.com/domains/tutorials/10-days-of-javascript', practiceProvider: 'HackerRank' },
+  web:        { doc: 'https://developer.mozilla.org/en-US/docs/Learn', docProvider: 'MDN Web Docs', video: 'https://www.youtube.com/watch?v=UB1O30fR-EE', videoProvider: 'Traversy Media', practice: 'https://www.freecodecamp.org/learn/responsive-web-design/', practiceProvider: 'freeCodeCamp' },
+  react:      { doc: 'https://react.dev/learn', docProvider: 'React Docs', video: 'https://www.youtube.com/watch?v=SqcY0GlETPk', videoProvider: 'Programming with Mosh', practice: 'https://www.freecodecamp.org/learn/front-end-development-libraries/', practiceProvider: 'freeCodeCamp' },
+  node:       { doc: 'https://nodejs.org/en/docs/guides/', docProvider: 'Node.js Docs', video: 'https://www.youtube.com/watch?v=TlB_eWDSMt4', videoProvider: 'Programming with Mosh', practice: 'https://www.hackerrank.com/domains/tutorials/10-days-of-javascript', practiceProvider: 'HackerRank' },
+  java:       { doc: 'https://docs.oracle.com/javase/tutorial/', docProvider: 'Oracle Java Tutorials', video: 'https://www.youtube.com/watch?v=eIrMbAQSU34', videoProvider: 'Programming with Mosh', practice: 'https://www.hackerrank.com/domains/java', practiceProvider: 'HackerRank' },
+  sql:        { doc: 'https://www.w3schools.com/sql/', docProvider: 'W3Schools SQL', video: 'https://www.youtube.com/watch?v=7S_tz1z_5bA', videoProvider: 'Programming with Mosh', practice: 'https://sqlzoo.net/', practiceProvider: 'SQLZoo' },
+  data:       { doc: 'https://pandas.pydata.org/docs/getting_started/index.html', docProvider: 'Pandas Docs', video: 'https://www.youtube.com/watch?v=vmEHCJofslg', videoProvider: 'Keith Galli', practice: 'https://www.kaggle.com/learn', practiceProvider: 'Kaggle Learn' },
+  machine:    { doc: 'https://scikit-learn.org/stable/getting_started.html', docProvider: 'scikit-learn Docs', video: 'https://www.youtube.com/watch?v=NWONeJKn6kc', videoProvider: 'StatQuest', practice: 'https://www.kaggle.com/learn/intro-to-machine-learning', practiceProvider: 'Kaggle Learn' },
+  ai:         { doc: 'https://huggingface.co/learn/nlp-course/chapter1/1', docProvider: 'HuggingFace NLP Course', video: 'https://www.youtube.com/watch?v=aircAruvnKk', videoProvider: '3Blue1Brown', practice: 'https://www.kaggle.com/learn/intro-to-machine-learning', practiceProvider: 'Kaggle Learn' },
+  design:     { doc: 'https://www.figma.com/resources/learn-design/', docProvider: 'Figma Learn', video: 'https://www.youtube.com/watch?v=FTFaQWZBqQ8', videoProvider: 'Flux Academy', practice: 'https://www.freecodecamp.org/learn/responsive-web-design/', practiceProvider: 'freeCodeCamp' },
+  devops:     { doc: 'https://docs.docker.com/get-started/', docProvider: 'Docker Docs', video: 'https://www.youtube.com/watch?v=fqMOX6JJhGo', videoProvider: 'TechWorld with Nana', practice: 'https://labs.play-with-docker.com/', practiceProvider: 'Play with Docker' },
+  cpp:        { doc: 'https://cppreference.com/', docProvider: 'cppreference.com', video: 'https://www.youtube.com/watch?v=vLnPwxZdW4Y', videoProvider: 'freeCodeCamp', practice: 'https://www.hackerrank.com/domains/cpp', practiceProvider: 'HackerRank' },
+};
+
+const FALLBACK_RESOURCE_DEFAULT = { doc: 'https://developer.mozilla.org/en-US/', docProvider: 'MDN Web Docs', video: 'https://www.youtube.com/@freecodecamp', videoProvider: 'freeCodeCamp YouTube', practice: 'https://www.theodinproject.com/', practiceProvider: 'The Odin Project' };
+
+function getFallbackResources(goal: string, theme: string, pIdx: number, mIdx: number): Array<{ id: string; title: string; type: string; provider: string; url: string; description: string }> {
+  const key = Object.keys(FALLBACK_RESOURCE_MAP).find(k => goal.toLowerCase().includes(k) || theme.toLowerCase().includes(k));
+  const r = key ? FALLBACK_RESOURCE_MAP[key] : FALLBACK_RESOURCE_DEFAULT;
+  return [
+    { id: `res-${pIdx + 1}-${mIdx + 1}-1`, title: `${theme} — Official Documentation`, type: 'documentation', provider: r.docProvider, url: r.doc, description: `Authoritative reference for ${theme}.` },
+    { id: `res-${pIdx + 1}-${mIdx + 1}-2`, title: `${theme} — Video Course`, type: 'video', provider: r.videoProvider, url: r.video, description: `Structured video walkthrough covering ${theme}.` },
+    { id: `res-${pIdx + 1}-${mIdx + 1}-3`, title: `${theme} — Practice Exercises`, type: 'practice', provider: r.practiceProvider, url: r.practice, description: `Hands-on exercises to reinforce ${theme}.` },
+  ];
+}
+
 export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string }): any {
   const goal = meta.goal || 'the learning goal';
   const goalTitle = goal.charAt(0).toUpperCase() + goal.slice(1);
@@ -510,18 +547,14 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
           learningObjectives: [`Apply ${theme} concepts to ${goal}`, `Complete a guided exercise reinforcing ${theme.toLowerCase()}`],
           prerequisites: prereqs, skillTags: [String(goal).toLowerCase().split(' ')[0], theme.toLowerCase().replace(/[^a-z0-9]+/g, '-')].filter(Boolean),
           difficulty: plan.difficulty === 'expert' ? 'advanced' : plan.difficulty, estimatedMinutes: 20 + ((lessonCounter * 5) % 20),
-          type: 'learn', status: isFirstOverall ? 'available' : 'locked', contentStatus: 'pending', xpReward: 0
+          type: 'learn', status: isFirstOverall ? 'available' : 'locked', contentStatus: 'pending', xpReward: 25
         });
       }
 
       return {
         id: moduleId, name: theme, description: `Covers ${theme.toLowerCase()} as part of ${plan.name}.`,
         difficulty: plan.difficulty === 'expert' ? 'advanced' : plan.difficulty, estimatedHours: 4 + (mIdx % 3), lessons,
-        resources: [
-          { id: `res-${pIdx + 1}-${mIdx + 1}-1`, title: `Official ${theme} Documentation`, type: 'documentation', provider: 'Official Docs', url: 'https://example.com/docs', description: `Authoritative reference for ${theme}.` },
-          { id: `res-${pIdx + 1}-${mIdx + 1}-2`, title: `${theme} - Video Course`, type: 'video', provider: 'YouTube', url: 'https://example.com/course', description: `Structured video walkthrough of ${theme}.` },
-          { id: `res-${pIdx + 1}-${mIdx + 1}-3`, title: `${theme} Practice Exercises`, type: 'practice', provider: 'Practice Platform', url: 'https://example.com/practice', description: `Hands-on exercises for ${theme}.` }
-        ]
+        resources: getFallbackResources(goal, theme, pIdx, mIdx)
       };
     });
 

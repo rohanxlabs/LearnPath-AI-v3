@@ -170,6 +170,7 @@ export default function App() {
 
   const [showOnlineToast, setShowOnlineToast] = useState(false);
   const [wasOffline, setWasOffline] = useState(false);
+  const [verifiedStatus, setVerifiedStatus] = useState<'success' | 'invalid' | null>(null);
 
   // Legal page routing
   const [legalPage, setLegalPage] = useState<'terms' | 'privacy' | null>(null);
@@ -197,8 +198,15 @@ export default function App() {
   const [authName, setAuthName] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authError, setAuthError] = useState('');
-  const [showForgotCredentialsNotice, setShowForgotCredentialsNotice] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  // Password-reset flow state
+  const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotStatus, setForgotStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetStatus, setResetStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
   const [showAuthModal, setShowAuthModal] = useState(false);
 
@@ -254,6 +262,30 @@ export default function App() {
         if (!cancelled) setAiActive(false);
       });
     return () => { cancelled = true; };
+  }, []);
+
+  // Read ?reset_token and ?verified from URL on mount.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    const token = params.get('reset_token');
+    if (token) {
+      setResetToken(token);
+      setShowAuthModal(true);
+      params.delete('reset_token');
+    }
+
+    const verified = params.get('verified');
+    if (verified === 'success' || verified === 'invalid') {
+      setVerifiedStatus(verified as 'success' | 'invalid');
+      params.delete('verified');
+      // Auto-dismiss after 6 seconds
+      setTimeout(() => setVerifiedStatus(null), 6000);
+    }
+
+    // Strip consumed params from the URL without a page reload
+    const remaining = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (remaining ? '?' + remaining : ''));
   }, []);
 
   useEffect(() => {
@@ -572,6 +604,68 @@ export default function App() {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotStatus('sending');
+    try {
+      await fetch('/api/password-reset/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim().toLowerCase() })
+      });
+      setForgotStatus('sent');
+    } catch {
+      setForgotStatus('error');
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPassword || !resetToken) return;
+    setResetStatus('submitting');
+    try {
+      const res = await fetch('/api/password-reset/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, password: resetPassword })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAuthError(data.error || 'Reset failed. The link may have expired.');
+        setResetStatus('error');
+        return;
+      }
+      setResetStatus('success');
+      setResetToken(null);
+      setResetPassword('');
+    } catch {
+      setResetStatus('error');
+      setAuthError('Reset failed. Please try again.');
+    }
+  };
+
+  // Shared handler: server returns a newAchievement when an unlock event fires.
+  // Updates local achievements state and triggers the celebration overlay.
+  const handleAchievementUnlocked = (ach: { id: string; name: string; icon: string; xpReward: number }) => {
+    setAchievements(prev => {
+      const exists = prev.find(a => a.id === ach.id);
+      if (exists) {
+        return prev.map(a => a.id === ach.id ? { ...a, unlocked: true, unlockedAt: new Date().toISOString() } : a);
+      }
+      return prev;
+    });
+    setUnlockedAchievement({ ...ach, unlocked: true, unlockedAt: new Date().toISOString() } as any);
+    setNotifications(prev => [{
+      id: `notif-ach-${Date.now()}`,
+      title: `Achievement Unlocked: ${ach.name} 🏆`,
+      message: `You earned "${ach.name}". +${ach.xpReward} XP awarded!`,
+      category: 'achievement',
+      read: false,
+      timestamp: new Date().toISOString()
+    }, ...prev]);
+  };
+
   const handleLogout = async () => {
     try {
       await fetch('/api/logout', { method: 'POST' });
@@ -655,10 +749,11 @@ export default function App() {
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify(newRoadmap)
        });
+       const persistData = await persistResponse.json().catch(() => ({}));
        if (!persistResponse.ok) {
-         const errBody = await persistResponse.json().catch(() => ({}));
-         throw new Error(errBody.error || `Failed to persist roadmap (HTTP ${persistResponse.status})`);
-       }
+          throw new Error(persistData.error || `Failed to persist roadmap (HTTP ${persistResponse.status})`);
+        }
+       if (persistData.newAchievement) handleAchievementUnlocked(persistData.newAchievement);
 
        // Validate progression and fix if needed (best-effort; does not gate persistence)
        try {
@@ -966,6 +1061,8 @@ export default function App() {
             xpEarned: xpValue,
             roadmapId: targetRoadmapId
           })
+        }).then(r => r.ok ? r.json() : null).then(data => {
+          if (data?.newAchievement) handleAchievementUnlocked(data.newAchievement);
         }).catch(err => console.warn('Failed to complete lesson:', err));
       }
 
@@ -1251,7 +1348,7 @@ export default function App() {
         }
         if (roadmapDetailTab === 'quiz') {
           if (!selectedRm) return null;
-          return <QuizTab roadmap={selectedRm} onAddXp={handleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} />;
+          return <QuizTab roadmap={selectedRm} onAddXp={handleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} onAchievementUnlocked={handleAchievementUnlocked} />;
         }
         if (roadmapDetailTab === 'projects') {
           if (!selectedRm) return null;
@@ -1375,108 +1472,143 @@ export default function App() {
 
 
 // Render authentication UI (used within modal or standalone)
-  const renderAuthUI = () => (
-    <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-[24px] bg-[#111111] border border-white/10 p-6 shadow-2xl space-y-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
-        
-        <div className="text-center flex flex-col items-center">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5">
-            <Sparkles className="w-5 h-5 text-white animate-pulse" />
-          </div>
-          <h2 className="font-display font-extrabold text-xl tracking-tight mt-3">
-            LearnPath <span className="text-purple-400">AI</span>
-          </h2>
-          <p className="text-xs text-zinc-400 mt-1">Premium Full-Stack AI Learning Platform</p>
+  const renderAuthUI = () => {
+    const cardClass = "w-full max-w-sm rounded-[24px] bg-[#111111] border border-white/10 p-6 shadow-2xl space-y-6 relative overflow-hidden";
+    const inputClass = "w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500";
+    const btnClass = "w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed";
+
+    const header = (
+      <div className="text-center flex flex-col items-center">
+        <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-lg border border-white/5">
+          <Sparkles className="w-5 h-5 text-white animate-pulse" />
         </div>
+        <h2 className="font-display font-extrabold text-xl tracking-tight mt-3">
+          LearnPath <span className="text-purple-400">AI</span>
+        </h2>
+        <p className="text-xs text-zinc-400 mt-1">Premium Full-Stack AI Learning Platform</p>
+      </div>
+    );
 
-        {authError && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">
-            {authError}
+    // ── Password reset confirm form (arrived via email link with ?reset_token) ──
+    if (resetToken) {
+      return (
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
+          <div className={cardClass}>
+            <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
+            {header}
+            {authError && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">{authError}</div>}
+            {resetStatus === 'success' ? (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-[11px] font-semibold text-green-300 text-center">
+                ✅ Password updated! You can now sign in with your new password.
+                <button onClick={() => { setResetStatus('idle'); setAuthError(''); }} className="block mt-2 mx-auto text-zinc-400 hover:text-white text-[11px] cursor-pointer">Back to Sign In</button>
+              </div>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">New Password</label>
+                  <input type="password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} placeholder="Min 8 chars, include a number" className={inputClass} required minLength={8} />
+                </div>
+                <button type="submit" disabled={resetStatus === 'submitting'} className={btnClass}>
+                  {resetStatus === 'submitting' ? 'Saving…' : 'Set New Password'}
+                </button>
+              </form>
+            )}
           </div>
-        )}
+        </div>
+      );
+    }
 
-        <form onSubmit={handleAuthenticate} className="space-y-4">
-          {authMode === 'signup' && (
-            <div className="space-y-1.5">
-              <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Full Name</label>
-              <input
-                type="text"
-                value={authName}
-                onChange={(e) => setAuthName(e.target.value)}
-                placeholder="Jane Smith"
-                className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
-                required
-              />
+    // ── Forgot password inline form ──
+    if (forgotPasswordMode) {
+      return (
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
+          <div className={cardClass}>
+            <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
+            {header}
+            {forgotStatus === 'sent' ? (
+              <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3 text-[11px] font-semibold text-green-300 text-center">
+                ✅ Check your inbox! We sent a reset link to <strong>{forgotEmail}</strong>.
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                {forgotStatus === 'error' && <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">Something went wrong. Please try again.</div>}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Your Email</label>
+                  <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="you@example.com" className={inputClass} required />
+                </div>
+                <button type="submit" disabled={forgotStatus === 'sending'} className={btnClass}>
+                  {forgotStatus === 'sending' ? 'Sending…' : 'Send Reset Link'}
+                </button>
+              </form>
+            )}
+            <div className="text-center pt-2 border-t border-white/5">
+              <button onClick={() => { setForgotPasswordMode(false); setForgotStatus('idle'); setForgotEmail(''); }} className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer">
+                ← Back to Sign In
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Normal login / signup form ──
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4">
+        <div className={cardClass}>
+          <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
+          {header}
+
+          {authError && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[11px] font-semibold text-red-300">
+              {authError}
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Registry Email</label>
-            <input
-              type="email"
-              value={authEmail}
-              onChange={(e) => setAuthEmail(e.target.value)}
-              placeholder="bobby.fisher@learnpath.ai"
-              className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
-              required
-            />
-          </div>
-
-          <div className="space-y-1.5 font-sans">
-            <div className="flex justify-between items-center bg-transparent text-[10px]">
-              <label className="block uppercase font-bold text-zinc-400 font-mono">Security Password</label>
-              <button
-                type="button"
-                onClick={() => setShowForgotCredentialsNotice(true)}
-                className="text-zinc-500 hover:text-white cursor-pointer"
-              >
-                Forgot Credentials?
-              </button>
-            </div>
-            <input
-              type="password"
-              value={authPassword}
-              onChange={(e) => setAuthPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500"
-              required
-            />
-            {showForgotCredentialsNotice && (
-              <p className="text-[10px] text-amber-300 pt-1">
-                Self-serve password reset isn't available yet. For now, contact support to
-                have your account reset manually.
-              </p>
+          <form onSubmit={handleAuthenticate} className="space-y-4">
+            {authMode === 'signup' && (
+              <div className="space-y-1.5">
+                <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Full Name</label>
+                <input type="text" value={authName} onChange={(e) => setAuthName(e.target.value)} placeholder="Jane Smith" className={inputClass} required />
+              </div>
             )}
+
+            <div className="space-y-1.5">
+              <label className="block text-[10px] uppercase font-bold text-zinc-400 font-mono">Registry Email</label>
+              <input type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} placeholder="bobby.fisher@learnpath.ai" className={inputClass} required />
+            </div>
+
+            <div className="space-y-1.5 font-sans">
+              <div className="flex justify-between items-center text-[10px]">
+                <label className="block uppercase font-bold text-zinc-400 font-mono">Security Password</label>
+                {authMode === 'login' && (
+                  <button type="button" onClick={() => { setForgotPasswordMode(true); setAuthError(''); }} className="text-zinc-500 hover:text-white cursor-pointer">
+                    Forgot Password?
+                  </button>
+                )}
+              </div>
+              <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="••••••••" className={inputClass} required />
+            </div>
+
+            <button type="submit" disabled={isAuthenticating} className={btnClass}>
+              {isAuthenticating ? 'Processing...' : authMode === 'login' ? 'Confirm Sign In' : 'Create Free Account'}
+            </button>
+          </form>
+
+          <div className="text-center pt-2 space-y-3.5 border-t border-white/5 pb-1.5">
+            <button
+              onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setAuthError(''); }}
+              className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            >
+              {authMode === 'login' ? "Don't have an account? Sign Up" : "Already registered? Sign In"}
+            </button>
+            <p className="text-[10px] text-zinc-500 leading-relaxed">
+              Your data is loaded by email and saved only to your user profile.
+            </p>
           </div>
-
-          <button
-            type="submit"
-            disabled={isAuthenticating}
-            className="w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isAuthenticating ? 'Processing...' : authMode === 'login' ? 'Confirm Sign In' : 'Create Free Account'}
-          </button>
-        </form>
-
-        <div className="text-center pt-2 space-y-3.5 border-t border-white/5 pb-1.5">
-          <button
-            onClick={() => {
-              setAuthMode(authMode === 'login' ? 'signup' : 'login');
-              setAuthError('');
-            }}
-            className="text-[11px] text-zinc-400 hover:text-white transition-colors cursor-pointer"
-          >
-            {authMode === 'login' ? "Don't have an account? Sign Up" : "Already registered? Sign In"}
-          </button>
-
-          <p className="text-[10px] text-zinc-500 leading-relaxed">
-            Your data is loaded by email and saved only to your user profile.
-          </p>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
 // Render the app based on auth state
   if (isLoadingAuth) {
@@ -1695,6 +1827,13 @@ export default function App() {
               <p className="text-[10px] text-zinc-400">AI search and validation queries re-activated</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {verifiedStatus && (
+        <div className={`fixed top-4 left-4 right-4 z-50 p-3 rounded-2xl border text-xs shadow-2xl flex items-center justify-between gap-3 max-w-sm mx-auto ${verifiedStatus === 'success' ? 'bg-emerald-950/90 border-emerald-500/30 text-emerald-300' : 'bg-amber-950/90 border-amber-500/30 text-amber-300'}`}>
+          <span>{verifiedStatus === 'success' ? '✅ Email verified! Welcome to LearnPath AI.' : '⚠️ Verification link is invalid or expired.'}</span>
+          <button onClick={() => setVerifiedStatus(null)} className="text-zinc-400 hover:text-white cursor-pointer ml-2 shrink-0">✕</button>
         </div>
       )}
 

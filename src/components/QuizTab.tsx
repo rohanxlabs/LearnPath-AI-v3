@@ -16,6 +16,7 @@ interface QuizTabProps {
   roadmap: Roadmap;
   onAddXp: (amount: number) => void;
   onRoadmapUpdated?: () => void;
+  onAchievementUnlocked?: (achievement: { id: string; name: string; icon: string; xpReward: number }) => void;
 }
 
 interface Question {
@@ -26,7 +27,7 @@ interface Question {
    misconceptionNotes?: string[];
 }
 
-export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated }: QuizTabProps) {
+export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnlocked }: QuizTabProps) {
   const [quizzes, setQuizzes] = useState<TopicQuizAttempt[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -190,11 +191,17 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated }: QuizTabProps) {
       lastAttemptedAt: new Date().toLocaleString()
     };
 
-    await fetch('/api/topic-wise-quizzes', {
+    const saveRes = await fetch('/api/topic-wise-quizzes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...updatedAttempt, quizId })
     });
+    if (saveRes.ok) {
+      const saveData = await saveRes.json().catch(() => ({}));
+      if (saveData.newAchievement && onAchievementUnlocked) {
+        onAchievementUnlocked(saveData.newAchievement);
+      }
+    }
 
     const response = await fetch('/api/topic-wise-quizzes');
     if (response.ok) {

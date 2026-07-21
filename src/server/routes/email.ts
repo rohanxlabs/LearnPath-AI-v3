@@ -53,7 +53,7 @@ async function ensureTokensTable(): Promise<void> {
 // ---------------------------------------------------------------------------
 // Send email via Resend (or log to console when key not set)
 // ---------------------------------------------------------------------------
-async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     logger.info({ to, subject }, '[Email] RESEND_API_KEY not set — logging email instead of sending');
@@ -74,7 +74,7 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
 // ---------------------------------------------------------------------------
 // Token helpers
 // ---------------------------------------------------------------------------
-async function createToken(email: string, type: 'verify' | 'reset'): Promise<string> {
+export async function createToken(email: string, type: 'verify' | 'reset'): Promise<string> {
   await ensureTokensTable();
   const token = randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
@@ -98,6 +98,29 @@ async function consumeToken(token: string, type: 'verify' | 'reset'): Promise<st
   if (!rows[0]) return null;
   await sql`UPDATE email_tokens SET used = TRUE WHERE token = ${token}`;
   return rows[0].email as string;
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper — send a verification email. Used by auth.ts after register.
+// Fire-and-forget safe: never throws, only logs on failure.
+// ---------------------------------------------------------------------------
+export async function sendVerificationEmail(email: string): Promise<void> {
+  try {
+    await ensureTokensTable();
+    const token = await createToken(email, 'verify');
+    const link = `${APP_URL}/api/verify-email/${token}`;
+    await sendEmail(
+      email,
+      'Verify your LearnPath AI email',
+      `<p>Hi there,</p>
+       <p>Click the button below to verify your email address. This link expires in 1 hour.</p>
+       <p><a href="${link}" style="background:#8b5cf6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Verify Email</a></p>
+       <p>Or copy this link: <code>${link}</code></p>
+       <p>If you did not create a LearnPath AI account, ignore this email.</p>`
+    );
+  } catch (err: any) {
+    logger.warn({ err: err?.message }, '[Email] sendVerificationEmail failed (non-fatal)');
+  }
 }
 
 // ---------------------------------------------------------------------------

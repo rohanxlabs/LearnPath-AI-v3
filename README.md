@@ -1,8 +1,4 @@
-<div align="center">
-<img width="1200" height="475" alt="LearnPath AI Banner" src="https://your-banner-url.com/banner.png" />
-</div>
-
-# LearnPath AI - Your Personal AI Study Agent
+# LearnPath AI — Your Personal AI Study Agent
 
 ## Problem
 Generic AI tools don't know your university syllabus. They give generic advice that doesn't align with what you actually need to study for your exams.
@@ -17,16 +13,9 @@ An AI agent that builds custom learning roadmaps and quizzes based on your exact
 - 📊 Track your progress with XP and completion metrics
 - 💬 AI tutor available 24/7 to answer your questions
 
-## Demo GIFs
+## Screenshots
 
-![Generate Roadmap](https://your-gif-url.com/generate-roadmap.gif)
-*AI generates a custom roadmap based on your goal*
-
-![Take Quiz](https://your-gif-url.com/take-quiz.gif)
-*Test your knowledge with AI-generated quizzes*
-
-![Chat with Tutor](https://your-gif-url.com/chat-tutor.gif)
-*Get instant help from your AI study agent*
+> Demo screenshots coming soon — run the app locally to explore the features.
 
 ## Run Locally
 

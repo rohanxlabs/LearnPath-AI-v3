@@ -1,4 +1,3 @@
-import { neon } from '@neondatabase/serverless';
 import {
   getLessonById,
   upsertLessonContent,
@@ -8,8 +7,7 @@ import {
   upsertQuiz
 } from '../db/schema';
 import { callOpenRouterChatCompletion, cleanAndParseJSON, sanitizeForPrompt, OPENROUTER_MODELS } from './ai';
-
-const sql = neon(process.env.DATABASE_URL!);
+import { sql } from './db';
 
 // ---------------------------------------------------------------------------
 // Subject detection

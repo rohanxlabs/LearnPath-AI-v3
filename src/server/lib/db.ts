@@ -270,3 +270,51 @@ export async function updateStreak(userEmail: string): Promise<number> {
     return 0;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Achievement unlock helper — idempotent, adds XP, persists.
+// Returns the achievement object if it was just unlocked, null if already unlocked
+// or not found.
+// ---------------------------------------------------------------------------
+export async function unlockAchievement(
+  userEmail: string,
+  achievementId: string
+): Promise<{ id: string; name: string; icon: string; xpReward: number } | null> {
+  try {
+    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    if (!dbData) return null;
+
+    const achievements: any[] = Array.isArray(dbData.progress?.achievements)
+      ? dbData.progress.achievements
+      : Array.isArray(dbData.achievements)
+        ? dbData.achievements
+        : [];
+
+    const ach = achievements.find((a: any) => a.id === achievementId);
+    if (!ach || ach.unlocked) return null; // already unlocked or not found
+
+    ach.unlocked = true;
+    ach.unlockedAt = new Date().toISOString();
+
+    // Award XP
+    const xpReward = Number(ach.xpReward) || 0;
+    dbData.xp = (dbData.xp || 0) + xpReward;
+    if (!dbData.profile) dbData.profile = {};
+    dbData.profile.xp = dbData.xp;
+
+    // Persist achievements in the right location
+    if (Array.isArray(dbData.progress?.achievements)) {
+      dbData.progress.achievements = achievements;
+    } else {
+      if (!dbData.progress) dbData.progress = {};
+      dbData.progress.achievements = achievements;
+    }
+
+    await saveUserDB(userEmail, dbData);
+    return { id: ach.id, name: ach.name, icon: ach.icon, xpReward };
+  } catch (err: any) {
+    console.error('[Achievement] Failed to unlock achievement:', err?.message || err);
+    return null;
+  }
+}
+
