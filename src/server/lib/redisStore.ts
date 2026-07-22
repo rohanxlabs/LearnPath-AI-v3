@@ -18,8 +18,27 @@ export default class RedisStore {
     this.prefix = prefix;
   }
 
-  static async create(redisUrl: string, opts: { windowMs?: number; prefix?: string } = {}): Promise<RedisStore> {
+  static async create(rawRedisUrl: string, opts: { windowMs?: number; prefix?: string } = {}): Promise<RedisStore> {
     const { Redis } = await import('@upstash/redis');
+
+    // Strip accidental surrounding quotes or a "REDIS_URL=" prefix that can
+    // appear when the env var value is pasted incorrectly in Render's dashboard.
+    let redisUrl = rawRedisUrl.trim().replace(/^["']|["']$/g, '').replace(/^REDIS_URL=/i, '');
+
+    // @upstash/redis is a REST client — it requires an https:// URL, not a raw
+    // rediss:// connection string.  Convert automatically so both formats work.
+    if (redisUrl.startsWith('rediss://') || redisUrl.startsWith('redis://')) {
+      try {
+        const parsed = new URL(redisUrl);
+        // token is the password portion of the connection string
+        const token = parsed.password || process.env.REDIS_TOKEN || '';
+        redisUrl = `https://${parsed.hostname}`;
+        process.env.REDIS_TOKEN = process.env.REDIS_TOKEN || token;
+      } catch {
+        // malformed URL — let @upstash/redis reject it with a clear error
+      }
+    }
+
     const redis = new Redis({ url: redisUrl, token: process.env.REDIS_TOKEN || '' });
     return new RedisStore(redis, opts.windowMs ?? 60_000, opts.prefix ?? 'rl:');
   }
