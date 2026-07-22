@@ -88,7 +88,7 @@ export function AppRouter({
     setActiveRoadmapId,
     selectedRoadmapId, setSelectedRoadmapId,
     selectedPhaseId, setSelectedPhaseId,
-    roadmapDetailTab,
+    roadmapDetailTab, setRoadmapDetailTab,
     isAiGeneratingRoadmap,
     handleGenerateRoadmap,
     handleRoadmapReadyFromStream,
@@ -198,6 +198,20 @@ export function AppRouter({
         }
       }
       if (selectedRm) {
+        // Sub-Task 4: compute resume info from next incomplete lesson IDs → names
+        const nextLesson = getNextIncompleteLesson(selectedRm);
+        const resumeInfo = (() => {
+          if (!nextLesson) return null;
+          for (const ph of selectedRm.phases || []) {
+            if (ph.id !== nextLesson.phaseId) continue;
+            for (const lv of ph.levels || []) {
+              if (lv.id !== nextLesson.levelId) continue;
+              const les = (lv.lessons || []).find((l: any) => l.id === nextLesson.lessonId);
+              if (les) return { lessonName: les.name, phaseName: ph.name };
+            }
+          }
+          return null;
+        })();
         return (
           <RoadmapOverviewPage roadmap={selectedRm} profile={profile}
             onSelectPhase={(phaseId) => setSelectedPhaseId(phaseId)}
@@ -205,6 +219,8 @@ export function AppRouter({
             onContinueLearning={() => { const next = getNextIncompleteLesson(selectedRm); if (next) setActiveLesson(next); }}
             onGenerateRoadmap={handleGenerateRoadmap} onRoadmapReady={handleRoadmapReadyFromStream}
             isGenerating={isAiGeneratingRoadmap}
+            resumeInfo={resumeInfo}
+            onViewInsights={() => setRoadmapDetailTab('insights')}
           />
         );
       }

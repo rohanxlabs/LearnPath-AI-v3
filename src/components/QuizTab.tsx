@@ -99,12 +99,16 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
   }, [roadmap.id, retryKey]);
 
   const generatePhaseQuiz = async (phaseId: string, phaseName: string, skillsCovered?: string[]) => {
+    // Sub-Task 7: if quiz already cached (from roadmap.quizzes or prior generation), skip API call
+    const existing = phaseQuizCache[phaseId];
+    if (existing && existing.questions.length > 0 && !existing.loading) return existing.questions;
+
     const topicName = skillsCovered && skillsCovered.length > 0
       ? `${phaseName}: ${skillsCovered.join(', ')}`
       : phaseName;
 
     console.log('[QuizTab] Generating quiz for phase:', { phaseId, phaseName, topicName });
-    
+
     setPhaseQuizCache(prev => ({ ...prev, [phaseId]: { questions: [], phaseName, loading: true } }));
 
     try {

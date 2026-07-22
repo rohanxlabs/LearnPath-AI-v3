@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { BarChart, BrainCircuit, Calendar, Check, Eye, GitBranch, Lightbulb, LineChart, Radar, ShieldCheck, TrendingUp } from 'lucide-react';
+import { BarChart, BrainCircuit, Calendar, Check, Eye, GitBranch, Lightbulb, LineChart, Radar, ShieldCheck, TrendingUp, Sparkles } from 'lucide-react';
 import { Roadmap, UserProfile } from '../types';
 import { generateInsightsData, ActivityLog } from '../lib/insights';
+import { calcPhaseProgress } from '../lib/roadmapUtils';
 
 import { LearningVelocityChart } from './charts/LearningVelocityChart';
 import { WeeklyReportChart } from './charts/WeeklyReportChart';
@@ -26,6 +27,8 @@ interface AIInsightsTabProps {
 
 export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
   const insightsData = useMemo(
     () => generateInsightsData(roadmap, profile, activityLog),
     [roadmap, profile, activityLog]
@@ -36,6 +39,51 @@ export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabPr
     const timer = setTimeout(() => setIsLoading(false), 300);
     return () => clearTimeout(timer);
   }, [roadmap, profile, activityLog]);
+
+  // Sub-Task 10: auto-fetch AI narrative summary when roadmap changes
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSummary = async () => {
+      setSummaryLoading(true);
+      setAiSummary(null);
+      try {
+        // Collect top skills from completed lessons
+        const completedSkills = (roadmap.phases || [])
+          .flatMap(p => (p.levels || []).flatMap(l => l.lessons || []))
+          .filter(l => l.status === 'completed')
+          .flatMap((l: any) => l.skillTags || l.tags || []);
+        const uniqueSkills = Array.from(new Set(completedSkills)).slice(0, 4);
+
+        // Find active phase name
+        const activePhase = (roadmap.phases || []).find(p => calcPhaseProgress(p) < 100);
+        const totalLessons = (roadmap.phases || []).flatMap(p => (p.levels || []).flatMap(l => l.lessons || [])).length;
+        const completedLessons = (roadmap.phases || []).flatMap(p => (p.levels || []).flatMap(l => l.lessons || [])).filter(l => l.status === 'completed').length;
+
+        const res = await fetch('/api/ai-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roadmapGoal: roadmap.goal,
+            progressPercent: totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0,
+            completedLessons,
+            totalLessons,
+            activePhase: activePhase?.name || '',
+            topSkills: uniqueSkills,
+          }),
+        });
+        if (!cancelled && res.ok) {
+          const data = await res.json();
+          setAiSummary(data.summary || null);
+        }
+      } catch (e) {
+        // Fail silently — summary card is hidden on error
+      } finally {
+        if (!cancelled) setSummaryLoading(false);
+      }
+    };
+    fetchSummary();
+    return () => { cancelled = true; };
+  }, [roadmap.id]);
 
   const StatCard = ({ icon, title, value, change }: { icon: React.ReactNode, title: string, value: string, change?: string }) => (
     <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between">
@@ -76,6 +124,27 @@ export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabPr
           Your personalized learning command center. Analyze your progress, identify patterns, and get AI-driven recommendations.
         </p>
       </header>
+
+      {/* Sub-Task 10: AI narrative summary card */}
+      {(summaryLoading || aiSummary) && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-start gap-3 p-4 rounded-2xl bg-gradient-to-r from-violet-500/10 to-blue-500/10 border border-violet-500/20"
+        >
+          <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-violet-500/20 flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-violet-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-violet-400 uppercase tracking-wide mb-1">AI Mentor Summary</p>
+            {summaryLoading ? (
+              <div className="h-4 w-3/4 bg-white/10 rounded animate-pulse" />
+            ) : (
+              <p className="text-sm text-zinc-300 leading-relaxed">{aiSummary}</p>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

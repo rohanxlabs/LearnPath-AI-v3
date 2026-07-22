@@ -186,6 +186,9 @@ app.get('/sw.js', (req, res, next) => {
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (process.env.SENTRY_DSN) Sentry.captureException(err);
   logger.error({ err, url: req.url, method: req.method }, 'Unhandled request error');
+  // Guard against ERR_HTTP_HEADERS_SENT when a route already started a response
+  // (e.g. an SSE stream that errored mid-flight, or a double-next() call).
+  if (res.headersSent) return;
   const status = err.status || err.statusCode || 500;
   res.status(status).json({ error: isProduction ? 'Internal server error' : err.message });
 });

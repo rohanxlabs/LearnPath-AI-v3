@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { BookOpen, Video, FileText, Bookmark, ExternalLink, CheckCircle, Search, ChevronDown, Clock } from 'lucide-react';
+import { BookOpen, Video, FileText, Bookmark, ExternalLink, CheckCircle, Search, ChevronDown, Clock, Layers } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Roadmap, CuratedResource } from '../types';
 import { getRecommendationsForRoadmap } from '../lib/recommendations';
+import { calcPhaseProgress } from '../lib/roadmapUtils';
 import { buttonStyles, glassCardClass } from '../styles/theme';
 import { LoadingSpinner, SkeletonCard } from './Skeleton';
 import { EmptyState } from './EmptyState';
@@ -23,7 +24,17 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
 
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [filterPhaseId, setFilterPhaseId] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Build phase option list + detect the active (current) phase
+  const phaseOptions = useMemo(() => {
+    return (roadmap.phases || []).map((p, i) => ({
+      id: p.id,
+      label: `Phase ${i + 1}: ${p.name}`,
+      isActive: calcPhaseProgress(p) < 100 && (i === 0 || calcPhaseProgress((roadmap.phases || [])[i - 1]) === 100),
+    }));
+  }, [roadmap.phases]);
 
   useEffect(() => {
     async function loadResources() {
@@ -95,19 +106,24 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
         if (filterStatus === 'saved') return savedIds.includes(res.id);
         return true;
       })
+      // Phase filter: resources with no phaseId are shown in all views
+      .filter(res => filterPhaseId === 'all' || res.phaseId === filterPhaseId || !res.phaseId)
       .filter(res => res.title.toLowerCase().includes(searchTerm.toLowerCase()) || res.description.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [resources, filterType, filterStatus, completedIds, savedIds, searchTerm]);
+  }, [resources, filterType, filterStatus, filterPhaseId, completedIds, savedIds, searchTerm]);
 
   return (
     <div className="space-y-6 font-sans">
       <Header total={resources.length} goal={roadmap.goal} />
-      <FilterControls 
+      <FilterControls
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         filterType={filterType}
         setFilterType={setFilterType}
         filterStatus={filterStatus}
         setFilterStatus={setFilterStatus}
+        filterPhaseId={filterPhaseId}
+        setFilterPhaseId={setFilterPhaseId}
+        phaseOptions={phaseOptions}
       />
       {isUsingFallback && !loading && (
         <p className="text-xs text-zinc-500 -mt-2">
@@ -140,11 +156,11 @@ const Header = ({ total, goal }: { total: number, goal: string }) => (
   </div>
 );
 
-const FilterControls = ({ searchTerm, setSearchTerm, filterType, setFilterType, filterStatus, setFilterStatus }) => (
+const FilterControls = ({ searchTerm, setSearchTerm, filterType, setFilterType, filterStatus, setFilterStatus, filterPhaseId, setFilterPhaseId, phaseOptions }: any) => (
   <div className={`p-4 ${glassCardClass()} space-y-4`}>
     <div className="relative">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-      <input 
+      <input
         type="text"
         placeholder="Search resources by keyword..."
         value={searchTerm}
@@ -174,6 +190,31 @@ const FilterControls = ({ searchTerm, setSearchTerm, filterType, setFilterType, 
         </div>
       </div>
     </div>
+    {phaseOptions && phaseOptions.length > 0 && (
+      <div className="space-y-2">
+        <label className="text-xs font-bold text-zinc-400 flex items-center gap-1.5">
+          <Layers className="w-3.5 h-3.5" /> PHASE
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilterPhaseId('all')}
+            className={`px-3 py-1 text-sm rounded-lg transition-colors ${filterPhaseId === 'all' ? 'bg-blue-500 text-white font-bold' : 'bg-white/10 text-zinc-300 hover:bg-white/20'}`}
+          >
+            All Phases
+          </button>
+          {phaseOptions.map((opt: any) => (
+            <button
+              key={opt.id}
+              onClick={() => setFilterPhaseId(opt.id)}
+              className={`flex items-center gap-1.5 px-3 py-1 text-sm rounded-lg transition-colors ${filterPhaseId === opt.id ? 'bg-violet-600 text-white font-bold' : 'bg-white/10 text-zinc-300 hover:bg-white/20'}`}
+            >
+              {opt.label}
+              {opt.isActive && <span className="text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded-full leading-none">Active</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+    )}
   </div>
 );
 

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Code2 } from 'lucide-react';
+import { Code2, Layers } from 'lucide-react';
 import { ProjectTrack, Roadmap } from '../types';
 import ProjectCard from './ProjectCard';
 import ProjectFilters from './ProjectFilters';
 import { SkeletonCard, LoadingSpinner } from './Skeleton';
 import { EmptyState } from './EmptyState';
+import { getPhaseUnlockStatus } from '../lib/roadmapUtils';
 
 interface ProjectsTabProps {
   roadmap: Roadmap;
@@ -18,7 +19,30 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
   const [loading, setLoading] = useState<boolean>(true);
   const [isUsingFallback, setIsUsingFallback] = useState(false);
   const [filterDifficulty, setFilterDifficulty] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
+  const [filterPhaseId, setFilterPhaseId] = useState<string>('all');
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
+
+  // Build a map: projectId → { phaseId, phaseName, phaseIndex, isLocked }
+  const projectPhaseMap = useMemo(() => {
+    const map = new Map<string, { phaseId: string; phaseName: string; phaseIndex: number; isLocked: boolean }>();
+    (roadmap.phases || []).forEach((phase, idx) => {
+      const unlocked = getPhaseUnlockStatus(roadmap.phases, idx) !== 'locked';
+      ((phase as any).projects || []).forEach((proj: any) => {
+        if (proj?.id) map.set(proj.id, {
+          phaseId: phase.id,
+          phaseName: phase.name,
+          phaseIndex: idx,
+          isLocked: !unlocked,
+        });
+      });
+    });
+    return map;
+  }, [roadmap.phases]);
+
+  // Phase options for the filter
+  const phaseOptions = useMemo(() => {
+    return (roadmap.phases || []).map((p, i) => ({ id: p.id, label: `Phase ${i + 1}: ${p.name}` }));
+  }, [roadmap.phases]);
 
   useEffect(() => {
     async function loadProjects() {
@@ -88,9 +112,14 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
   };
 
   const filteredProjects = useMemo(() => {
-    if (filterDifficulty === 'all') return projects;
-    return projects.filter(p => p.difficulty === filterDifficulty);
-  }, [projects, filterDifficulty]);
+    return projects
+      .filter(p => filterDifficulty === 'all' || p.difficulty === filterDifficulty)
+      .filter(p => {
+        if (filterPhaseId === 'all') return true;
+        const meta = projectPhaseMap.get(p.id);
+        return meta ? meta.phaseId === filterPhaseId : true;
+      });
+  }, [projects, filterDifficulty, filterPhaseId, projectPhaseMap]);
 
   const handleToggleExpand = (projectId: string) => {
     setExpandedProjectId(prevId => (prevId === projectId ? null : projectId));
@@ -105,7 +134,18 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
             Transform theory into tangible skills. Build real-world applications, track your progress, and assemble a professional portfolio to showcase your expertise.
           </p>
         </div>
-        <ProjectFilters activeFilter={filterDifficulty} onFilterChange={setFilterDifficulty} />
+        <div className="flex flex-wrap gap-3 items-center">
+          <ProjectFilters activeFilter={filterDifficulty} onFilterChange={setFilterDifficulty} />
+          {phaseOptions.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Layers className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
+              <button onClick={() => setFilterPhaseId('all')} className={`px-2.5 py-1 text-xs rounded-lg transition-colors ${filterPhaseId === 'all' ? 'bg-violet-600 text-white font-bold' : 'bg-white/10 text-zinc-300 hover:bg-white/20'}`}>All</button>
+              {phaseOptions.map(opt => (
+                <button key={opt.id} onClick={() => setFilterPhaseId(opt.id)} className={`px-2.5 py-1 text-xs rounded-lg transition-colors ${filterPhaseId === opt.id ? 'bg-violet-600 text-white font-bold' : 'bg-white/10 text-zinc-300 hover:bg-white/20'}`}>{opt.label}</button>
+              ))}
+            </div>
+          )}
+        </div>
       </header>
 
       {isUsingFallback && !loading && (
@@ -143,6 +183,8 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
                   onUpdateProgress={handleUpdateProgress}
                   isExpanded={expandedProjectId === proj.id}
                   onToggleExpand={() => handleToggleExpand(proj.id)}
+                  phaseLabel={projectPhaseMap.get(proj.id) ? `Phase ${(projectPhaseMap.get(proj.id)!.phaseIndex + 1)}: ${projectPhaseMap.get(proj.id)!.phaseName}` : undefined}
+                  isLocked={projectPhaseMap.get(proj.id)?.isLocked ?? false}
                 />
               </motion.div>
             ))}

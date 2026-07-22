@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowLeft, Sparkles, Play, Lock, CheckCircle2,
-  Clock, Zap, BookOpen, ChevronRight, PlusCircle,
+  Clock, Zap, BookOpen, ChevronRight, PlusCircle, MapPin,
 } from 'lucide-react';
 import { Roadmap, UserProfile } from '../types';
 import {
@@ -29,6 +29,10 @@ interface RoadmapOverviewPageProps {
   }) => Promise<void>;
   onRoadmapReady?: (roadmap: any) => void;
   isGenerating: boolean;
+  /** Sub-Task 4: resume info derived in AppRouter from getNextIncompleteLesson */
+  resumeInfo?: { lessonName: string; phaseName: string } | null;
+  /** Sub-Task 10: navigate to the AI Insights tab */
+  onViewInsights?: () => void;
 }
 
 const LOADING_QUOTES = [
@@ -48,14 +52,17 @@ export function RoadmapOverviewPage({
   onGenerateRoadmap,
   onRoadmapReady,
   isGenerating,
+  resumeInfo,
+  onViewInsights,
 }: RoadmapOverviewPageProps) {
   const [lockedToast, setLockedToast] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
 
   const handlePhaseClick = (phaseId: string, status: PhaseUnlockStatus, phaseIndex: number) => {
     if (status === 'locked') {
+      // phaseIndex is 0-based; display as 1-based to users (H-01 fix)
       const msg = phaseIndex > 0
-        ? `Complete Phase ${phaseIndex} first to unlock this phase.`
+        ? `Complete Phase ${phaseIndex} first to unlock Phase ${phaseIndex + 1}.`
         : 'This phase is locked.';
       setLockedToast(msg);
       setTimeout(() => setLockedToast(null), 3000);
@@ -65,15 +72,23 @@ export function RoadmapOverviewPage({
   };
 
   const completionWeeks = calcEstimatedCompletionWeeks(roadmap);
-  const activeLesson = (roadmap.phases || [])
+  // Use onContinueLearning (backed by getNextIncompleteLesson) as the CTA guard
+  // rather than scanning lesson statuses locally, which can be stale (M-04 fix).
+  // We still need a boolean to show/hide the button; derive it from phase scan.
+  const hasNextLesson = (roadmap.phases || [])
     .flatMap(p => (p.levels || []).flatMap(l => l.lessons || []))
-    .find(l => l.status === 'available');
+    .some(l => l.status !== 'completed');
 
   const totalLessons = (roadmap.phases || [])
     .flatMap(p => (p.levels || []).flatMap(l => l.lessons || [])).length;
   const completedLessons = (roadmap.phases || [])
     .flatMap(p => (p.levels || []).flatMap(l => l.lessons || []))
     .filter(l => l.status === 'completed').length;
+
+  // Sub-Task 1: live-computed progress rather than stale DB snapshot
+  const liveProgressPercent = totalLessons > 0
+    ? Math.round((completedLessons / totalLessons) * 100)
+    : roadmap.progressPercent;
 
   return (
     <div className="space-y-6 pb-8">
@@ -121,13 +136,13 @@ export function RoadmapOverviewPage({
                     cx="40" cy="40" r="34"
                     stroke="white" strokeWidth="7" fill="none"
                     strokeDasharray={`${2 * Math.PI * 34}`}
-                    strokeDashoffset={`${2 * Math.PI * 34 * (1 - roadmap.progressPercent / 100)}`}
+                    strokeDashoffset={`${2 * Math.PI * 34 * (1 - liveProgressPercent / 100)}`}
                     strokeLinecap="round"
                     className="transition-all duration-700"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-lg font-extrabold text-white leading-none">{roadmap.progressPercent}%</span>
+                  <span className="text-lg font-extrabold text-white leading-none">{liveProgressPercent}%</span>
                   <span className="text-xs text-white/70 font-medium uppercase tracking-wide">done</span>
                 </div>
               </div>
@@ -158,17 +173,28 @@ export function RoadmapOverviewPage({
             )}
           </div>
 
-          {/* CTA */}
-          {activeLesson && (
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={onContinueLearning}
-              className={`mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-purple-700 hover:bg-white/90 transition-all shadow-lg`}
-            >
-              <Play className="w-4 h-4 fill-current" />
-              Continue Learning
-            </motion.button>
-          )}
+          {/* CTA row: Continue Learning + View AI Insights link */}
+          <div className="flex flex-wrap items-center gap-3 mt-1">
+            {hasNextLesson && (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={onContinueLearning}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-white text-purple-700 hover:bg-white/90 transition-all shadow-lg"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                Continue Learning
+              </motion.button>
+            )}
+            {onViewInsights && (
+              <button
+                onClick={onViewInsights}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white hover:bg-white/10 transition-all border border-white/20"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                View AI Insights
+              </button>
+            )}
+          </div>
         </div>
       </motion.div>
 
@@ -182,6 +208,31 @@ export function RoadmapOverviewPage({
         >
           <Lock className="w-4 h-4 flex-shrink-0" />
           {lockedToast}
+        </motion.div>
+      )}
+
+      {/* ── Resume banner (slim strip between hero and phase cards) ── */}
+      {resumeInfo && completedLessons > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="flex items-center gap-3 px-4 py-3 rounded-xl border-l-4 border-purple-500 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20"
+        >
+          <div className="flex-shrink-0 w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center">
+            <MapPin className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-purple-500 dark:text-purple-400 font-semibold uppercase tracking-wide">Resume where you left off</p>
+            <p className="text-sm font-bold text-zinc-900 dark:text-white truncate">{resumeInfo.lessonName}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{resumeInfo.phaseName}</p>
+          </div>
+          <button
+            onClick={onContinueLearning}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-colors"
+          >
+            <Play className="w-3 h-3 fill-current" /> Resume
+          </button>
         </motion.div>
       )}
 

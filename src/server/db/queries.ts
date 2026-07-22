@@ -1070,6 +1070,9 @@ export async function reconstructRoadmapJson(roadmapId: string, ownerEmail?: str
       type: m.module.type,
       status: m.module.status,
       lessons: m.lessons.map((l: any) => reconstructLesson(l)),
+      // Include module-level resources on the level object so PhaseDetailPage
+      // can display them in the Resources tab (H-02 fix).
+      resources: (m.resources || []).map(reconstructResource),
     })),
   }));
 

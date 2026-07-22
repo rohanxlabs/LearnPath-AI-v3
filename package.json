@@ -12,7 +12,9 @@
     "test": "vitest",
     "test:ci": "vitest run --reporter=verbose",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

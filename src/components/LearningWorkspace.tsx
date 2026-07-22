@@ -261,8 +261,10 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
     onNavigateToLesson(phaseId, levelId, lesson.id);
   };
 
-  const handleMarkComplete = () => {
-    if (!canMarkComplete) return; // engagement gate
+  // skipGate=true allows quiz completion to bypass the 30-second timer (C-03 fix).
+  // The timer gate only blocks the bare "Mark Lesson Complete" button.
+  const handleMarkComplete = ({ skipGate = false }: { skipGate?: boolean } = {}) => {
+    if (!canMarkComplete && !skipGate) return; // engagement gate
     if (topicData && !completedInLevel.includes(topicData.id)) {
       onCompleteLesson(topicData.xpReward || 20, topicData.id);
       setCompletedInLevel(prev => [...prev, topicData.id]);
@@ -521,7 +523,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                         </div>
                         <p className="text-sm text-slate-500">Apply what you've learned in a real coding exercise.</p>
                         <button
-                          onClick={handleMarkComplete}
+                          onClick={() => handleMarkComplete()}
                           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
                         >
                           Mark as Complete
@@ -540,7 +542,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                     ) : (
                       <div className="flex items-center gap-3 flex-wrap">
                         <button
-                          onClick={handleMarkComplete}
+                          onClick={() => handleMarkComplete()}
                           disabled={!canMarkComplete}
                           className="px-6 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:brightness-110 text-white rounded-xl font-bold text-sm transition-all shadow-[0_4px_12px_rgba(124,58,237,0.25)] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -631,7 +633,9 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                           const qs = topicData.quiz.questions || [];
                           const correct = qs.filter((q: any) => quizAnswers[q.id] === q.correctIndex).length;
                           setQuizScore(correct);
-                          if (correct === qs.length) handleMarkComplete();
+                          // Perfect quiz score is a valid completion signal —
+                          // bypass the 30-second timer gate (C-03 fix).
+                          if (correct === qs.length) handleMarkComplete({ skipGate: true });
                         }}
                         disabled={Object.keys(quizAnswers).length === 0}
                         className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"

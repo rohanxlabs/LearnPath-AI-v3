@@ -60,7 +60,11 @@ export function RoadmapProvider({
   const [roadmapProgress, setRoadmapProgress] = useState<Record<string, any>>({});
   const [isAiGeneratingRoadmap, setIsAiGeneratingRoadmap] = useState(false);
 
-  // Load progress for all roadmaps in parallel
+  // Load progress for all roadmaps in parallel.
+  // Depend on a stable sorted-ID string rather than the `roadmaps` array
+  // reference so this only fires when the set of roadmaps actually changes,
+  // not on every object mutation (M-02 fix).
+  const roadmapIdKey = roadmaps.map(r => r.id).sort().join(',');
   useEffect(() => {
     if (roadmaps.length === 0) return;
     const loadProgress = async () => {
@@ -81,7 +85,8 @@ export function RoadmapProvider({
       setRoadmapProgress(prev => ({ ...prev, ...updates }));
     };
     loadProgress();
-  }, [roadmaps]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roadmapIdKey]);
 
   const syncRoadmapsFromDatabase = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -119,6 +124,10 @@ export function RoadmapProvider({
         }
       }
     }
+    // Fallback: use lesson status from in-memory roadmap.
+    // Accept 'available' first; if none found (e.g. brand-new roadmap where
+    // only lesson-1 should be available but was normalised as 'locked'), also
+    // accept the very first 'locked' lesson so the CTA always appears (C-04).
     for (const phase of roadmap.phases || []) {
       for (const level of phase.levels || []) {
         for (const lesson of level.lessons || []) {
@@ -126,10 +135,22 @@ export function RoadmapProvider({
         }
       }
     }
+    // Second pass — first locked lesson as last resort (C-04)
+    for (const phase of roadmap.phases || []) {
+      for (const level of phase.levels || []) {
+        for (const lesson of level.lessons || []) {
+          if (lesson.status === 'locked') return { phaseId: phase.id, levelId: level.id, lessonId: lesson.id };
+        }
+      }
+    }
     return null;
   }, [roadmapProgress]);
 
+  // Sub-Task 8: called by RoadmapGeneratorForm after the SSE stream delivers the final roadmap.
+  // The form already shows isStreaming=true; we keep isAiGeneratingRoadmap=true here only for
+  // the DB-persist phase — do NOT call setIsAiGeneratingRoadmap(true) again as the form already did.
   const handleRoadmapReadyFromStream = useCallback(async (data: any) => {
+    // Ensure the context loading state is active (form may have already set it)
     setIsAiGeneratingRoadmap(true);
     try {
       const newRoadmap: Roadmap = {
@@ -151,6 +172,14 @@ export function RoadmapProvider({
       const persistData = await persistResponse.json().catch(() => ({}));
       if (!persistResponse.ok) throw new Error(persistData.error || `Failed to persist roadmap (HTTP ${persistResponse.status})`);
       if (persistData.newAchievement) onAchievementUnlocked(persistData.newAchievement);
+      // Validate progression (same as handleGenerateRoadmap — Sub-Task 8 fix)
+      try {
+        const valRes = await fetch('/api/validate-progression', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ roadmap: newRoadmap }) });
+        if (valRes.ok) {
+          const val = await valRes.json();
+          if (val.hasGaps || !val.prerequisitesMet) console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites);
+        }
+      } catch (e) { console.warn('Could not validate progression:', e); }
       setRoadmaps(prev => [newRoadmap, ...prev]);
       setActiveRoadmapId(newRoadmap.id);
       setSelectedRoadmapId(newRoadmap.id);

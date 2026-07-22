@@ -327,4 +327,40 @@ Level ${attemptNumber || 1} is requested. Keep hints educational, not giving awa
   }
 });
 
+// AI Progress Summary — used by AIInsightsTab for the narrative summary card
+router.post('/ai-summary', aiLimiter, requireAuth, async (req, res) => {
+  const { roadmapGoal, progressPercent, completedLessons, totalLessons, activePhase, topSkills } = req.body;
+  const userEmail = req.session.userEmail!;
+
+  const cacheKey = `aisummary:${userEmail}:${roadmapGoal || ''}:${progressPercent}`;
+  const cached = recCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < REC_CACHE_TTL) return res.json(cached.data);
+
+  const prompt = `You are an expert learning coach. Write a concise, motivating 2-3 sentence progress summary for a learner.
+Context:
+- Goal: "${sanitizeForPrompt(roadmapGoal || 'Programming', 120)}"
+- Progress: ${progressPercent || 0}% complete (${completedLessons || 0}/${totalLessons || 0} lessons)
+- Currently in: "${sanitizeForPrompt(activePhase || 'Phase 1', 60)}"
+- Top skills building: ${sanitizeForPrompt((topSkills || []).slice(0, 4).join(', ') || 'core concepts', 120)}
+
+Rules: Be specific to the goal and phase. Be encouraging but honest. Mention one concrete next action. Maximum 3 sentences.
+Return ONLY the summary text (no JSON, no preamble).`;
+
+  try {
+    const text = await callOpenRouterChatCompletion(prompt, { temperature: 0.65, asJSON: false, maxTokens: 150 });
+    const data = { summary: text.trim() };
+    recCache.set(cacheKey, { data, timestamp: Date.now() });
+    return res.json(data);
+  } catch (error: any) {
+    console.warn('[AI Summary] fallback:', error.message);
+    const pct = progressPercent || 0;
+    const summary = pct < 30
+      ? `You're building the foundations for ${sanitizeForPrompt(roadmapGoal || 'your goal', 60)}. Keep momentum by completing one lesson today.`
+      : pct < 70
+      ? `You're making strong progress on ${sanitizeForPrompt(roadmapGoal || 'your goal', 60)} at ${pct}%. Focus on applying what you've learned in the current phase.`
+      : `You're in the final stretch of ${sanitizeForPrompt(roadmapGoal || 'your goal', 60)} with ${pct}% done. Push through the advanced topics to complete your roadmap.`;
+    return res.json({ summary });
+  }
+});
+
 export default router;

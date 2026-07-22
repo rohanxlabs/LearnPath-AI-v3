@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { CheckCircle2, Code2, ExternalLink, TrendingUp } from 'lucide-react';
+import { CheckCircle2, Code2, ExternalLink, TrendingUp, Lock, Tag } from 'lucide-react';
 import { ProjectTrack } from '../types';
 import RecommendedResources from './RecommendedResources';
 
@@ -9,6 +9,9 @@ interface ProjectCardProps {
   onUpdateProgress: (id: string, newProgress: number) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  /** Sub-Task 6: phase context */
+  phaseLabel?: string;
+  isLocked?: boolean;
 }
 
 const cardVariants = {
@@ -16,7 +19,7 @@ const cardVariants = {
   open: { height: 'auto' },
 };
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project, onUpdateProgress, isExpanded, onToggleExpand }) => {
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, onUpdateProgress, isExpanded, onToggleExpand, phaseLabel, isLocked = false }) => {
   const isCompleted = project.progress === 100;
 
   const difficultyColors = {
@@ -31,12 +34,25 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onUpdateProgress, is
       variants={cardVariants}
       initial="closed"
       animate={isExpanded ? 'open' : 'closed'}
-      className="bg-white/5 border border-white/10 rounded-2xl shadow-lg overflow-hidden"
+      className={`bg-white/5 border border-white/10 rounded-2xl shadow-lg overflow-hidden relative ${isLocked ? 'opacity-60' : ''}`}
     >
-      <div className="p-5 cursor-pointer" onClick={onToggleExpand}>
+      {/* Lock overlay for future-phase projects */}
+      {isLocked && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 rounded-2xl">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/80 rounded-xl text-zinc-400 text-xs font-semibold">
+            <Lock size={12} /> Complete previous phases to unlock
+          </div>
+        </div>
+      )}
+      <div className={`p-5 ${isLocked ? '' : 'cursor-pointer'}`} onClick={isLocked ? undefined : onToggleExpand}>
         <motion.div layout="position" className="flex items-start justify-between gap-4">
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              {phaseLabel && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-zinc-300 border border-white/10">
+                  <Tag size={9} /> {phaseLabel}
+                </span>
+              )}
               <span className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${difficultyColors[project.difficulty]}`}>
                 {project.difficulty}
               </span>

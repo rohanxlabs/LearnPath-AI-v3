@@ -57,6 +57,8 @@ export function PhaseDetailPage({
   onRoadmapUpdated,
 }: PhaseDetailPageProps) {
   const [activeTab, setActiveTab] = useState<DetailTab>('modules');
+  // Lifted quiz score so GateStat can reflect the last attempt (H-04 fix)
+  const [phaseQuizScore, setPhaseQuizScore] = useState<number | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(() => {
     // Auto-expand first non-completed module
     const firstActive = (phase.levels || []).find(
@@ -100,13 +102,21 @@ export function PhaseDetailPage({
     return 'in-progress' as const;
   };
 
-  // Phase resources: collect from all module-level resources
+  // Phase resources: collect from module-level resources AND roadmap-level resources
+  // filtered by phaseId. De-duplicate by id so nothing appears twice.
   const phaseResources = useMemo(() => {
-    return (phase.levels || []).flatMap(level => (level as any).resources || []);
-  }, [phase]);
+    const levelIds = new Set((phase.levels || []).map((l: any) => l.id));
+    const fromLevels = (phase.levels || []).flatMap(level => (level as any).resources || []);
+    const fromRoadmap = (roadmap.resources || []).filter(
+      r => r.phaseId === phase.id || (!r.phaseId && levelIds.has((r as any).moduleId))
+    );
+    const seen = new Map<string, any>();
+    [...fromLevels, ...fromRoadmap].forEach(r => { if (r?.id && !seen.has(r.id)) seen.set(r.id, r); });
+    return Array.from(seen.values());
+  }, [phase, roadmap.resources]);
 
-  // Phase project (first project)
-  const phaseProject = (phase as any).projects?.[0] ?? null;
+  // Phase projects (all projects, not just first)
+  const phaseProjects = useMemo(() => (phase as any).projects ?? [], [phase]);
 
   // Quiz state
   const savedQuiz = roadmap.quizzes?.[phase.id];
@@ -235,14 +245,14 @@ export function PhaseDetailPage({
           />
           <GateStat
             label="Quiz"
-            value={savedQuiz ? `${(roadmap as any)._quizScore ?? '—'}%` : 'Not taken'}
-            done={!!savedQuiz}
+            value={phaseQuizScore !== null ? `${phaseQuizScore}%` : savedQuiz ? 'Taken' : 'Not taken'}
+            done={phaseQuizScore !== null && phaseQuizScore >= 70}
             icon={<Brain className="w-3.5 h-3.5" />}
           />
           <GateStat
             label="Project"
-            value={phaseProject ? `${phaseProject.progress ?? 0}%` : 'None'}
-            done={phaseProject?.progress === 100}
+            value={phaseProjects.length > 0 ? `${Math.max(...phaseProjects.map((p: any) => p.progress ?? 0))}%` : 'None'}
+            done={phaseProjects.length > 0 && phaseProjects.some((p: any) => p.progress === 100)}
             icon={<Rocket className="w-3.5 h-3.5" />}
           />
         </div>
@@ -295,11 +305,12 @@ export function PhaseDetailPage({
               savedQuiz={savedQuiz}
               onAddXp={onAddXp}
               onRoadmapUpdated={onRoadmapUpdated}
+              onQuizComplete={(score) => setPhaseQuizScore(score)}
             />
           )}
           {activeTab === 'project' && (
             <ProjectSection
-              project={phaseProject}
+              projects={phaseProjects}
               roadmap={roadmap}
               phase={phase}
               onRoadmapUpdated={onRoadmapUpdated}
@@ -439,7 +450,7 @@ function ResourcesSection({ resources }: { resources: any[] }) {
 // QuizSection
 // ---------------------------------------------------------------------------
 
-function QuizSection({ phase, roadmap, savedQuiz, onAddXp, onRoadmapUpdated }: any) {
+function QuizSection({ phase, roadmap, savedQuiz, onAddXp, onRoadmapUpdated, onQuizComplete }: any) {
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>(
     savedQuiz?.questions || [],
   );
@@ -497,6 +508,8 @@ function QuizSection({ phase, roadmap, savedQuiz, onAddXp, onRoadmapUpdated }: a
           if (xp > 0) onAddXp(xp);
           setQuizResult({ score, correct, total: quizQuestions.length });
           setActiveQuiz(false);
+          // Surface score to parent so GateStat updates (H-04 fix)
+          onQuizComplete?.(score);
         }}
         onExit={() => setActiveQuiz(false)}
       />
@@ -606,8 +619,19 @@ function InlineQuiz({ questions, onComplete, onExit }: {
   const handleSubmit = () => {
     if (selectedOpt === null) return;
     const isCorrect = selectedOpt === questions[currentIdx].correctIndex;
-    setAnswers(prev => ({ ...prev, [currentIdx]: isCorrect }));
+    const updatedAnswers = { ...answers, [currentIdx]: isCorrect };
+    setAnswers(updatedAnswers);
     setShowFeedback(true);
+
+    // If this is the last question, compute and fire the final score immediately
+    // from the synchronously-built updatedAnswers map — avoids the off-by-one
+    // caused by reading stale `correctCount` from state in handleNext (H-06 fix).
+    if (currentIdx === questions.length - 1) {
+      const finalCorrect = Object.values(updatedAnswers).filter(Boolean).length;
+      const finalScore = Math.round((finalCorrect / questions.length) * 100);
+      // Delay to let the feedback animation render before unmounting
+      setTimeout(() => onComplete(finalScore, finalCorrect), 800);
+    }
   };
 
   const handleNext = () => {
@@ -615,10 +639,8 @@ function InlineQuiz({ questions, onComplete, onExit }: {
       setCurrentIdx(prev => prev + 1);
       setSelectedOpt(null);
       setShowFeedback(false);
-    } else {
-      const finalScore = Math.round((correctCount / questions.length) * 100);
-      onComplete(finalScore, correctCount);
     }
+    // Last question: completion is fired from handleSubmit (H-06 fix)
   };
 
   const currentQ = questions[currentIdx];
@@ -699,19 +721,41 @@ function InlineQuiz({ questions, onComplete, onExit }: {
 // ProjectSection
 // ---------------------------------------------------------------------------
 
-function ProjectSection({ project, roadmap, phase, onRoadmapUpdated }: any) {
-  const [progress, setProgress] = useState(project?.progress ?? 0);
-  const [githubUrl, setGithubUrl] = useState(project?.githubUrl ?? '');
-  const [saving, setSaving] = useState(false);
-
-  if (!project) {
+function ProjectSection({ projects, roadmap, phase, onRoadmapUpdated }: any) {
+  if (!projects || projects.length === 0) {
     return (
       <div className="text-center py-12 px-6 rounded-2xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/10">
         <Rocket className="w-10 h-10 text-zinc-300 dark:text-zinc-600 mx-auto mb-3" />
-        <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">No project assigned to this phase yet.</p>
+        <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">No projects assigned to this phase yet.</p>
       </div>
     );
   }
+
+  return (
+    <div className="space-y-4">
+      {projects.map((project: any, idx: number) => (
+        <ProjectItem
+          key={project.id || idx}
+          project={project}
+          projectIndex={idx}
+          totalProjects={projects.length}
+          roadmap={roadmap}
+          phase={phase}
+          onRoadmapUpdated={onRoadmapUpdated}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ProjectItem — individual project card with its own progress/github state
+// ---------------------------------------------------------------------------
+
+function ProjectItem({ project, projectIndex, totalProjects, roadmap, phase, onRoadmapUpdated }: any) {
+  const [progress, setProgress] = useState(project?.progress ?? 0);
+  const [githubUrl, setGithubUrl] = useState(project?.githubUrl ?? '');
+  const [saving, setSaving] = useState(false);
 
   const diffColors: Record<string, string> = {
     'mini-exercise': 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-500/20',
@@ -724,13 +768,18 @@ function ProjectSection({ project, roadmap, phase, onRoadmapUpdated }: any) {
   const saveProgress = async (newProgress: number) => {
     setSaving(true);
     try {
-      const updatedProjects = (roadmap.projects || []).map((p: any) =>
-        p.id === project.id ? { ...p, progress: newProgress, githubUrl } : p,
-      );
+      const updatedProject = { ...project, progress: newProgress, githubUrl, phaseId: phase?.id ?? project.phaseId };
+      // Merge roadmap.projects with the phase-level project so we never lose an
+      // entry that only exists in one array.
+      const existingIds = new Set((roadmap.projects || []).map((p: any) => p.id));
+      const mergedProjects = [
+        ...(roadmap.projects || []).map((p: any) => p.id === project.id ? updatedProject : p),
+        ...(existingIds.has(project.id) ? [] : [updatedProject]),
+      ];
       await fetch('/api/update-roadmap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roadmapId: roadmap.id, updates: { projects: updatedProjects } }),
+        body: JSON.stringify({ roadmapId: roadmap.id, updates: { projects: mergedProjects } }),
       });
       onRoadmapUpdated?.();
     } catch (_) {} finally {
@@ -747,6 +796,11 @@ function ProjectSection({ project, roadmap, phase, onRoadmapUpdated }: any) {
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
+              {totalProjects > 1 && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10">
+                  {projectIndex + 1}/{totalProjects}
+                </span>
+              )}
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border ${diffColors[project.difficulty] || 'bg-zinc-100 text-zinc-500 border-zinc-200'}`}>
                 {project.difficulty}
               </span>

@@ -64,15 +64,20 @@ export function sanitizeForPrompt(input: string | number | undefined | null, max
 
 /**
  * Groq model cascade — ordered by capability and token limits.
- * All models are available on Groq's free tier.
+ * Only active (non-decommissioned) models listed here.
  * https://console.groq.com/docs/models
+ *
+ * Removed decommissioned models (as of 2025):
+ *   llama-3.1-70b-versatile  → decommissioned
+ *   gemma2-9b-it             → decommissioned
+ *   mixtral-8x7b-32768       → decommissioned
  */
 export const GROQ_MODELS = [
-  'llama-3.3-70b-versatile',   // primary — strongest reasoning, 128k context
-  'llama-3.1-70b-versatile',   // second choice — very capable
-  'llama-3.1-8b-instant',      // fast fallback — good for lighter tasks
-  'gemma2-9b-it',              // Google Gemma fallback
-  'mixtral-8x7b-32768',        // Mixtral with 32k context window
+  'meta-llama/llama-4-scout-17b-16e-instruct', // primary — Llama 4 Scout, 131k context
+  'llama-3.3-70b-versatile',                   // second — strong reasoning, 128k context
+  'llama3-70b-8192',                            // third — capable, 8k context
+  'llama3-8b-8192',                             // fast fallback — lighter tasks, 8k context
+  'llama-3.1-8b-instant',                       // last resort — very fast, 128k context
 ];
 
 // Keep the old export name as an alias so existing call-sites that import

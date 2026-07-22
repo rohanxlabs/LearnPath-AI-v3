@@ -15,6 +15,20 @@
       "when": 1784356955475,
       "tag": "0001_simple_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784360000000,
+      "tag": "0002_add_email_verified",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784363000000,
+      "tag": "0003_add_last_active_date",
+      "breakpoints": true
     }
   ]
 }

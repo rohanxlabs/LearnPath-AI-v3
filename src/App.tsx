@@ -6,13 +6,13 @@
 //   src/contexts/PWAContext.tsx     — online/offline, update, email verified
 //   src/router/AppRouter.tsx        — route-to-component mapping
 
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { Toast } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { AuthScreen } from './components/AuthScreen';
 import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification } from './types';
-import { getPhaseUnlockStatus } from './lib/roadmapUtils';
+import { getPhaseUnlockStatus, calcPhaseProgress, isPhaseComplete } from './lib/roadmapUtils';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
 import { HomeView } from './components/HomeView';
 import { SplashScreen } from './components/SplashScreen';
@@ -23,6 +23,7 @@ import { OnboardingWizard } from './components/OnboardingWizard';
 import type { OnboardingData } from './components/OnboardingWizard';
 import { TermsPage, PrivacyPage } from './components/LegalPages';
 import { useAnalytics } from './hooks/useAnalytics';
+import { PhaseCompletionModal } from './components/PhaseCompletionModal';
 
 import { AuthProvider, useAuth, createEmptyProfile, DEFAULT_SETTINGS } from './contexts/AuthContext';
 import { RoadmapProvider, useRoadmaps } from './contexts/RoadmapContext';
@@ -74,6 +75,9 @@ export function renderHomeView(props: {
 
 function AppShell() {
   const { track, identify } = useAnalytics();
+  // Sub-Task 9: phase completion modal state + session dedup ref
+  const [phaseCompletionData, setPhaseCompletionData] = useState<{ phase: Phase; nextPhase: Phase | null; xpEarned: number } | null>(null);
+  const celebratedPhasesRef = useRef<Set<string>>(new Set());
   const {
     isAuthenticated, isLoadingAuth, profile, setProfile, settings, setSettings,
     achievements, setAchievements, notifications, setNotifications,
@@ -150,6 +154,10 @@ function AppShell() {
     if (!activeLesson) return;
     const targetLessonId = specificLessonId || activeLesson.lessonId;
     const targetRoadmapId = selectedRoadmapId || activeRoadmapId;
+
+    // Optimistically update lesson/level/phase status in local state only —
+    // XP totals are NOT touched here; they are applied once from the server
+    // response to avoid double-counting (C-01).
     const updatedRoadmaps = roadmaps.map((r) => {
       if (r.id !== targetRoadmapId) return r;
       const updatedPhases = r.phases.map((ph) => {
@@ -175,21 +183,65 @@ function AppShell() {
           const nextLvl = updatedLevels[currentLvlIdx + 1];
           if (nextLvl.status === 'locked') { nextLvl.status = 'current'; nextLvl.lessons.forEach(l => { if (l.type === 'learn') l.status = 'available'; }); }
         }
-        return { ...ph, levels: updatedLevels, progress: phaseProgress, status: phStatus, xpEarned: ph.xpEarned + xpAdded };
+        // xpEarned on the phase is NOT updated here — applied from server response
+        return { ...ph, levels: updatedLevels, progress: phaseProgress, status: phStatus };
       });
       const donePhsPercent = updatedPhases.length > 0 ? updatedPhases.reduce((acc, p) => acc + (p.progress || 0), 0) / updatedPhases.length : 0;
-      return { ...r, phases: updatedPhases, progressPercent: Math.round(donePhsPercent), totalXp: r.totalXp + xpAdded, lessonsCompleted: r.lessonsCompleted + 1, hoursRemaining: Math.max(2, r.hoursRemaining - 1.5) };
+      // totalXp and lessonsCompleted are NOT updated here — applied from server response
+      return { ...r, phases: updatedPhases, progressPercent: Math.round(donePhsPercent), hoursRemaining: Math.max(2, r.hoursRemaining - 1.5) };
     });
     setRoadmaps(updatedRoadmaps);
+
+    // Sub-Task 9: check if the completed lesson finished its phase — trigger celebration
+    {
+      const targetRm = updatedRoadmaps.find(r => r.id === targetRoadmapId);
+      if (targetRm && activeLesson) {
+        const completedPhase = targetRm.phases.find(p => p.id === activeLesson.phaseId);
+        if (completedPhase && isPhaseComplete(completedPhase) && !celebratedPhasesRef.current.has(completedPhase.id)) {
+          const phaseIndex = targetRm.phases.findIndex(p => p.id === completedPhase.id);
+          const nextPhase = phaseIndex >= 0 && phaseIndex < targetRm.phases.length - 1 ? targetRm.phases[phaseIndex + 1] : null;
+          const phaseXp = (completedPhase.levels || []).flatMap(l => l.lessons || []).reduce((sum, l) => sum + (l.xpReward || 0), 0);
+          celebratedPhasesRef.current.add(completedPhase.id);
+          setPhaseCompletionData({ phase: completedPhase, nextPhase, xpEarned: phaseXp });
+        }
+      }
+    }
+
     if (targetRoadmapId) {
-      const todayKey = new Date().toISOString().split('T')[0];
-      setActivityLog(prev => { const ex = prev[todayKey] || { xp: 0, lessonsCompleted: 0 }; return { ...prev, [todayKey]: { xp: ex.xp + (xpAdded || 0), lessonsCompleted: ex.lessonsCompleted + 1 } }; });
-      fetch('/api/complete-lesson', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ lessonId: targetLessonId, xpEarned: xpAdded || 0, roadmapId: targetRoadmapId }) })
-        .then(r => r.ok ? r.json() : null).then(data => { if (data?.newAchievement) handleAchievementUnlocked(data.newAchievement); })
+      fetch('/api/complete-lesson', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ lessonId: targetLessonId, roadmapId: targetRoadmapId }) })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data) return;
+          // Apply XP from the server's authoritative value (C-01 fix)
+          if (typeof data.xp === 'number') {
+            setProfile(prev => {
+              const newXp = data.xp;
+              const isNextLevel = newXp >= (prev.level * 200);
+              return { ...prev, xp: newXp, level: isNextLevel ? prev.level + 1 : prev.level };
+            });
+          }
+          // Write activity log entry from server XP delta (C-01 fix)
+          const xpEarned = typeof data.xp === 'number' ? (xpAdded || 0) : 0;
+          const todayKey = new Date().toISOString().split('T')[0];
+          setActivityLog(prev => {
+            const ex = prev[todayKey] || { xp: 0, lessonsCompleted: 0 };
+            return { ...prev, [todayKey]: { xp: ex.xp + xpEarned, lessonsCompleted: ex.lessonsCompleted + 1 } };
+          });
+          // Update roadmap XP/completion totals from server (C-01 fix)
+          if (typeof data.xp === 'number') {
+            setRoadmaps(prev => prev.map(r => r.id === targetRoadmapId
+              ? { ...r, totalXp: (r.totalXp || 0) + xpEarned, lessonsCompleted: r.lessonsCompleted + 1 }
+              : r
+            ));
+          }
+          if (data.newAchievement) handleAchievementUnlocked(data.newAchievement);
+          // Re-sync from DB so phase unlock statuses are authoritative (C-02 fix)
+          syncRoadmapsFromDatabase();
+        })
         .catch(err => console.warn('Failed to complete lesson:', err));
     }
     if (!specificLessonId) setActiveLesson(null);
-  }, [activeLesson, selectedRoadmapId, activeRoadmapId, roadmaps, mutatingHeaders]);
+  }, [activeLesson, selectedRoadmapId, activeRoadmapId, roadmaps, mutatingHeaders, syncRoadmapsFromDatabase]);
 
   // XP handler
   const handleAddXp = useCallback((amount: number) => {
@@ -418,6 +470,26 @@ function AppShell() {
           <Suspense fallback={null}>
             <AchievementCelebration achievement={unlockedAchievement} onDone={() => setUnlockedAchievement(null)} />
           </Suspense>
+        )}
+
+        {/* Sub-Task 9: phase completion celebration modal */}
+        {phaseCompletionData && (
+          <PhaseCompletionModal
+            phase={phaseCompletionData.phase}
+            nextPhase={phaseCompletionData.nextPhase}
+            xpEarned={phaseCompletionData.xpEarned}
+            onContinue={() => {
+              setPhaseCompletionData(null);
+              if (phaseCompletionData.nextPhase) {
+                setActiveLesson(null);
+                setActiveTab('roadmaps');
+              } else {
+                setActiveTab('progress');
+                setActiveLesson(null);
+              }
+            }}
+            onDismiss={() => setPhaseCompletionData(null)}
+          />
         )}
 
         <FeedbackWidget context={activeTab} />
