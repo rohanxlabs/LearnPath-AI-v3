@@ -18,13 +18,13 @@ import {
   logCurriculumStats,
   CURRICULUM_LIMITS
 } from '../lib/curriculum';
-import { callOpenRouterChatCompletion, cleanAndParseJSON, sanitizeForPrompt, OPENROUTER_MODELS } from '../lib/ai';
+import { callOpenRouterChatCompletion, cleanAndParseJSON, sanitizeForPrompt, GROQ_MODELS } from '../lib/ai';
 
 const router = Router();
 
 // Health check
 router.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), aiActive: !!process.env.OPENROUTER_API_KEY, aiModel: OPENROUTER_MODELS[0] });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), aiActive: !!process.env.GROQ_API_KEY, aiModel: GROQ_MODELS[0] });
 });
 
 // Generate roadmap

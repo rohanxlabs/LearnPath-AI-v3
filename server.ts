@@ -24,7 +24,7 @@ import { validateCsrf } from './src/server/lib/middleware';
 // ---------------------------------------------------------------------------
 // Startup env-var validation — fail fast with a clear message.
 // ---------------------------------------------------------------------------
-const requiredEnvVars = ['DATABASE_URL', 'SESSION_SECRET', 'OPENROUTER_API_KEY'];
+const requiredEnvVars = ['DATABASE_URL', 'SESSION_SECRET', 'GROQ_API_KEY'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingEnvVars.length > 0) {
   logger.fatal({ missing: missingEnvVars }, 'Missing required environment variables — server cannot start');
@@ -82,7 +82,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],  // Vite HMR + React needs eval in dev
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", 'https://openrouter.ai', 'https://*.sentry.io'],
+      connectSrc: ["'self'", 'https://api.groq.com', 'https://*.sentry.io'],
       fontSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],

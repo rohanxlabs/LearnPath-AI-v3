@@ -59,7 +59,7 @@ router.post('/mentor-chat', aiLimiter, requireAuth, async (req, res) => {
   if (!message) return res.status(400).json({ error: 'Message payload is required' });
 
   try {
-    if (!process.env.OPENROUTER_API_KEY) throw new Error('OPENROUTER_API_KEY is not configured');
+    if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
 
     const messages: Array<{ role: string; content: string }> = [];
     if (history && Array.isArray(history)) {

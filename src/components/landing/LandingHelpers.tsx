@@ -35,17 +35,17 @@ export const SectionHeading: React.FC<{
   center?: boolean;
 }> = ({ id, eyebrow, title, description, center = false }) => (
   <div className={center ? 'mx-auto max-w-2xl text-center' : 'max-w-xl'}>
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/25 bg-purple-500/[0.1] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-purple-300">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-purple-300 bg-purple-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-purple-700">
       <Sparkles className="h-3 w-3" />
       {eyebrow}
     </span>
     <h2
       id={id}
-      className="mt-4 font-display text-[1.85rem] font-extrabold leading-tight tracking-[-0.02em] text-white sm:text-[2.1rem]"
+      className="mt-4 font-display text-[1.85rem] font-extrabold leading-tight tracking-[-0.02em] text-[#1a0a2e] sm:text-[2.1rem]"
     >
       {title}
     </h2>
-    <p className="mt-3 text-base leading-7 text-zinc-400">{description}</p>
+    <p className="mt-3 text-base leading-7 text-slate-500">{description}</p>
   </div>
 );
 
@@ -94,16 +94,16 @@ export const StatCard: React.FC<{ stat: (typeof stats)[0]; index: number }> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ delay: index * 0.08, duration: 0.5, ease: 'easeOut' }}
-      className="group relative overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.04] p-6 backdrop-blur-sm transition-all hover:border-purple-500/25 hover:bg-white/[0.06]"
+      className="group relative overflow-hidden rounded-2xl border border-purple-100 bg-white p-6 shadow-sm backdrop-blur-sm transition-all hover:border-purple-300 hover:shadow-md"
     >
-      <div className="absolute -right-3 -top-3 h-16 w-16 rounded-full bg-purple-500/[0.12] blur-2xl transition-all group-hover:bg-purple-500/20" />
-      <stat.icon className="mb-4 h-5 w-5 text-purple-400" />
-      <p className="text-3xl font-extrabold tracking-tight text-white">
+      <div className="absolute -right-3 -top-3 h-16 w-16 rounded-full bg-purple-200/40 blur-2xl transition-all group-hover:bg-purple-300/50" />
+      <stat.icon className="mb-4 h-5 w-5 text-purple-600" />
+      <p className="text-3xl font-extrabold tracking-tight text-[#1a0a2e]">
         {count.toLocaleString()}
         {stat.suffix}
       </p>
-      <p className="mt-1 text-sm font-medium text-zinc-300">{stat.label}</p>
-      <p className="mt-0.5 text-xs text-zinc-600">{stat.note}</p>
+      <p className="mt-1 text-sm font-medium text-slate-600">{stat.label}</p>
+      <p className="mt-0.5 text-xs text-slate-400">{stat.note}</p>
     </motion.div>
   );
 };

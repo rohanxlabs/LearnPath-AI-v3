@@ -1,8 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { app } from '../../../server.ts';
 import { resetMockDb, mockSql } from './mockDb';
+
+// getRoadmapsByOwner uses Drizzle ORM which bypasses the raw neon SQL mock.
+// Stub it to return an empty array so the route hits the 404 branch as intended.
+vi.mock('../db/queries', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../db/queries')>();
+  return {
+    ...actual,
+    getRoadmapsByOwner: vi.fn().mockResolvedValue([]),
+  };
+});
 
 const email = 'roadmap@test.com';
 

@@ -59,31 +59,32 @@ export function sanitizeForPrompt(input: string | number | undefined | null, max
 }
 
 // ---------------------------------------------------------------------------
-// OpenRouter LLM client
+// Groq LLM client
 // ---------------------------------------------------------------------------
 
-export const OPENROUTER_MODELS = [
-  'deepseek/deepseek-r1-0528:free',          // primary — strong reasoning, free tier
-  'nvidia/nemotron-3-super-120b-a12b:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'qwen/qwen3-next-80b-a3b-instruct:free',
-  'google/gemma-2-27b-it:free',
-  'tencent/hy3:free',
-  'openrouter/free'                           // generic catch-all fallback
+/**
+ * Groq model cascade — ordered by capability and token limits.
+ * All models are available on Groq's free tier.
+ * https://console.groq.com/docs/models
+ */
+export const GROQ_MODELS = [
+  'llama-3.3-70b-versatile',   // primary — strongest reasoning, 128k context
+  'llama-3.1-70b-versatile',   // second choice — very capable
+  'llama-3.1-8b-instant',      // fast fallback — good for lighter tasks
+  'gemma2-9b-it',              // Google Gemma fallback
+  'mixtral-8x7b-32768',        // Mixtral with 32k context window
 ];
 
-// Models known NOT to support the `response_format: json_object` request param.
-export const MODELS_WITHOUT_JSON_MODE = new Set(['tencent/hy3:free', 'openrouter/free']);
+// Keep the old export name as an alias so existing call-sites that import
+// OPENROUTER_MODELS still compile without change.
+export const OPENROUTER_MODELS = GROQ_MODELS;
 
-export function isJsonModeUnsupportedError(err: any): boolean {
-  const msg = (err?.message || '').toLowerCase();
-  return /response_format|json_object|response format|does not support/i.test(msg);
-}
+export const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-// Default per-request timeout.
-export const OPENROUTER_TIMEOUT_MS = 15000;
+// Default per-request timeout (Groq is significantly faster than OpenRouter).
+export const GROQ_TIMEOUT_MS = 20000;
 
-export interface OpenRouterOptions {
+export interface GroqOptions {
   temperature?: number;
   asJSON?: boolean;
   timeoutMs?: number;
@@ -92,21 +93,24 @@ export interface OpenRouterOptions {
   systemPrompt?: string;
 }
 
-export async function callOpenRouterChatCompletion(
-  prompt: string,
-  options: OpenRouterOptions = {}
-): Promise<string> {
-  const { temperature = 0.7, asJSON = false, timeoutMs = OPENROUTER_TIMEOUT_MS, maxTokens } = options;
+// Keep old interface name as alias.
+export type OpenRouterOptions = GroqOptions;
 
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error('OPENROUTER_API_KEY is not configured');
+export async function callGroqChatCompletion(
+  prompt: string,
+  options: GroqOptions = {}
+): Promise<string> {
+  const { temperature = 0.7, asJSON = false, timeoutMs = GROQ_TIMEOUT_MS, maxTokens } = options;
+
+  const key = process.env.GROQ_API_KEY;
+  if (!key) throw new Error('GROQ_API_KEY is not configured');
 
   const systemContent = options.systemPrompt
     ?? (asJSON
       ? 'You are a precise data generator. Output a single valid JSON object only, with no markdown fences, comments, or prose.'
       : 'You are a helpful AI assistant. Provide responses in markdown format with clear headings and bullet points.');
 
-  const tryModel = async (model: string, useJsonFormat: boolean): Promise<string> => {
+  const tryModel = async (model: string): Promise<string> => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -115,31 +119,30 @@ export async function callOpenRouterChatCompletion(
         temperature,
         messages: [
           { role: 'system', content: systemContent },
-          { role: 'user', content: prompt }
-        ]
+          { role: 'user', content: prompt },
+        ],
       };
-      if (useJsonFormat) body.response_format = { type: 'json_object' };
+      if (asJSON) body.response_format = { type: 'json_object' };
       if (maxTokens) body.max_tokens = maxTokens;
 
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${key}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.FRONTEND_URL || 'http://localhost:3000'
         },
         body: JSON.stringify(body),
-        signal: controller.signal
+        signal: controller.signal,
       });
 
       const responseText = await response.text();
       if (!response.ok) {
-        throw new Error(responseText || `OpenRouter request failed with status ${response.status}`);
+        throw new Error(responseText || `Groq request failed with status ${response.status}`);
       }
 
       const parsed = JSON.parse(responseText) as { choices?: Array<{ message?: { content?: string } }> };
       const content = parsed.choices?.[0]?.message?.content || '';
-      if (!content.trim()) throw new Error('OpenRouter returned an empty completion');
+      if (!content.trim()) throw new Error('Groq returned an empty completion');
       return content;
     } finally {
       clearTimeout(timeoutId);
@@ -148,24 +151,18 @@ export async function callOpenRouterChatCompletion(
 
   let lastError: Error | null = null;
 
-  for (const model of OPENROUTER_MODELS) {
-    const wantsJsonFormat = asJSON && !MODELS_WITHOUT_JSON_MODE.has(model);
+  for (const model of GROQ_MODELS) {
     try {
-      return await tryModel(model, wantsJsonFormat);
+      return await tryModel(model);
     } catch (error: any) {
       lastError = error;
       const reason = error.name === 'AbortError' ? `timed out after ${Math.round(timeoutMs / 1000)}s` : error.message;
-      console.warn(`[Model Fallback] Model ${model} failed:`, reason);
-      if (asJSON && wantsJsonFormat && isJsonModeUnsupportedError(error)) {
-        try {
-          return await tryModel(model, false);
-        } catch (retryErr: any) {
-          lastError = retryErr;
-          console.warn(`[Model Fallback] Model ${model} (plain-text retry) failed:`, retryErr.message);
-        }
-      }
+      console.warn(`[Model Fallback] Groq model ${model} failed:`, reason);
     }
   }
 
-  throw lastError || new Error('All OpenRouter models failed');
+  throw lastError || new Error('All Groq models failed');
 }
+
+// Keep old function name as alias so call-sites need zero changes.
+export const callOpenRouterChatCompletion = callGroqChatCompletion;
