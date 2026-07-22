@@ -267,25 +267,46 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
                 <div className="grid gap-2.5 p-4 sm:grid-cols-2">
 
-                  {/* AI Roadmap card */}
+                  {/* AI Roadmap card — animated phase preview */}
                   <div className="col-span-2 rounded-2xl border border-white/[0.07] bg-gradient-to-br from-purple-500/[0.1] to-[#0d1425] p-4">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2 mb-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-purple-400">Your AI Roadmap</p>
-                        <p className="mt-1 text-sm font-bold text-white">Your personalised learning path</p>
+                        <p className="mt-1 text-sm font-bold text-white">Python for Machine Learning</p>
                       </div>
                       <span className="flex items-center gap-1.5 rounded-xl bg-purple-500/15 px-2.5 py-1 text-[10px] font-bold text-purple-300">
-                        <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
-                        Demo
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-400" />
+                        Live Demo
                       </span>
                     </div>
-                    {/* Progress bar */}
-                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
-                      <div className="h-full w-[68%] rounded-full bg-gradient-to-r from-purple-500 to-cyan-500" />
+                    {/* Phase rows */}
+                    <div className="space-y-2">
+                      {[
+                        { name: 'Python Foundations', progress: 100, lessons: 8, status: 'completed' },
+                        { name: 'Data Structures & NumPy', progress: 100, lessons: 6, status: 'completed' },
+                        { name: 'ML Model Training', progress: 55, lessons: 9, status: 'active' },
+                        { name: 'Deep Learning & Neural Nets', progress: 0, lessons: 10, status: 'locked' },
+                      ].map((phase, i) => (
+                        <div key={phase.name} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 ${phase.status === 'active' ? 'bg-purple-500/[0.12] border border-purple-500/20' : 'bg-white/[0.03]'}`}>
+                          <div className={`h-5 w-5 shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold ${phase.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : phase.status === 'active' ? 'bg-purple-500/30 text-purple-300' : 'bg-white/[0.06] text-zinc-600'}`}>
+                            {phase.status === 'completed' ? '✓' : phase.status === 'active' ? i + 1 : '🔒'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-[11px] font-semibold truncate ${phase.status === 'locked' ? 'text-zinc-600' : phase.status === 'active' ? 'text-white' : 'text-zinc-400'}`}>{phase.name}</p>
+                            <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
+                              <div
+                                className={`h-full rounded-full transition-all ${phase.status === 'completed' ? 'bg-emerald-500' : 'bg-gradient-to-r from-purple-500 to-cyan-500'}`}
+                                style={{ width: `${phase.progress}%` }}
+                              />
+                            </div>
+                          </div>
+                          <span className={`shrink-0 text-[10px] ${phase.status === 'locked' ? 'text-zinc-700' : 'text-zinc-500'}`}>{phase.lessons} lessons</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="mt-1.5 flex justify-between text-[10px] text-zinc-500">
-                      <span>Phase 3 of 6</span>
-                      <span className="text-purple-400 font-semibold">Keep going — you're making progress</span>
+                    <div className="mt-2 flex justify-between text-[10px] text-zinc-500">
+                      <span>Phase 3 of 4 active</span>
+                      <span className="text-purple-400 font-semibold">63% complete</span>
                     </div>
                   </div>
 

@@ -10,7 +10,7 @@ import {
   upsertRoadmap,
   upsertResource,
   upsertPhaseProject
-} from '../db/schema';
+} from '../db/queries';
 import {
   validateCurriculumQuality,
   validateAndNormalizeCurriculum,
@@ -247,7 +247,7 @@ router.get('/roadmaps/:roadmapId', requireAuth, async (req, res) => {
   const { roadmapId } = req.params;
   const userEmail = req.session.userEmail!;
   try {
-    const roadmap = await reconstructRoadmapJson(roadmapId);
+    const roadmap = await reconstructRoadmapJson(roadmapId, userEmail);
     if (!roadmap) return res.status(404).json({ error: 'Roadmap not found' });
     // Ownership check — return 404 (not 403) to avoid roadmap ID enumeration.
     if (roadmap.ownerEmail?.toLowerCase() !== userEmail.toLowerCase()) {
@@ -299,7 +299,7 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
     // Check BEFORE inserting so we know if this is the user's first roadmap.
     const existingBefore = await getRoadmapsByOwner(userEmail);
     await createRoadmapFromJson(userEmail, roadmap);
-    const saved = await reconstructRoadmapJson(roadmap.id);
+    const saved = await reconstructRoadmapJson(roadmap.id, userEmail);
 
     // Unlock "Roadmap Builder" on first roadmap creation.
     let newAchievement: { id: string; name: string; icon: string; xpReward: number } | null = null;
@@ -357,7 +357,7 @@ router.post('/update-roadmap', requireAuth, async (req, res) => {
       await upsertRoadmap({ id: roadmapId, ownerEmail: userEmail.toLowerCase(), goal: existingRoadmap?.goal || roadmapPatch.goal || '', ...roadmapPatch });
     }
 
-    const updated = await reconstructRoadmapJson(roadmapId);
+    const updated = await reconstructRoadmapJson(roadmapId, userEmail);
     return res.json({ success: true, roadmap: updated });
   } catch (error) {
     console.error('Update roadmap error:', error);

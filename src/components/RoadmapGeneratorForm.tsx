@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, GraduationCap, X, CheckCircle2 } from 'lucide-react';
+import { Sparkles, GraduationCap, X, CheckCircle2, AlertCircle } from 'lucide-react';
 import { buttonStyles } from '../styles/theme';
 
 export interface RoadmapGeneratorParams {
@@ -44,6 +44,7 @@ export function RoadmapGeneratorForm({
   // ── Streaming state ──────────────────────────────────────────────────────────
   const [streamPhases, setStreamPhases] = useState<string[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // Clean up stream on unmount.
@@ -61,8 +62,8 @@ export function RoadmapGeneratorForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (goal.trim().length < 3) {
-      setGoalError('Please enter at least 3 characters for your goal.');
+    if (goal.trim().length < 10) {
+      setGoalError('Please describe your goal in at least 10 characters (e.g. "Learn React for web apps").');
       return;
     }
     setGoalError('');
@@ -138,8 +139,13 @@ export function RoadmapGeneratorForm({
     }
 
     // Legacy path (no SSE or SSE failed).
-    await onSubmit(params);
-    setGoal('');
+    try {
+      await onSubmit(params);
+      setGoal('');
+    } catch (err: any) {
+      setGenerationError('Roadmap generation failed. Check your connection and try again.');
+      // Do not clear the goal — let the user retry without re-typing.
+    }
   };
 
   const handleChipClick = (chip: string) => {
@@ -190,7 +196,7 @@ export function RoadmapGeneratorForm({
             <input
               type="text"
               value={goal}
-              onChange={e => { setGoal(e.target.value); if (goalError) setGoalError(''); }}
+              onChange={e => { setGoal(e.target.value); if (goalError) setGoalError(''); if (generationError) setGenerationError(null); }}
               placeholder="e.g., Build a full-stack application with React and Node.js"
               disabled={busy}
               className={`w-full px-4 py-2.5 bg-white dark:bg-white/5 border rounded-xl text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60 ${goalError ? 'border-red-400 dark:border-red-500' : 'border-zinc-200 dark:border-white/10'}`}
@@ -257,7 +263,7 @@ export function RoadmapGeneratorForm({
           <div className="flex gap-3">
             <button
               type="submit"
-              disabled={busy || goal.trim().length < 3}
+              disabled={busy || goal.trim().length < 10}
               className={`flex-1 py-3 rounded-xl text-sm font-bold ${buttonStyles.primary} flex items-center justify-center gap-2 disabled:opacity-50 transition-all`}
             >
               <Sparkles className="w-4 h-4" />
@@ -275,6 +281,16 @@ export function RoadmapGeneratorForm({
           </div>
         </form>
       </div>
+
+      {/* ── Generation error panel ── */}
+      {generationError && (
+        <div className="px-5 pb-4">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+            <AlertCircle size={14} className="flex-shrink-0" />
+            <span>{generationError}</span>
+          </div>
+        </div>
+      )}
 
       {/* ── Streaming progress panel ── */}
       <AnimatePresence>

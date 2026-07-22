@@ -16,6 +16,7 @@ interface ProjectsTabProps {
 export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabProps) {
   const [projects, setProjects] = useState<ProjectTrack[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isUsingFallback, setIsUsingFallback] = useState(false);
   const [filterDifficulty, setFilterDifficulty] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
 
@@ -55,6 +56,7 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
         console.warn('[ProjectsTab] /api/generate-projects failed, falling back to seed data:', e);
       }
 
+      setIsUsingFallback(true);
       const updatedProjects = roadmap.projects || [];
       setProjects(updatedProjects.sort((a, b) => a.title.localeCompare(b.title)));
       setLoading(false);
@@ -105,6 +107,12 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
         </div>
         <ProjectFilters activeFilter={filterDifficulty} onFilterChange={setFilterDifficulty} />
       </header>
+
+      {isUsingFallback && !loading && (
+        <p className="text-xs text-zinc-500 -mt-4">
+          Showing general project suggestions — personalised AI generation was unavailable.
+        </p>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

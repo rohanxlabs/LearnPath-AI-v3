@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Award, Brain, CheckCircle, XCircle, Video, Bookmark, BookOpen, ExternalLink, Trophy, Repeat, BarChart2, Calendar } from 'lucide-react';
+import { Award, Brain, CheckCircle, XCircle, Video, Bookmark, BookOpen, ExternalLink, Trophy, Repeat, BarChart2, Calendar, RefreshCw, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Roadmap, TopicQuizAttempt } from '../types';
 import { getQuizRecommendations } from '../lib/recommendations';
@@ -282,7 +282,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
                 <h3 className="font-bold text-lg text-white">Phase Quizzes</h3>
                 <p className="text-sm text-zinc-400">Test your knowledge for each phase. AI-generated questions are tailored to your roadmap.</p>
                 {quizzes.length > 0 ? (
-                  <QuizList quizzes={quizzes} onStartQuiz={handleSeedQuizStart} />
+                  <QuizList quizzes={quizzes} onStartQuiz={handleSeedQuizStart} phaseQuizCache={phaseQuizCache} onRetryQuiz={(phaseId, phaseName) => generatePhaseQuiz(phaseId, phaseName)} />
                 ) : (
                   <div className="text-center py-8">
                     <p className="text-zinc-500">No phases available</p>
@@ -317,15 +317,15 @@ const Header = () => (
   </div>
 );
 
-const QuizList = ({ quizzes, onStartQuiz }: { quizzes: any[]; onStartQuiz: any }) => (
+const QuizList = ({ quizzes, onStartQuiz, phaseQuizCache, onRetryQuiz }: { quizzes: any[]; onStartQuiz: any; phaseQuizCache: Record<string, CachedPhaseQuiz>; onRetryQuiz: (phaseId: string, phaseName: string) => void }) => (
   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
     {quizzes.map(quiz => (
-      <QuizCard key={quiz.id} quiz={quiz} onStartQuiz={onStartQuiz} />
+      <QuizCard key={quiz.id} quiz={quiz} onStartQuiz={onStartQuiz} cacheEntry={phaseQuizCache[quiz.quizId]} onRetry={() => { onRetryQuiz(quiz.quizId, quiz.quizName); }} />
     ))}
   </div>
 );
 
-const QuizCard = ({ quiz, onStartQuiz }: { quiz: any; onStartQuiz: any }) => (
+const QuizCard = ({ quiz, onStartQuiz, cacheEntry, onRetry }: { quiz: any; onStartQuiz: any; cacheEntry?: CachedPhaseQuiz; onRetry: () => void }) => (
   <div className="p-5 rounded-2xl border border-white/10 bg-white/5 flex flex-col gap-4">
     <div className="flex-grow space-y-4">
       <div className="flex justify-between items-start">
@@ -350,9 +350,25 @@ const QuizCard = ({ quiz, onStartQuiz }: { quiz: any; onStartQuiz: any }) => (
         </div>
       </div>
     </div>
-    <button onClick={() => onStartQuiz(quiz.quizId)} className="w-full py-3 bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 font-bold text-sm rounded-xl flex items-center justify-center gap-2 text-white shadow-[0_4px_15px_rgba(128,90,213,0.2)]">
-      <Award size={18} /> {quiz.attemptsCount > 0 ? 'Re-attempt Quiz' : 'Start Assessment'}
-    </button>
+    {cacheEntry?.error ? (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-300">
+          <AlertCircle size={14} className="flex-shrink-0" />
+          <span>Quiz generation failed. Please retry.</span>
+        </div>
+        <button onClick={onRetry} className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 font-bold text-sm rounded-xl flex items-center justify-center gap-2 text-zinc-300 transition-colors">
+          <RefreshCw size={16} /> Retry Generation
+        </button>
+      </div>
+    ) : cacheEntry?.loading ? (
+      <button disabled className="w-full py-3 bg-gradient-to-r from-violet-600/50 to-blue-600/50 font-bold text-sm rounded-xl flex items-center justify-center gap-2 text-white/60 cursor-not-allowed">
+        <RefreshCw size={16} className="animate-spin" /> Generating Quiz…
+      </button>
+    ) : (
+      <button onClick={() => onStartQuiz(quiz.quizId)} className="w-full py-3 bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-500 hover:to-blue-500 font-bold text-sm rounded-xl flex items-center justify-center gap-2 text-white shadow-[0_4px_15px_rgba(128,90,213,0.2)]">
+        <Award size={18} /> {quiz.attemptsCount > 0 ? 'Re-attempt Quiz' : 'Start Assessment'}
+      </button>
+    )}
   </div>
 );
 
@@ -410,7 +426,18 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
 
   return (
     <div className="p-6 rounded-2xl border border-white/10 bg-white/5">
-      <div className="mb-6">
+      <div className="mb-4">
+        <div className="flex justify-between items-center mb-3">
+          {source === 'ai' ? (
+            <span className="text-xs font-bold text-purple-400 flex items-center gap-1.5">
+              <Brain size={12} /> Tailored to your roadmap
+            </span>
+          ) : (
+            <span className="text-xs font-bold text-zinc-500 flex items-center gap-1.5">
+              <BookOpen size={12} /> General practice quiz
+            </span>
+          )}
+        </div>
         <div className="flex justify-between items-center text-sm text-zinc-400 mb-2">
           <span>Question {currentIdx + 1} of {questions.length}</span>
           <span className="font-bold text-emerald-400">{correctCount} Correct</span>

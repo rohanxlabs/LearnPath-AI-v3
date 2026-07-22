@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { authLimiter, loginLimiter, isValidEmail, validatePassword, generateCsrfToken } from '../lib/middleware';
 import { loadUserDB, saveUserDB } from '../lib/db';
-import { getUserRoadmapsReconstructed } from '../db/schema';
+import { getUserRoadmapsReconstructed } from '../db/queries';
 import { sendVerificationEmail } from './email';
 
 const router = Router();
@@ -32,7 +32,9 @@ router.post('/register', authLimiter, async (req, res) => {
       const csrfToken = generateCsrfToken();
       res.cookie('csrf-token', csrfToken, { httpOnly: false, sameSite: 'strict', secure: process.env.NODE_ENV === 'production' });
       // Fire-and-forget — never delays or blocks registration response.
-      sendVerificationEmail(email.toLowerCase()).catch(() => {});
+      sendVerificationEmail(email.toLowerCase()).catch((err: any) => {
+        console.warn('[Auth] Verification email failed to send:', err?.message);
+      });
       return res.json({ success: true, email, name });
     });
   } catch (error) {

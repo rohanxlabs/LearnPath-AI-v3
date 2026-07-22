@@ -12,7 +12,8 @@
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "types": [
-      "vite/client"
+      "vite/client",
+      "@testing-library/jest-dom"
     ],
     "isolatedModules": true,
     "moduleDetection": "force",

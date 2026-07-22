@@ -5,7 +5,7 @@ import {
   findLessonContext,
   getQuizForLesson,
   upsertQuiz
-} from '../db/schema';
+} from '../db/queries';
 import { callOpenRouterChatCompletion, cleanAndParseJSON, sanitizeForPrompt, OPENROUTER_MODELS } from './ai';
 import { sql } from './db';
 

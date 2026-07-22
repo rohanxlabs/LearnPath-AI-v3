@@ -88,9 +88,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
           <button
             onClick={(e) => {
               e.stopPropagation();
-              if (window.confirm(`Delete "${roadmap.goal}"? This cannot be undone.`)) {
-                onDeleteRoadmap(roadmap.id);
-              }
+              onDeleteRoadmap(roadmap.id);
             }}
             className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-lg hover:bg-rose-500/10"
             aria-label="Delete roadmap"

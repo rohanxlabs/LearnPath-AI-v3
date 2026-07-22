@@ -343,7 +343,7 @@ export const userRoadmapState = pgTable(
   })
 );
 
-// Reference to the legacy `users` table for FK targets (kept minimal).
+// Users table — FK target for all child tables.
 export const users = pgTable('users', {
   email: text('email').primaryKey(),
   passwordHash: text('password_hash'),
@@ -351,6 +351,7 @@ export const users = pgTable('users', {
   progress: jsonb('progress'),
   xp: integer('xp').notNull().default(0),
   streak: integer('streak').notNull().default(0),
+  lastActiveDate: text('last_active_date'), // DATE stored as ISO string (YYYY-MM-DD)
   emailVerified: boolean('email_verified').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

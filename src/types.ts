@@ -56,6 +56,7 @@ export interface Lesson {
    codingExercise?: CodingExercise;
    prerequisites?: string[]; // Lesson IDs that must be completed first
    misconceptionNotes?: string[]; // Common wrong understanding for this topic
+   completedAt?: string; // ISO date string from user_lesson_progress.completed_at
 }
 
 export interface Level {

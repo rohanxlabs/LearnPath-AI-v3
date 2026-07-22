@@ -147,16 +147,29 @@ Use clean formatting without markdown symbols like ** or ##.`;
   }
 });
 
+// Detect the most likely programming language from exercise instructions.
+function detectLanguage(instructions: string): string {
+  const txt = (instructions || '').toLowerCase();
+  if (/\b(javascript|js|react|node\.?js|typescript|ts|vue|angular|next\.?js)\b/.test(txt)) return 'JavaScript';
+  if (/\b(sql|query|select|database|postgres|mysql|sqlite)\b/.test(txt)) return 'SQL';
+  if (/\b(java |\bjava\b|spring|maven|gradle|jvm)\b/.test(txt)) return 'Java';
+  if (/\b(c\+\+|cpp|c language)\b/.test(txt)) return 'C++';
+  if (/\b(rust|cargo)\b/.test(txt)) return 'Rust';
+  if (/\b(go |golang)\b/.test(txt)) return 'Go';
+  return 'Python'; // default — most common in the platform
+}
+
 // Analyze code
 router.post('/analyze-code', aiLimiter, requireAuth, async (req, res) => {
   const { code, instructions, solution } = req.body;
   if (!code) return res.status(400).json({ error: 'Code parameter is required' });
 
-  const prompt = `Analyze the user's Python code submitted for the following exercise:
-Instructions: "${sanitizeForPrompt(instructions || 'Implement a basic metrics calculator.', 500)}"
+  const language = detectLanguage(instructions || '');
+  const prompt = `Analyze the user's ${language} code submitted for the following exercise:
+Instructions: "${sanitizeForPrompt(instructions || 'Implement the requested function.', 500)}"
 Expected solution pattern: "${sanitizeForPrompt(solution || '', 500)}"
 User Code:
-\`\`\`python
+\`\`\`${language.toLowerCase()}
 ${sanitizeForPrompt(code, 2000)}
 \`\`\`
 

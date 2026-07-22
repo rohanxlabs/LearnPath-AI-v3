@@ -4,7 +4,7 @@ import { loadUserDB, saveUserDB, updateStreak, unlockAchievement, sql } from '..
 import {
   getUserLessonCompletionStats,
   getRoadmapProgressSnapshot
-} from '../db/schema';
+} from '../db/queries';
 import { logger } from '../lib/logger';
 
 // ---------------------------------------------------------------------------
@@ -199,7 +199,7 @@ router.post('/progress', requireAuth, async (req, res) => {
   if (!roadmapId || !lessonId) return res.status(400).json({ error: 'roadmapId and lessonId are required' });
 
   // dynamic import to avoid circular deps
-  const { findLessonContext, completeLessonForUser, getRoadmapState, upsertRoadmapState } = await import('../db/schema');
+  const { findLessonContext, completeLessonForUser, getRoadmapState, upsertRoadmapState } = await import('../db/queries');
   const { sql } = await import('../lib/db');
 
   try {

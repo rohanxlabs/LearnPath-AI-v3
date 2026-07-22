@@ -7,7 +7,7 @@ import {
   getLessonById,
   getResourcesForLessonContext,
   getProjectForPhase
-} from '../db/schema';
+} from '../db/queries';
 import {
   getOrGenerateLessonContent,
   assembleLessonResponse,
@@ -158,7 +158,7 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
 
       if (lessonCtx.status === 'completed') {
         const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-        const { getCurrentStreak, getRoadmapProgressPercent } = await import('../db/schema');
+        const { getCurrentStreak, getRoadmapProgressPercent } = await import('../db/queries');
         return { xp: dbData?.xp || 0, streak: await getCurrentStreak(userEmail), completionPercent: await getRoadmapProgressPercent(lessonCtx.roadmap_id), alreadyCompleted: true, message: 'Lesson already completed.' };
       }
 

@@ -3,7 +3,7 @@ import { withUserLock } from './middleware';
 import {
   getRoadmapsByOwner,
   migrateRoadmapJsonToTables
-} from '../db/schema';
+} from '../db/queries';
 
 export const sql = neon(process.env.DATABASE_URL!);
 
@@ -255,9 +255,17 @@ export async function updateStreak(userEmail: string): Promise<number> {
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    const twoDaysAgoStr = twoDaysAgo.toISOString().split('T')[0];
+
     if (lastActiveDate === yesterdayStr) {
+      // Consecutive day — increment streak.
       currentStreak += 1;
-    } else if (!lastActiveDate || lastActiveDate < yesterdayStr) {
+    } else if (lastActiveDate === twoDaysAgoStr) {
+      // One-day grace window — preserve streak, do not reset or increment.
+    } else if (!lastActiveDate || lastActiveDate < twoDaysAgoStr) {
+      // Missed more than one day — reset.
       currentStreak = 1;
     }
 

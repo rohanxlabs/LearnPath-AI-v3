@@ -17,6 +17,7 @@ type FilterStatus = 'all' | 'completed' | 'unread' | 'saved';
 export function ResourcesTab({ roadmap }: ResourcesTabProps) {
   const [resources, setResources] = useState<CuratedResource[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isUsingFallback, setIsUsingFallback] = useState(false);
   const [completedIds, setCompletedIds] = useState<string[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
 
@@ -35,6 +36,7 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
       } else {
         const recommendations = getRecommendationsForRoadmap(roadmap);
         combined = [...recommendations];
+        setIsUsingFallback(true);
       }
       
       setResources(combined);
@@ -107,6 +109,11 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
         filterStatus={filterStatus}
         setFilterStatus={setFilterStatus}
       />
+      {isUsingFallback && !loading && (
+        <p className="text-xs text-zinc-500 -mt-2">
+          Showing general resource suggestions — personalised AI curation was unavailable.
+        </p>
+      )}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(6)].map((_, i) => (

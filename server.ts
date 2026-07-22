@@ -18,7 +18,7 @@ import pg from 'pg';
 import fs from 'fs';
 
 import { logger } from './src/server/lib/logger';
-import { ensureRoadmapTables } from './src/server/db/schema';
+import { ensureRoadmapTables } from './src/server/db/queries';
 import { validateCsrf } from './src/server/lib/middleware';
 
 // ---------------------------------------------------------------------------

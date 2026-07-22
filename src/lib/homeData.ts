@@ -140,13 +140,15 @@ export function getModuleProgress(level: Level): number {
   return Math.round((completed / level.lessons.length) * 100);
 }
 
-// Ebbinghaus forgetting-curve proxy: deterministic spread across completed lessons.
+// Ebbinghaus forgetting-curve: a completed lesson is due for review after 7 days.
+// Falls back to the hash heuristic only when completedAt is unavailable (old data).
 function isDueForReview(lesson: Lesson): boolean {
-  // We don't have per-lesson completion timestamps in the front-end Lesson type,
-  // so we use a deterministic hash of the lesson id to spread reviews across the set
-  // of completed lessons — this gives a stable, spread-out review suggestion without
-  // needing a timestamp.  Any lesson whose hash mod 14 < 4 is considered "due".
   if (lesson.status !== 'completed') return false;
+  if (lesson.completedAt) {
+    const daysSince = (Date.now() - new Date(lesson.completedAt).getTime()) / (1000 * 60 * 60 * 24);
+    return daysSince >= 7;
+  }
+  // Legacy fallback for lessons without a timestamp: deterministic hash spread.
   let h = 0;
   for (let i = 0; i < lesson.id.length; i++) h = (h * 31 + lesson.id.charCodeAt(i)) >>> 0;
   return (h % 14) < 4;
