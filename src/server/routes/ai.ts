@@ -193,7 +193,7 @@ Concoct your response as a valid JSON object matching this structure:
 // AI Recommendations
 router.post('/ai-recommendations', aiLimiter, requireAuth, async (req, res) => {
   const { currentXp, level, streak, activeGoal } = req.body;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
 
   const cacheKey = `${userEmail}:${activeGoal || ''}`;
   const cached = recCache.get(cacheKey);
@@ -330,7 +330,7 @@ Level ${attemptNumber || 1} is requested. Keep hints educational, not giving awa
 // AI Progress Summary — used by AIInsightsTab for the narrative summary card
 router.post('/ai-summary', aiLimiter, requireAuth, async (req, res) => {
   const { roadmapGoal, progressPercent, completedLessons, totalLessons, activePhase, topSkills } = req.body;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
 
   const cacheKey = `aisummary:${userEmail}:${roadmapGoal || ''}:${progressPercent}`;
   const cached = recCache.get(cacheKey);

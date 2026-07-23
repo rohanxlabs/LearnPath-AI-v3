@@ -1,11 +1,28 @@
-import { neon } from '@neondatabase/serverless';
+import { Pool } from 'pg';
 import { withUserLock } from './middleware';
 import {
   getRoadmapsByOwner,
   migrateRoadmapJsonToTables
 } from '../db/queries';
 
-export const sql = neon(process.env.DATABASE_URL!);
+// Use the standard node-postgres driver — works with Supabase, Neon, and any
+// standard PostgreSQL host (unlike the neon() serverless HTTP driver which only
+// works with Neon's HTTP proxy endpoint).
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+});
+
+// Provide a tagged-template `sql` interface compatible with the existing call
+// sites (sql`SELECT ...` returns rows as an array).
+export async function sql(strings: TemplateStringsArray, ...values: any[]): Promise<any[]> {
+  const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''), '');
+  const { rows } = await pool.query(text, values);
+  return rows;
+}
 
 // ---------------------------------------------------------------------------
 // In-memory caches

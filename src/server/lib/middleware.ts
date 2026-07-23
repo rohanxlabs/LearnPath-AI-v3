@@ -1,7 +1,18 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomBytes } from 'node:crypto';
 import express from 'express';
 import { rateLimit } from 'express-rate-limit';
+import jwt from 'jsonwebtoken';
+
+// ---------------------------------------------------------------------------
+// Extend Express Request with Supabase user payload
+// ---------------------------------------------------------------------------
+declare global {
+  namespace Express {
+    interface Request {
+      supabaseUser?: { id: string; email: string };
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // HTTP error used to propagate status codes out of locked closures.
@@ -47,44 +58,125 @@ export async function withUserLock<T>(email: string, fn: () => Promise<T>): Prom
 }
 
 // ---------------------------------------------------------------------------
-// CSRF — double-submit cookie pattern
+// Auth middleware — verify Supabase JWT locally (no API round-trip)
 // ---------------------------------------------------------------------------
 
-/** Generate a fresh CSRF token (32 random bytes, hex-encoded). */
-export function generateCsrfToken(): string {
-  return randomBytes(32).toString('hex');
+/**
+ * In-memory JWKS cache so we fetch the public key at most once per process.
+ * Key: Supabase project URL.  Value: { keys, fetchedAt }.
+ */
+const jwksCache: Map<string, { keys: any[]; fetchedAt: number }> = new Map();
+const JWKS_TTL_MS = 60 * 60 * 1000; // re-fetch after 1 hour
+
+async function getJwksKeys(supabaseUrl: string): Promise<any[]> {
+  const cached = jwksCache.get(supabaseUrl);
+  if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) return cached.keys;
+  const res = await fetch(`${supabaseUrl}/auth/v1/.well-known/jwks.json`);
+  if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
+  const { keys } = await res.json() as { keys: any[] };
+  jwksCache.set(supabaseUrl, { keys, fetchedAt: Date.now() });
+  return keys;
+}
+
+// Synchronous JWK → PEM via Node crypto (available in Node 15+).
+function jwkToPemSync(jwk: any): string {
+  const { createPublicKey } = require('node:crypto');
+  const key = createPublicKey({ key: jwk, format: 'jwk' });
+  return key.export({ type: 'spki', format: 'pem' }) as string;
 }
 
 /**
- * Validate CSRF for all state-mutating methods (POST / PUT / DELETE / PATCH).
- * The client must echo the `csrf-token` cookie value back in the `x-csrf-token`
- * request header. Safe methods (GET / HEAD / OPTIONS) are always allowed.
+ * Verify the Supabase JWT sent by the client as `Authorization: Bearer <token>`.
  *
- * Skip validation when NODE_ENV === 'test' so existing test suites continue to
- * pass without changes.
+ * Handles both token types issued by Supabase:
+ *   • HS256  — older projects: verified with SUPABASE_JWT_SECRET (symmetric)
+ *   • ES256  — newer projects: verified with the project's JWKS public key
+ *
+ * The algorithm is read from the token header so the right path is chosen
+ * automatically — no configuration change needed.
  */
-export function validateCsrf(req: express.Request, res: express.Response, next: express.NextFunction): void {
-  const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-  if (process.env.NODE_ENV === 'test' || SAFE_METHODS.has(req.method)) {
-    return next();
-  }
-  const cookieToken = (req as any).cookies?.['csrf-token'] as string | undefined;
-  const headerToken = req.headers['x-csrf-token'] as string | undefined;
-  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
-    res.status(403).json({ error: 'Invalid CSRF token' });
+export function requireAuth(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+): void {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!token) {
+    res.status(401).json({ error: 'Unauthorized' });
     return;
   }
-  next();
-}
 
-// ---------------------------------------------------------------------------
-// Auth middleware
-// ---------------------------------------------------------------------------
-export function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (!req.session.userEmail) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  // Decode header to determine the signing algorithm without verifying yet.
+  const decoded = jwt.decode(token, { complete: true });
+  if (!decoded || typeof decoded === 'string') {
+    res.status(401).json({ error: 'Invalid token' });
+    return;
   }
-  next();
+  const alg = (decoded.header?.alg as string | undefined) ?? 'HS256';
+
+  if (alg === 'HS256') {
+    // ─── Symmetric path (older Supabase projects) ──────────────────────────
+    const secret = process.env.SUPABASE_JWT_SECRET;
+    if (!secret) {
+      res.status(500).json({ error: 'Server misconfiguration: SUPABASE_JWT_SECRET is not set' });
+      return;
+    }
+    try {
+      const payload = jwt.verify(token, secret) as jwt.JwtPayload;
+      const email = payload.email as string | undefined;
+      const sub = payload.sub as string | undefined;
+      if (!email || !sub) {
+        res.status(401).json({ error: 'Invalid token: missing claims' });
+        return;
+      }
+      req.supabaseUser = { id: sub, email };
+      next();
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  } else {
+    // ─── Asymmetric path (newer Supabase projects — ES256 / RS256) ─────────
+    const supabaseUrl = process.env.SUPABASE_URL;
+    if (!supabaseUrl) {
+      res.status(500).json({ error: 'Server misconfiguration: SUPABASE_URL is not set' });
+      return;
+    }
+    getJwksKeys(supabaseUrl)
+      .then((keys) => {
+        // Match by kid if present, otherwise try all keys.
+        const kid = decoded.header?.kid as string | undefined;
+        const candidates = kid ? keys.filter((k) => k.kid === kid) : keys;
+        if (candidates.length === 0) {
+          res.status(401).json({ error: 'Invalid token: no matching JWKS key' });
+          return;
+        }
+        let lastErr: Error | null = null;
+        for (const jwk of candidates) {
+          try {
+            const pem = jwkToPemSync(jwk);
+            const payload = jwt.verify(token, pem, { algorithms: [alg as any] }) as jwt.JwtPayload;
+            const email = payload.email as string | undefined;
+            const sub = payload.sub as string | undefined;
+            if (!email || !sub) {
+              res.status(401).json({ error: 'Invalid token: missing claims' });
+              return;
+            }
+            req.supabaseUser = { id: sub, email };
+            next();
+            return;
+          } catch (e: any) {
+            lastErr = e;
+          }
+        }
+        // All candidate keys failed — token is invalid.
+        res.status(401).json({ error: 'Invalid or expired token' });
+      })
+      .catch(() => {
+        res.status(401).json({ error: 'Unable to verify token: JWKS unavailable' });
+      });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -106,12 +198,16 @@ export function validatePassword(password: string): string | null {
 // ---------------------------------------------------------------------------
 // Rate-limit factory
 // ---------------------------------------------------------------------------
-export let RATE_LIMIT_STORE: any | undefined;
 
+/**
+ * Create an express-rate-limit instance.
+ * Pass a `store` to use a shared (e.g. Redis) store; omit for in-memory.
+ */
 export function createLimiter(opts: {
   windowMs: number;
   max: number;
   message: { error: string };
+  store?: any;
 }): ReturnType<typeof rateLimit> {
   return rateLimit({
     windowMs: opts.windowMs,
@@ -119,26 +215,15 @@ export function createLimiter(opts: {
     standardHeaders: true,
     legacyHeaders: false,
     message: opts.message,
-    ...(RATE_LIMIT_STORE ? { store: RATE_LIMIT_STORE } : {})
+    ...(opts.store ? { store: opts.store } : {})
   });
 }
 
+// AI and lesson limiters are per-process / per-IP and don't need Redis upgrade.
 export const aiLimiter = createLimiter({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: 'Too many requests, please slow down.' }
-});
-
-export const authLimiter = createLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'test' ? 1000 : 10,
-  message: { error: 'Too many authentication attempts. Please try again later.' }
-});
-
-export const loginLimiter = createLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'test' ? 1000 : 5,
-  message: { error: 'Too many authentication attempts. Please try again later.' }
 });
 
 // 30 lesson completions per minute per IP — prevents XP farming via rapid-fire requests.
@@ -147,3 +232,59 @@ export const lessonLimiter = createLimiter({
   max: process.env.NODE_ENV === 'test' ? 1000 : 30,
   message: { error: 'Too many lesson completions. Please slow down.' }
 });
+
+/**
+ * Factory for the auth limiter (register / password-reset).
+ * Pass a Redis store to share counters across instances; omit for in-memory.
+ */
+export function createAuthLimiter(store?: any): ReturnType<typeof rateLimit> {
+  return createLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 1000 : 10,
+    message: { error: 'Too many authentication attempts. Please try again later.' },
+    store,
+  });
+}
+
+/**
+ * Factory for the login limiter (stricter — 5 attempts per 15 min).
+ * Pass a Redis store to share counters across instances; omit for in-memory.
+ */
+export function createLoginLimiter(store?: any): ReturnType<typeof rateLimit> {
+  return createLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 1000 : 5,
+    message: { error: 'Too many authentication attempts. Please try again later.' },
+    store,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Auth limiters — eagerly created at module load with in-memory store.
+// server.ts bootstrap() calls setAuthLimiters(redisStore) before app.listen
+// to upgrade them to a Redis-backed shared store when REDIS_URL is set.
+// ---------------------------------------------------------------------------
+
+// Mutable references — replaced atomically by setAuthLimiters before any
+// request arrives, so the wrapper never creates a limiter mid-request.
+let _authLimiterInstance: ReturnType<typeof rateLimit> = createAuthLimiter();
+let _loginLimiterInstance: ReturnType<typeof rateLimit> = createLoginLimiter();
+
+/**
+ * Replace the active auth/login limiter instances with Redis-backed ones.
+ * Must be called before app.listen() — i.e. during bootstrap, not per-request.
+ */
+export function setAuthLimiters(store: any): void {
+  _authLimiterInstance = createAuthLimiter(store);
+  _loginLimiterInstance = createLoginLimiter(store);
+}
+
+/**
+ * Wrapper middleware that delegates to the current active instance.
+ * The instance is always pre-created (never inside a request handler).
+ */
+export const authLimiter: express.RequestHandler = (req, res, next) =>
+  _authLimiterInstance(req, res, next);
+
+export const loginLimiter: express.RequestHandler = (req, res, next) =>
+  _loginLimiterInstance(req, res, next);

@@ -19,6 +19,11 @@ export default defineConfig({
       SESSION_SECRET: 'test-session-secret',
       DATABASE_URL: 'postgres://test:test@localhost:5432/test',
       APP_URL: 'http://localhost:3000',
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_ANON_KEY: 'test-anon-key',
+      SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
+      SUPABASE_JWT_SECRET: 'test-jwt-secret-at-least-32-chars-long!!',
+      GROQ_API_KEY: 'test-groq-key',
     },
     // Override environment per file pattern.
     // Vitest >=1.0 supports this via the `browser` field or inline docblock.

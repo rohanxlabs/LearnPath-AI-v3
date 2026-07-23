@@ -41,7 +41,7 @@ const router = Router();
 
 // Get user stats
 router.get('/user-stats', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     if (!dbData) return res.json({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0, daysSinceLastVisit: null });
@@ -73,7 +73,7 @@ router.get('/user-stats', requireAuth, async (req, res) => {
 
 // Get user resource states
 router.get('/user-resource-states', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     const states = dbData?.progress?.resource_states || { completedIds: [], savedIds: [] };
@@ -85,7 +85,7 @@ router.get('/user-resource-states', requireAuth, async (req, res) => {
 });
 
 router.post('/user-resource-states', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   const { completedIds, savedIds } = req.body;
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: true });
@@ -101,7 +101,7 @@ router.post('/user-resource-states', requireAuth, async (req, res) => {
 
 // Get user profile
 router.get('/user-profile', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     const progress = dbData?.progress || {};
@@ -113,7 +113,7 @@ router.get('/user-profile', requireAuth, async (req, res) => {
 });
 
 router.put('/user-profile', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   const { profile, settings, achievements, notifications, chats } = req.body;
 
   const PROFILE_BLOCKLIST = ['xp', 'level', 'streak', 'isPro', 'email', 'createdAt', 'id', 'tier'];
@@ -151,7 +151,7 @@ router.put('/user-profile', requireAuth, async (req, res) => {
 
 // Topic-wise quizzes
 router.get('/topic-wise-quizzes', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     return res.json(dbData?.topic_wise_quizzes || []);
@@ -162,7 +162,7 @@ router.get('/topic-wise-quizzes', requireAuth, async (req, res) => {
 });
 
 router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   const attempt = req.body;
   if (!attempt || !attempt.quizId) return res.status(400).json({ error: 'quizId is required' });
 
@@ -195,7 +195,7 @@ router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
 // Progress tracking
 router.post('/progress', requireAuth, async (req, res) => {
   const { roadmapId, lessonId, action } = req.body;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   if (!roadmapId || !lessonId) return res.status(400).json({ error: 'roadmapId and lessonId are required' });
 
   // dynamic import to avoid circular deps
@@ -234,7 +234,7 @@ router.post('/feedback', async (req, res) => {
     return res.status(400).json({ error: 'Valid sentiment is required' });
   }
   try {
-    const userEmail = req.session.userEmail || 'anonymous';
+    const userEmail = req.supabaseUser?.email || 'anonymous';
     await ensureFeedbackTable();
     await sql`
       INSERT INTO feedback (user_email, sentiment, message, context)
@@ -248,7 +248,7 @@ router.post('/feedback', async (req, res) => {
 
 router.get('/progress/:roadmapId', requireAuth, async (req, res) => {
   const { roadmapId } = req.params;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const progress = await getRoadmapProgressSnapshot(userEmail, roadmapId);
     return res.json({ progress });
@@ -260,7 +260,7 @@ router.get('/progress/:roadmapId', requireAuth, async (req, res) => {
 
 // Real user analytics from DB — replaces synthetic data in userDataService.ts
 router.get('/user-analytics', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     // Last 7 days of study hours per day from user_lesson_progress
     const today = new Date();

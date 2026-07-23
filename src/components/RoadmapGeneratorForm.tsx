@@ -87,7 +87,6 @@ export function RoadmapGeneratorForm({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-CSRF-Token': (document.cookie.match(/csrf-token=([^;]+)/) || [])[1] || '',
           },
           body: JSON.stringify(params),
           signal: controller.signal,

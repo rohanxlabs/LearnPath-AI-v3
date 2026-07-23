@@ -1,37 +1,31 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
-import bcrypt from 'bcryptjs';
 import { app } from '../../../server.ts';
-import { resetMockDb, mockSql } from './mockDb';
+import { resetMockDb } from './mockDb';
 
 const email = 'progress@test.com';
+const password = 'Password1';
 
-async function seedUser() {
-  const hash = await bcrypt.hash('Password1', 10);
-  await mockSql`
-    INSERT INTO users (email, password_hash, roadmap, progress, xp, updated_at)
-    VALUES (${email}, ${hash}, ${{ roadmaps: [] }}, ${{ profile: { name: 'T', xp: 100 }, achievements: [], resource_states: { completedIds: [], savedIds: [] } }}, 100, NOW())
-    ON CONFLICT (email) DO UPDATE SET roadmap = EXCLUDED.roadmap
-  `;
+async function setupUser() {
+  await request(app).post('/api/register').send({ email, password, name: 'Progress User' });
 }
 
-async function loginCookie() {
-  const res = await request(app).post('/api/login').send({ email, password: 'Password1' });
-  const raw = res.headers['set-cookie'];
-  return Array.isArray(raw) ? raw.map((c: string) => c.split(';')[0]).join('; ') : '';
+async function loginToken(): Promise<string> {
+  const res = await request(app).post('/api/login').send({ email, password });
+  return res.body?.access_token ?? '';
 }
 
 describe('progress endpoint', () => {
   beforeEach(async () => {
     resetMockDb();
-    await seedUser();
+    await setupUser();
   });
 
   it('GET /api/user-stats — returns xp and streak for authenticated user', async () => {
-    const cookie = await loginCookie();
+    const token = await loginToken();
     const res = await request(app)
       .get('/api/user-stats')
-      .set('Cookie', cookie);
+      .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('xp');
     expect(res.body).toHaveProperty('streak');

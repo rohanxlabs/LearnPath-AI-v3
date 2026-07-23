@@ -123,7 +123,7 @@ function AppShell() {
     try {
       const activeGoal = roadmaps.find(r => r.id === activeRoadmapId)?.goal || '';
       const response = await fetch('/api/ai-recommendations', {
-        method: 'POST', headers: mutatingHeaders(),
+        method: 'POST', headers: await mutatingHeaders(),
         body: JSON.stringify({ currentXp: profile.xp, level: profile.level, streak: profile.streak, activeGoal, userEmail: getStoredUserEmail() }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -208,7 +208,7 @@ function AppShell() {
     }
 
     if (targetRoadmapId) {
-      fetch('/api/complete-lesson', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ lessonId: targetLessonId, roadmapId: targetRoadmapId }) })
+      mutatingHeaders().then(h => fetch('/api/complete-lesson', { method: 'POST', headers: h, body: JSON.stringify({ lessonId: targetLessonId, roadmapId: targetRoadmapId }) }))
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (!data) return;
@@ -259,7 +259,7 @@ function AppShell() {
     let aiMsg = { id: aiMsgId, sender: 'assistant' as const, text: '', timestamp: new Date().toISOString() };
     setChats(prev => [...prev, aiMsg]);
     try {
-      const response = await fetch('/api/mentor-chat', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ message: text, history: chats.slice(-6), userEmail: getStoredUserEmail() }) });
+      const response = await fetch('/api/mentor-chat', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify({ message: text, history: chats.slice(-6), userEmail: getStoredUserEmail() }) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -290,7 +290,7 @@ function AppShell() {
   const handleStripeCheckout = useCallback(async () => {
     setStripeCheckoutStatus('Processing…');
     try {
-      const res = await fetch('/api/checkout', { method: 'POST', headers: mutatingHeaders() });
+      const res = await fetch('/api/checkout', { method: 'POST', headers: await mutatingHeaders() });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         setProfile(p => ({ ...p, isPro: true }));

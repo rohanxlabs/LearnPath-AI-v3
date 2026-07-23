@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 import express from 'express';
-import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -13,18 +12,17 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { createServer as createViteServer } from 'vite';
 import pinoHttp from 'pino-http';
 import * as Sentry from '@sentry/node';
-import connectPgSimple from 'connect-pg-simple';
-import pg from 'pg';
 import fs from 'fs';
 
 import { logger } from './src/server/lib/logger';
 import { ensureRoadmapTables } from './src/server/db/queries';
-import { validateCsrf } from './src/server/lib/middleware';
 
 // ---------------------------------------------------------------------------
 // Startup env-var validation — fail fast with a clear message.
 // ---------------------------------------------------------------------------
-const requiredEnvVars = ['DATABASE_URL', 'SESSION_SECRET', 'GROQ_API_KEY'];
+// SUPABASE_JWT_SECRET is only required for HS256 projects (older Supabase).
+// ES256 projects (newer Supabase) use JWKS — SUPABASE_URL is sufficient.
+const requiredEnvVars = ['DATABASE_URL', 'GROQ_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY'];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingEnvVars.length > 0) {
   logger.fatal({ missing: missingEnvVars }, 'Missing required environment variables — server cannot start');
@@ -49,30 +47,6 @@ app.set('trust proxy', 1);
 const PORT = Number(process.env.PORT) || 3000;
 
 // ---------------------------------------------------------------------------
-// Session store (PostgreSQL-backed via connect-pg-simple)
-// ---------------------------------------------------------------------------
-const PgStore = connectPgSimple(session);
-let sessionStore: any;
-// Skip the Postgres session store in test — pg.Pool would try to connect to
-// a real database and crash session.regenerate() with ECONNREFUSED.
-if (process.env.NODE_ENV !== 'test') {
-  try {
-    const pgPool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-    sessionStore = new PgStore({ pool: pgPool, createTableIfMissing: true });
-    logger.info('[Session] Using PostgreSQL-backed persistent session store');
-  } catch (err) {
-    logger.warn({ err }, '[Session] Falling back to in-memory store');
-    sessionStore = undefined;
-  }
-}
-
-declare module 'express-session' {
-  interface SessionData {
-    userEmail?: string;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Security & request middleware (ordered carefully — helmet first)
 // ---------------------------------------------------------------------------
 app.use(helmet({
@@ -82,7 +56,14 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],  // Vite HMR + React needs eval in dev
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", 'https://api.groq.com', 'https://*.sentry.io'],
+      connectSrc: [
+        "'self'",
+        'https://api.groq.com',
+        'https://*.sentry.io',
+        // Supabase — auth, realtime, storage (the subdomain matches the project ref)
+        'https://*.supabase.co',
+        'wss://*.supabase.co',
+      ],
       fontSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -98,6 +79,8 @@ const allowedOrigins = process.env.FRONTEND_URL
     ? []
     : ['http://localhost:5173', 'http://localhost:3000'];
 
+// Every mutation requires Authorization: Bearer <token>, which cross-site forms
+// cannot set — CSRF at the cookie level is therefore unnecessary.
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
@@ -117,19 +100,6 @@ app.use(pinoHttp({
 app.use(express.json({ limit: '4mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
-app.use(session({
-  store: sessionStore,
-  name: 'learnpath.sid',
-  secret: process.env.SESSION_SECRET!,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: isProduction,
-    maxAge: 7 * 24 * 60 * 60 * 1000
-  }
-}));
 
 // ---------------------------------------------------------------------------
 // Route modules
@@ -141,10 +111,6 @@ import aiRouter from './src/server/routes/ai';
 import userRouter from './src/server/routes/user';
 import emailRouter from './src/server/routes/email';
 
-// CSRF validation applied once here before all routes.
-// The validateCsrf middleware skips GET/HEAD/OPTIONS and test environments.
-app.use('/api', validateCsrf);
-
 app.use('/api', authRouter);
 app.use('/api', roadmapsRouter);
 app.use('/api', lessonsRouter);
@@ -153,27 +119,29 @@ app.use('/api', userRouter);
 app.use('/api', emailRouter);
 
 // ---------------------------------------------------------------------------
-// Redis-backed rate-limit store (Upstash) — item 10.
-// When REDIS_URL is present the in-memory limiters are upgraded to a shared
+// Redis-backed rate-limit store (Upstash).
+// When REDIS_URL is present the auth/login limiters are upgraded to a shared
 // store so horizontal scaling (multiple instances) shares the same counters.
 // Falls back silently to in-memory when not configured.
+//
+// bootstrap() awaits this before calling app.listen so the Redis-backed
+// instances are in place before any request arrives.
 // ---------------------------------------------------------------------------
-async function upgradeRateLimitStore() {
+async function buildAuthLimiters() {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) return;
   try {
     const { default: RedisStore } = await import('./src/server/lib/redisStore');
     const store = await RedisStore.create(redisUrl);
-    const { RATE_LIMIT_STORE: limiterRef } = await import('./src/server/lib/middleware');
-    // Mutate the exported reference so all limiters already created pick it up
-    // on next request (express-rate-limit reads opts.store per request).
-    (await import('./src/server/lib/middleware')).RATE_LIMIT_STORE = store;
+    // setAuthLimiters replaces the lazy-wrapper instances in middleware.ts so
+    // the first request to /api/register, /api/login, etc. uses the Redis store.
+    const { setAuthLimiters } = await import('./src/server/lib/middleware');
+    setAuthLimiters(store);
     logger.info('[RateLimit] Upgraded to Redis-backed store (Upstash)');
   } catch (err: any) {
     logger.warn({ err: err?.message }, '[RateLimit] Redis store init failed, staying in-memory');
   }
 }
-upgradeRateLimitStore();
 
 // Ensure sw.js is served with no-cache headers so clients detect updates instantly.
 app.get('/sw.js', (req, res, next) => {
@@ -234,6 +202,9 @@ async function bootstrap() {
   ensureRoadmapTables().catch((err: any) =>
     logger.error({ err: err?.message || err }, '[Database] Failed to ensure normalized roadmap tables')
   );
+
+  // Provision Redis-backed limiters before the server starts accepting connections.
+  await buildAuthLimiters();
 
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

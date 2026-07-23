@@ -1,11 +1,12 @@
 // AuthContext — authentication state, session bootstrap, login/logout/password-reset.
-// Extracted from App.tsx to isolate all auth concerns in one place.
+// Now backed by Supabase Authentication (JWT-based, no server-side sessions).
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { UserProfile, UserSettings, Achievement, SystemNotification, ChatMessage } from '../types';
+import { supabase } from '../lib/supabaseClient';
 
 // ---------------------------------------------------------------------------
-// Helpers (previously inlined in App.tsx)
+// Helpers
 // ---------------------------------------------------------------------------
 
 const DEFAULT_AVATAR =
@@ -99,8 +100,8 @@ interface AuthContextValue {
   handleForgotPassword: (e: React.FormEvent) => Promise<void>;
   handleResetPassword: (e: React.FormEvent) => Promise<void>;
   handleLogout: () => Promise<void>;
-  mutatingHeaders: () => Record<string, string>;
-  getCsrfToken: () => string;
+  /** Returns headers with Bearer token for all mutating API calls. */
+  mutatingHeaders: () => Promise<Record<string, string>>;
   getStoredUserEmail: () => string;
 }
 
@@ -172,90 +173,166 @@ export function AuthProvider({
   const [resetPassword, setResetPassword] = useState('');
   const [resetStatus, setResetStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
-  const getCsrfToken = useCallback((): string => {
-    const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrf-token='));
-    return match ? decodeURIComponent(match.split('=')[1]) : '';
+  // ---------------------------------------------------------------------------
+  // Token helpers
+  // ---------------------------------------------------------------------------
+
+  /** Get the current Supabase access token (refreshes automatically if needed). */
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    const { data } = await supabase.auth.getSession();
+    return data.session?.access_token ?? null;
   }, []);
 
-  const mutatingHeaders = useCallback((): Record<string, string> => ({
-    'Content-Type': 'application/json',
-    'x-csrf-token': getCsrfToken(),
-  }), [getCsrfToken]);
+  /** Returns headers with Bearer token for all mutating API calls. */
+  const mutatingHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    const token = await getAccessToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }, [getAccessToken]);
 
   const getStoredUserEmail = useCallback(() => profile.email, [profile.email]);
 
-  // Bootstrap session on mount
+  // ---------------------------------------------------------------------------
+  // Bootstrap — load profile from server once a session is confirmed
+  // ---------------------------------------------------------------------------
+  const bootstrapUser = useCallback(async (accessToken: string, email: string) => {
+    try {
+      const response = await fetch('/api/bootstrap', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) throw new Error('Bootstrap failed');
+      const data = await response.json();
+      const name =
+        data.profile?.name ||
+        email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+      const resolvedProfile = { ...createEmptyProfile(email, name), name, avatar: DEFAULT_AVATAR };
+      const isNewUser = !data.profile || Object.keys(data.profile).length === 0;
+      const merged = isNewUser ? resolvedProfile : { ...resolvedProfile, ...data.profile };
+      setProfile(merged);
+      setSettings(
+        data.settings && Object.keys(data.settings).length > 0
+          ? { ...DEFAULT_SETTINGS, ...data.settings }
+          : DEFAULT_SETTINGS
+      );
+      setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
+      setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
+      setChats(Array.isArray(data.chats) ? data.chats : []);
+      setActivityLog(data.activityLog && typeof data.activityLog === 'object' ? data.activityLog : {});
+      identify(email, { name: merged.name });
+      setIsAuthenticated(true);
+      // Close auth modal and clear form fields now that the profile is ready.
+      // Doing this here (not in handleAuthenticate) ensures the app never shows
+      // the landing page during the async fetch gap.
+      setShowAuthModal(false);
+      setAuthEmail('');
+      setAuthPassword('');
+      setAuthName('');
+      onAuthenticated({
+        email,
+        profile: merged,
+        settings: data.settings,
+        achievements: data.achievements || [],
+        notifications: data.notifications || [],
+        chats: data.chats || [],
+        activityLog: data.activityLog || {},
+        roadmaps: data.roadmaps || [],
+      });
+      // Show onboarding for brand-new accounts (no prior profile data).
+      if (isNewUser) {
+        setShowOnboarding(true);
+        onShowOnboarding();
+      }
+    } catch {
+      setIsAuthenticated(false);
+    }
+  }, [identify, onAuthenticated, onShowOnboarding, setShowAuthModal, setAuthEmail, setAuthPassword, setAuthName]);
+
+  // ---------------------------------------------------------------------------
+  // Listen to Supabase auth state changes
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    const verifySession = async () => {
-      try {
-        const response = await fetch('/api/bootstrap');
-        if (!response.ok) throw new Error('Session invalid');
-        const data = await response.json();
-        if (data.authenticated && data.email) {
-          const email = data.email;
-          const name = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-          const resolvedProfile = { ...createEmptyProfile(email, name), name, avatar: DEFAULT_AVATAR };
-          const merged = data.profile && Object.keys(data.profile).length > 0 ? { ...resolvedProfile, ...data.profile } : resolvedProfile;
-          setProfile(merged);
-          setSettings(data.settings && Object.keys(data.settings).length > 0 ? { ...DEFAULT_SETTINGS, ...data.settings } : DEFAULT_SETTINGS);
-          setAchievements(Array.isArray(data.achievements) ? data.achievements : []);
-          setNotifications(Array.isArray(data.notifications) ? data.notifications : []);
-          setChats(Array.isArray(data.chats) ? data.chats : []);
-          setActivityLog(data.activityLog && typeof data.activityLog === 'object' ? data.activityLog : {});
-          identify(data.email, { name: data.profile?.name || '' });
-          setIsAuthenticated(true);
-          onAuthenticated({
-            email,
-            profile: merged,
-            settings: data.settings,
-            achievements: data.achievements || [],
-            notifications: data.notifications || [],
-            chats: data.chats || [],
-            activityLog: data.activityLog || {},
-            roadmaps: data.roadmaps || [],
-          });
-        } else {
-          setIsAuthenticated(false);
-        }
-      } catch {
+    // Get the initial session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email && session.access_token) {
+        bootstrapUser(session.access_token, session.user.email).finally(() =>
+          setIsLoadingAuth(false)
+        );
+      } else {
         setIsAuthenticated(false);
-      } finally {
         setIsLoadingAuth(false);
       }
-    };
-    verifySession();
+    });
+
+    // Subscribe to future auth state changes (login / signup / token refresh).
+    // isLoadingAuth is set to true immediately so the app shows a loading screen
+    // instead of flashing the landing page while bootstrapUser fetches the profile.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setResetToken('recovery');
+        setShowAuthModal(true);
+        return;
+      }
+      if (session?.user?.email && session.access_token) {
+        // Show loading immediately so the unauthenticated branch never renders
+        // during the async bootstrapUser fetch.
+        setIsLoadingAuth(true);
+        bootstrapUser(session.access_token, session.user.email).finally(() =>
+          setIsLoadingAuth(false)
+        );
+      } else if (!session) {
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist profile changes (debounced)
+  // Persist profile/settings/achievements/notifications (debounced, 1 s).
+  // Chats are excluded — they are returned from /api/bootstrap and persisted
+  // via a separate effect below with a longer debounce to avoid flushing the
+  // full conversation history on every notification change.
   useEffect(() => {
     if (!isAuthenticated || !profile.email) return;
     const timer = setTimeout(async () => {
       try {
+        const headers = await mutatingHeaders();
         await fetch('/api/user-profile', {
           method: 'PUT',
-          headers: mutatingHeaders(),
-          body: JSON.stringify({ profile, settings, achievements, notifications, chats }),
+          headers,
+          body: JSON.stringify({ profile, settings, achievements, notifications }),
         });
       } catch (err) {
         console.warn('Failed to save user profile:', err);
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [profile, settings, achievements, notifications, chats, isAuthenticated]);
+  }, [profile, settings, achievements, notifications, isAuthenticated]);
 
-  // URL param handlers (reset_token, verified)
+  // Persist chat history separately (debounced, 5 s) so that frequent AI
+  // mentor messages don't trigger a full profile flush.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('reset_token');
-    if (token) {
-      setResetToken(token);
-      setShowAuthModal(true);
-      params.delete('reset_token');
-    }
-    const remaining = params.toString();
-    window.history.replaceState({}, '', window.location.pathname + (remaining ? '?' + remaining : ''));
-  }, []);
+    if (!isAuthenticated || !profile.email) return;
+    const timer = setTimeout(async () => {
+      try {
+        const headers = await mutatingHeaders();
+        await fetch('/api/user-profile', {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ chats }),
+        });
+      } catch (err) {
+        console.warn('Failed to save chat history:', err);
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [chats, isAuthenticated]);
+
+  // ---------------------------------------------------------------------------
+  // Auth handlers
+  // ---------------------------------------------------------------------------
 
   const handleAuthenticate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -269,29 +346,56 @@ export function AuthProvider({
     }
     setIsAuthenticating(true);
     try {
-      const response = await fetch(mode === 'login' ? '/api/login' : '/api/register', {
-        method: 'POST',
-        headers: mutatingHeaders(),
-        body: JSON.stringify(mode === 'signup' ? { email, password, name: authName.trim() } : { email, password }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) { setAuthError(data.error || 'Authentication failed.'); return; }
-      const name = data.name || (data.email || email).split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
-      const newProfile = { ...createEmptyProfile(data.email || email, name), name, avatar: DEFAULT_AVATAR };
-      setProfile(newProfile);
-      setSettings(DEFAULT_SETTINGS);
-      setAchievements([]);
-      setNotifications([]);
-      setChats([]);
-      identify(data.email || email, { name });
-      track(mode === 'signup' ? 'user_signed_up' : 'user_logged_in');
-      setIsAuthenticated(true);
-      onAuthenticated({ email, profile: newProfile, settings: DEFAULT_SETTINGS, achievements: [], notifications: [], chats: [], activityLog: {}, roadmaps: [] });
       if (mode === 'signup') {
-        setShowOnboarding(true);
-        onShowOnboarding();
+        // Register via our server endpoint (creates Supabase user + seeds DB row)
+        const response = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name: authName.trim() }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) { setAuthError(data.error || 'Registration failed.'); return; }
+
+        // Sign in via our server route (not direct Supabase SDK) so the
+        // auto-confirm logic runs server-side before sign-in is attempted.
+        const loginRes = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        if (!loginRes.ok) {
+          const loginData = await loginRes.json().catch(() => ({}));
+          setAuthError(loginData.error || 'Account created — please sign in.');
+          setAuthMode('login');
+          return;
+        }
+        // The server validated credentials and returned a session token.
+        // Now sign in on the client side using Supabase SDK so onAuthStateChange fires.
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) {
+          setAuthError(signInError.message || 'Account created — please sign in.');
+          setAuthMode('login');
+          return;
+        }
+
+        // Analytics only — state is set by bootstrapUser via onAuthStateChange.
+        identify(email, { name: authName.trim() });
+        track('user_signed_up');
+      } else {
+        // Login — call Supabase directly from the client for best UX
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error || !data.session) {
+          setAuthError(error?.message || 'Invalid credentials.');
+          return;
+        }
+        // onAuthStateChange will fire and call bootstrapUser automatically
+        identify(email, {});
+        track('user_logged_in');
       }
-      if (showAuthModal) { setShowAuthModal(false); setAuthEmail(''); setAuthPassword(''); setAuthName(''); }
+
+      // Modal close + form clear is handled in bootstrapUser once the profile
+      // is loaded — avoids the landing-page flash during the async fetch gap.
+      // Only handle the post-login redirect here.
       if (redirectAfterLogin) {
         onRedirectAfterLogin(redirectAfterLogin.replace('/', '') || 'home');
         setRedirectAfterLogin(null);
@@ -309,19 +413,23 @@ export function AuthProvider({
     if (!forgotEmail.trim()) return;
     setForgotStatus('sending');
     try {
-      await fetch('/api/password-reset/request', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ email: forgotEmail.trim().toLowerCase() }) });
-      setForgotStatus('sent');
+      // Use Supabase client directly — sends the magic-link email
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        forgotEmail.trim().toLowerCase(),
+        { redirectTo: `${window.location.origin}/reset-password` }
+      );
+      setForgotStatus(error ? 'error' : 'sent');
     } catch { setForgotStatus('error'); }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetPassword || !resetToken) return;
+    if (!resetPassword) return;
     setResetStatus('submitting');
     try {
-      const res = await fetch('/api/password-reset/confirm', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ token: resetToken, password: resetPassword }) });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) { setAuthError(data.error || 'Reset failed. The link may have expired.'); setResetStatus('error'); return; }
+      // Update password using the active Supabase session from the reset link
+      const { error } = await supabase.auth.updateUser({ password: resetPassword });
+      if (error) { setAuthError(error.message || 'Reset failed.'); setResetStatus('error'); return; }
       setResetStatus('success');
       setResetToken(null);
       setResetPassword('');
@@ -329,7 +437,7 @@ export function AuthProvider({
   };
 
   const handleLogout = async () => {
-    try { await fetch('/api/logout', { method: 'POST' }); } catch { /* continue */ }
+    try { await supabase.auth.signOut(); } catch { /* continue */ }
     setIsAuthenticated(false);
     setAuthEmail(''); setAuthPassword(''); setAuthName('');
     setAuthMode('login'); setAuthError(''); setIsAuthenticating(false);
@@ -354,7 +462,7 @@ export function AuthProvider({
     resetToken, setResetToken, resetPassword, setResetPassword,
     resetStatus, setResetStatus,
     handleAuthenticate, handleForgotPassword, handleResetPassword, handleLogout,
-    mutatingHeaders, getCsrfToken, getStoredUserEmail,
+    mutatingHeaders, getStoredUserEmail,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -27,7 +27,7 @@ const router = Router();
 // Lesson content (lazy generate on first access)
 router.get('/lessons/:lessonId/content', requireAuth, async (req, res) => {
   const { lessonId } = req.params;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const result = await getOrGenerateLessonContent(lessonId);
     if (!result) return res.status(404).json({ error: 'Lesson not found' });
@@ -42,7 +42,7 @@ router.get('/lessons/:lessonId/content', requireAuth, async (req, res) => {
 // Force-regenerate lesson content
 router.post('/lessons/:lessonId/generate', aiLimiter, requireAuth, async (req, res) => {
   const { lessonId } = req.params;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   const regenerate = req.body?.regenerate === true || req.query?.regenerate === 'true';
   try {
     const result = await getOrGenerateLessonContent(lessonId, { regenerate });
@@ -58,7 +58,7 @@ router.post('/lessons/:lessonId/generate', aiLimiter, requireAuth, async (req, r
 // Lesson metadata (no generation)
 router.get('/lessons/:lessonId/meta', requireAuth, async (req, res) => {
   const { lessonId } = req.params;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const lesson = await getLessonById(lessonId);
     if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
@@ -84,7 +84,7 @@ router.get('/lessons/:lessonId/meta', requireAuth, async (req, res) => {
 // Topic content (workspace view)
 router.get('/topics/:topicId', requireAuth, async (req, res) => {
   const { topicId } = req.params;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const lesson = await findLessonContext(topicId);
     if (!lesson) return res.status(404).json({ error: 'Topic not found' });
@@ -145,7 +145,7 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
 // destructured here. XP is authoritative from `lessonCtx.xp_reward` in the DB.
 router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => {
   const { lessonId, roadmapId } = req.body;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });
 
   try {

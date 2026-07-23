@@ -36,7 +36,7 @@ export function useRoadmaps(): RoadmapContextValue {
 interface RoadmapProviderProps {
   children: React.ReactNode;
   isAuthenticated: boolean;
-  mutatingHeaders: () => Record<string, string>;
+  mutatingHeaders: () => Promise<Record<string, string>>;
   onAchievementUnlocked: (ach: { id: string; name: string; icon: string; xpReward: number }) => void;
   onNotification: (notif: SystemNotification) => void;
   onShowToast: (message: string, type?: 'error' | 'success' | 'info') => void;
@@ -168,13 +168,13 @@ export function RoadmapProvider({
         resources: data.resources || [],
         projects: data.projects || [],
       };
-      const persistResponse = await fetch('/api/roadmaps', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify(newRoadmap) });
+      const persistResponse = await fetch('/api/roadmaps', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify(newRoadmap) });
       const persistData = await persistResponse.json().catch(() => ({}));
       if (!persistResponse.ok) throw new Error(persistData.error || `Failed to persist roadmap (HTTP ${persistResponse.status})`);
       if (persistData.newAchievement) onAchievementUnlocked(persistData.newAchievement);
       // Validate progression (same as handleGenerateRoadmap — Sub-Task 8 fix)
       try {
-        const valRes = await fetch('/api/validate-progression', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ roadmap: newRoadmap }) });
+        const valRes = await fetch('/api/validate-progression', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify({ roadmap: newRoadmap }) });
         if (valRes.ok) {
           const val = await valRes.json();
           if (val.hasGaps || !val.prerequisitesMet) console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites);
@@ -195,7 +195,7 @@ export function RoadmapProvider({
   const handleGenerateRoadmap = useCallback(async (params: { goal: string; experienceLevel: string; weeklyHours: number; preferredStyle: string }) => {
     setIsAiGeneratingRoadmap(true);
     try {
-      const response = await fetch('/api/generate-roadmap', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify(params) });
+      const response = await fetch('/api/generate-roadmap', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify(params) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const ct = response.headers.get('content-type') || '';
       if (!ct.includes('application/json')) throw new Error('Server returned non-JSON content.');
@@ -215,12 +215,12 @@ export function RoadmapProvider({
         resources: data.resources || [],
         projects: data.projects || [],
       };
-      const persistResponse = await fetch('/api/roadmaps', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify(newRoadmap) });
+      const persistResponse = await fetch('/api/roadmaps', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify(newRoadmap) });
       const persistData = await persistResponse.json().catch(() => ({}));
       if (!persistResponse.ok) throw new Error(persistData.error || `Failed to persist roadmap (HTTP ${persistResponse.status})`);
       if (persistData.newAchievement) onAchievementUnlocked(persistData.newAchievement);
       try {
-        const valRes = await fetch('/api/validate-progression', { method: 'POST', headers: mutatingHeaders(), body: JSON.stringify({ roadmap: newRoadmap }) });
+        const valRes = await fetch('/api/validate-progression', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify({ roadmap: newRoadmap }) });
         if (valRes.ok) {
           const val = await valRes.json();
           if (val.hasGaps || !val.prerequisitesMet) console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites);

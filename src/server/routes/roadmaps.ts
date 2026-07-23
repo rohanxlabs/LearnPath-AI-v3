@@ -232,7 +232,7 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
 
 // Get all roadmaps for a user
 router.get('/roadmaps', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const roadmaps = await getUserRoadmapsReconstructed(userEmail);
     return res.json(roadmaps);
@@ -245,7 +245,7 @@ router.get('/roadmaps', requireAuth, async (req, res) => {
 // Get single roadmap
 router.get('/roadmaps/:roadmapId', requireAuth, async (req, res) => {
   const { roadmapId } = req.params;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const roadmap = await reconstructRoadmapJson(roadmapId, userEmail);
     if (!roadmap) return res.status(404).json({ error: 'Roadmap not found' });
@@ -277,7 +277,7 @@ router.get('/roadmaps/:roadmapId', requireAuth, async (req, res) => {
 // Delete roadmap
 router.delete('/roadmaps/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   try {
     const owned = await getRoadmapsByOwner(userEmail);
     if (!owned.some((r: any) => r.id === id)) return res.status(404).json({ error: 'Roadmap not found' });
@@ -292,7 +292,7 @@ router.delete('/roadmaps/:id', requireAuth, async (req, res) => {
 
 // Create roadmap
 router.post('/roadmaps', requireAuth, async (req, res) => {
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   const roadmap = req.body;
   if (!roadmap || !roadmap.id || !roadmap.goal) return res.status(400).json({ error: 'Valid roadmap object with id and goal is required' });
   try {
@@ -317,7 +317,7 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
 // Update roadmap
 router.post('/update-roadmap', requireAuth, async (req, res) => {
   const { roadmapId, updates } = req.body;
-  const userEmail = req.session.userEmail!;
+  const userEmail = req.supabaseUser!.email;
   if (!roadmapId || !updates || typeof updates !== 'object') return res.status(400).json({ error: 'roadmapId and updates object are required' });
 
   const ROADMAP_MUTABLE_FIELDS = new Set(['title', 'goal', 'progressPercent', 'totalXp', 'lessonsCompleted', 'hoursRemaining', 'phases', 'resources', 'projects', 'quizzes']);
