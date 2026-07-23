@@ -198,11 +198,63 @@ export function AuthProvider({
   // Bootstrap — load profile from server once a session is confirmed
   // ---------------------------------------------------------------------------
   const bootstrapUser = useCallback(async (accessToken: string, email: string) => {
+    // Clear any stale error from a previous attempt before we start.
+    setAuthError('');
+    // Decode the token locally so we can log the expiry time without a round-trip.
+    const tokenPayload = (() => { try { return JSON.parse(atob(accessToken.split('.')[1])); } catch { return null; } })();
+    const tokenExp = tokenPayload?.exp ? new Date(tokenPayload.exp * 1000).toISOString() : 'unknown';
+    console.log(`[Auth] bootstrapUser called  email=${email}  token_exp=${tokenExp}  token_prefix=${accessToken.slice(0, 20)}…`);
+    // Retry transient failures (cold-start / network blip) instead of treating
+    // them as "not logged in" — only a 401/403 from our server means the
+    // session itself is invalid and should log the user out.
+    const MAX_ATTEMPTS = 3;
+    let response: Response | null = null;
+    let lastErr: unknown = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      console.log(`[Auth] /api/bootstrap fetch attempt ${attempt}/${MAX_ATTEMPTS}`);
+      try {
+        response = await fetch('/api/bootstrap', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        console.log(`[Auth] /api/bootstrap response status=${response.status}`);
+        if (response.ok) break;
+        if (response.status === 401 || response.status === 403) {
+          // Read the body to get the server's reason (e.g. "invalid signature", "jwt expired")
+          const body = await response.clone().json().catch(() => ({}));
+          console.warn(`[Auth] /api/bootstrap returned ${response.status} — stopping retries (auth failure)  server_reason=${body?.reason ?? body?.error ?? 'none'}`);
+          break; // real auth failure, don't retry
+        }
+        lastErr = new Error(`Bootstrap failed: ${response.status}`);
+        console.warn(`[Auth] /api/bootstrap non-auth failure status=${response.status}, will retry`);
+      } catch (err) {
+        lastErr = err;
+        response = null;
+        console.warn(`[Auth] /api/bootstrap network error on attempt ${attempt}:`, err);
+      }
+      if (attempt < MAX_ATTEMPTS) {
+        const delay = attempt * 800;
+        console.log(`[Auth] waiting ${delay}ms before retry…`);
+        await new Promise((r) => setTimeout(r, delay)); // 800ms, 1600ms backoff
+      }
+    }
+
     try {
-      const response = await fetch('/api/bootstrap', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!response.ok) throw new Error('Bootstrap failed');
+      if (!response) {
+        console.error('[Auth] all bootstrap attempts failed with network errors, lastErr:', lastErr);
+        throw lastErr ?? new Error('Bootstrap failed: no response');
+      }
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          console.error(`[Auth] bootstrap unauthorized (${response.status}) — token may be expired. token_exp=${tokenExp}`);
+          throw new Error('Bootstrap failed: unauthorized');
+        }
+        // Non-auth failure after retries — keep the user's session alive and
+        // surface a retryable error instead of silently logging them out.
+        console.error(`[Auth] bootstrap non-auth failure after all retries, status=${response.status}`);
+        setAuthError('Could not load your account. Please try again.');
+        setIsAuthenticated(false);
+        return;
+      }
       const data = await response.json();
       const name =
         data.profile?.name ||
@@ -244,8 +296,20 @@ export function AuthProvider({
         setShowOnboarding(true);
         onShowOnboarding();
       }
-    } catch {
+      console.log(`[Auth] bootstrap success  email=${email}  isNewUser=${!data.profile || Object.keys(data.profile).length === 0}`);
+    } catch (err) {
+      // 401/403 → genuine session expiry: show auth screen with a clear message.
+      // Any other unexpected throw (e.g. JSON parse error) gets the same treatment
+      // so the user always knows why they were signed out.
+      const isAuthErr = err instanceof Error && err.message.includes('unauthorized');
+      console.error(`[Auth] bootstrapUser catch  isAuthErr=${isAuthErr}  email=${email}  token_exp=${tokenExp}  err=`, err);
       setIsAuthenticated(false);
+      setShowAuthModal(true);
+      setAuthError(
+        isAuthErr
+          ? 'Your session has expired. Please sign in again.'
+          : 'Could not load your account. Please try again.'
+      );
     }
   }, [identify, onAuthenticated, onShowOnboarding, setShowAuthModal, setAuthEmail, setAuthPassword, setAuthName]);
 
@@ -253,13 +317,24 @@ export function AuthProvider({
   // Listen to Supabase auth state changes
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    // Get the initial session immediately
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // refreshSession() re-validates the stored refresh token with Supabase and
+    // returns a fresh access_token.  getSession() reads from localStorage and
+    // will hand us a stale, expired access_token if the user was away > 1 hour,
+    // causing the server to return 401 and the client to show "session expired"
+    // even though the user's refresh token is still valid.
+    console.log('[Auth] useEffect: calling refreshSession()…');
+    supabase.auth.refreshSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.warn('[Auth] refreshSession error:', error.message);
+      }
       if (session?.user?.email && session.access_token) {
+        const exp = (() => { try { const p = JSON.parse(atob(session.access_token.split('.')[1])); return new Date(p.exp * 1000).toISOString(); } catch { return 'unknown'; } })();
+        console.log(`[Auth] refreshSession returned valid session  email=${session.user.email}  token_exp=${exp}`);
         bootstrapUser(session.access_token, session.user.email).finally(() =>
           setIsLoadingAuth(false)
         );
       } else {
+        console.log('[Auth] refreshSession returned no session — user is logged out');
         setIsAuthenticated(false);
         setIsLoadingAuth(false);
       }
@@ -269,19 +344,29 @@ export function AuthProvider({
     // isLoadingAuth is set to true immediately so the app shows a loading screen
     // instead of flashing the landing page while bootstrapUser fetches the profile.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log(`[Auth] onAuthStateChange  event=${event}  email=${session?.user?.email ?? 'none'}`);
       if (event === 'PASSWORD_RECOVERY') {
         setResetToken('recovery');
         setShowAuthModal(true);
+        return;
+      }
+      // INITIAL_SESSION / TOKEN_REFRESHED fired as a direct result of the
+      // refreshSession() call above — skip it here to avoid a second concurrent
+      // bootstrapUser call racing the one already started above.
+      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+        console.log(`[Auth] onAuthStateChange skipping ${event} (handled by refreshSession path)`);
         return;
       }
       if (session?.user?.email && session.access_token) {
         // Show loading immediately so the unauthenticated branch never renders
         // during the async bootstrapUser fetch.
         setIsLoadingAuth(true);
+        console.log(`[Auth] onAuthStateChange triggering bootstrapUser  event=${event}  email=${session.user.email}`);
         bootstrapUser(session.access_token, session.user.email).finally(() =>
           setIsLoadingAuth(false)
         );
       } else if (!session) {
+        console.log('[Auth] onAuthStateChange no session — setting isAuthenticated=false');
         setIsAuthenticated(false);
       }
     });

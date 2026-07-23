@@ -138,9 +138,9 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   const COMPLETE_GATE_SECONDS = 30;
   const canMarkComplete = secondsOnPage >= COMPLETE_GATE_SECONDS;
 
-  // Content-generating poll: retry up to 3 times every 8s when content is placeholder
+  // Content-generating poll: retry up to 6 times every 5s when content is pending/empty
   const [contentPollCount, setContentPollCount] = useState(0);
-  const MAX_CONTENT_POLLS = 3;
+  const MAX_CONTENT_POLLS = 6;
 
   // Phase accordion — default-expand phase containing active lesson
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(() => {
@@ -168,20 +168,30 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
     return () => clearInterval(id);
   }, [selectedTopicId, isCompletedForTimer]);
 
-  // Auto-poll for content when placeholder is detected (max 3 retries, every 8s)
+  // Auto-poll for content when placeholder/empty/generating is detected (max 6 retries, every 5s).
+  // Also polls when quiz is null — quiz is generated in the background and cached in the DB;
+  // the second poll will serve it once the AI finishes.
   useEffect(() => {
-    const isPlaceholder = topicData?.content === 'Content is being generated for this topic...' || !topicData?.content;
-    if (!topicData || !isPlaceholder || contentPollCount >= MAX_CONTENT_POLLS) return;
+    const isGenerating =
+      !topicData?.content ||
+      topicData?.content === 'Content is being generated for this topic...' ||
+      topicData?.contentStatus === 'generating' ||
+      topicData?.contentStatus === 'pending' ||
+      topicData?.quiz === null;
+    if (!topicData || !isGenerating || contentPollCount >= MAX_CONTENT_POLLS) return;
     const pollId = setTimeout(async () => {
       setContentPollCount(c => c + 1);
       const res = await fetch(`/api/topics/${topicData.id}`).catch(() => null);
       if (res?.ok) {
         const d = await res.json();
-        if (d.topic?.content && d.topic.content !== 'Content is being generated for this topic...') {
-          setTopicData(d.topic);
+        if (d.topic) {
+          const contentReady = d.topic.content && d.topic.content !== 'Content is being generated for this topic...';
+          const quizReady = d.topic.quiz !== null;
+          // Update whenever content or quiz has arrived since the last fetch.
+          if (contentReady || quizReady) setTopicData(d.topic);
         }
       }
-    }, 8_000);
+    }, 5_000);
     return () => clearTimeout(pollId);
   }, [topicData, contentPollCount]);
 
@@ -298,7 +308,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   // Render
   // -------------------------------------------------------------------------
   return (
-    <div className="flex flex-col lg:flex-row min-h-[calc(100vh-10rem)] bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+    <div className="flex flex-col lg:flex-row h-full bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
 
       {/* ── CENTER PANEL (order-1 mobile = shown first) ── */}
       <div className="w-full lg:flex-1 flex flex-col overflow-hidden order-1 lg:order-2 min-h-0">
@@ -843,7 +853,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
       </div>
 
       {/* ── RIGHT RAIL — progress stats ── */}
-      <div className="hidden lg:flex w-56 flex-col border-l border-slate-200 self-start sticky top-0 h-[calc(100vh-10rem)] overflow-y-auto order-3 lg:order-3 bg-slate-50">
+      <div className="hidden lg:flex w-56 flex-col border-l border-slate-200 overflow-y-auto order-3 lg:order-3 bg-slate-50">
         <div className="p-4 space-y-5">
 
           {/* Overall progress */}

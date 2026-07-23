@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { createPublicKey } from 'node:crypto';
 import express from 'express';
 import { rateLimit } from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
@@ -80,7 +81,6 @@ async function getJwksKeys(supabaseUrl: string): Promise<any[]> {
 
 // Synchronous JWK → PEM via Node crypto (available in Node 15+).
 function jwkToPemSync(jwk: any): string {
-  const { createPublicKey } = require('node:crypto');
   const key = createPublicKey({ key: jwk, format: 'jwk' });
   return key.export({ type: 'spki', format: 'pem' }) as string;
 }
@@ -100,10 +100,12 @@ export function requireAuth(
   res: express.Response,
   next: express.NextFunction
 ): void {
+  const route = `${req.method} ${req.path}`;
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
   if (!token) {
+    console.warn(`[requireAuth] ${route} — 401 no token`);
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
@@ -111,15 +113,22 @@ export function requireAuth(
   // Decode header to determine the signing algorithm without verifying yet.
   const decoded = jwt.decode(token, { complete: true });
   if (!decoded || typeof decoded === 'string') {
+    console.warn(`[requireAuth] ${route} — 401 token not decodable`);
     res.status(401).json({ error: 'Invalid token' });
     return;
   }
   const alg = (decoded.header?.alg as string | undefined) ?? 'HS256';
+  // Log expiry from the unverified payload so we can spot expired tokens immediately.
+  const rawPayload = decoded.payload as jwt.JwtPayload;
+  const tokenExp = rawPayload?.exp ? new Date(rawPayload.exp * 1000).toISOString() : 'unknown';
+  const tokenEmail = (rawPayload?.email as string | undefined) ?? 'unknown';
+  console.log(`[requireAuth] ${route}  alg=${alg}  email=${tokenEmail}  token_exp=${tokenExp}`);
 
   if (alg === 'HS256') {
     // ─── Symmetric path (older Supabase projects) ──────────────────────────
     const secret = process.env.SUPABASE_JWT_SECRET;
     if (!secret) {
+      console.error(`[requireAuth] ${route} — 500 SUPABASE_JWT_SECRET not set`);
       res.status(500).json({ error: 'Server misconfiguration: SUPABASE_JWT_SECRET is not set' });
       return;
     }
@@ -128,53 +137,87 @@ export function requireAuth(
       const email = payload.email as string | undefined;
       const sub = payload.sub as string | undefined;
       if (!email || !sub) {
+        console.warn(`[requireAuth] ${route} — 401 HS256 token missing email/sub claims`);
         res.status(401).json({ error: 'Invalid token: missing claims' });
         return;
       }
+      console.log(`[requireAuth] ${route} — HS256 verified ok  email=${email}`);
       req.supabaseUser = { id: sub, email };
       next();
-    } catch {
+    } catch (e: any) {
+      console.warn(`[requireAuth] ${route} — 401 HS256 verify failed  token_exp=${tokenExp}  reason=${e?.message}`);
       res.status(401).json({ error: 'Invalid or expired token' });
     }
   } else {
     // ─── Asymmetric path (newer Supabase projects — ES256 / RS256) ─────────
     const supabaseUrl = process.env.SUPABASE_URL;
     if (!supabaseUrl) {
+      console.error(`[requireAuth] ${route} — 500 SUPABASE_URL not set`);
       res.status(500).json({ error: 'Server misconfiguration: SUPABASE_URL is not set' });
       return;
     }
-    getJwksKeys(supabaseUrl)
-      .then((keys) => {
-        // Match by kid if present, otherwise try all keys.
-        const kid = decoded.header?.kid as string | undefined;
-        const candidates = kid ? keys.filter((k) => k.kid === kid) : keys;
-        if (candidates.length === 0) {
-          res.status(401).json({ error: 'Invalid token: no matching JWKS key' });
-          return;
+    const tokenKid = decoded.header?.kid as string | undefined;
+    // Two-pass: first try with cached keys, then force-refresh JWKS once on failure.
+    // This handles key rotation — a stale cached key no longer matching the current
+    // signing key would otherwise permanently block logins until the process restarts.
+    const tryVerify = (keys: any[]): { ok: true; email: string; sub: string } | { ok: false; reason: string; noKey?: boolean } => {
+      const candidates = tokenKid ? keys.filter((k) => k.kid === tokenKid) : keys;
+      console.log(`[requireAuth] ${route}  token_kid=${tokenKid ?? 'none'}  jwks_kids=${keys.map((k: any) => k.kid).join(',')}  candidates=${candidates.length}`);
+      if (candidates.length === 0) return { ok: false, reason: `no JWKS key matched kid=${tokenKid}`, noKey: true };
+      let lastReason = 'unknown';
+      for (const jwk of candidates) {
+        try {
+          const pem = jwkToPemSync(jwk);
+          const payload = jwt.verify(token, pem, { algorithms: [alg as any] }) as jwt.JwtPayload;
+          const email = payload.email as string | undefined;
+          const sub = payload.sub as string | undefined;
+          if (!email || !sub) return { ok: false, reason: 'missing email/sub claims' };
+          return { ok: true, email, sub };
+        } catch (e: any) {
+          lastReason = e?.message ?? 'unknown';
         }
-        let lastErr: Error | null = null;
-        for (const jwk of candidates) {
+      }
+      return { ok: false, reason: lastReason };
+    };
+
+    getJwksKeys(supabaseUrl)
+      .then(async (keys) => {
+        let result = tryVerify(keys);
+
+        // If verification failed and we used cached keys, bust the cache and retry once.
+        // This recovers from key rotation without a process restart.
+        if (!result.ok) {
+          const failReason = (result as any).reason ?? 'unknown';
+          console.warn(`[requireAuth] ${route} — first pass failed (${failReason}), busting JWKS cache and retrying`);
+          jwksCache.delete(supabaseUrl);
           try {
-            const pem = jwkToPemSync(jwk);
-            const payload = jwt.verify(token, pem, { algorithms: [alg as any] }) as jwt.JwtPayload;
-            const email = payload.email as string | undefined;
-            const sub = payload.sub as string | undefined;
-            if (!email || !sub) {
-              res.status(401).json({ error: 'Invalid token: missing claims' });
-              return;
-            }
-            req.supabaseUser = { id: sub, email };
-            next();
-            return;
+            const freshKeys = await getJwksKeys(supabaseUrl);
+            result = tryVerify(freshKeys);
           } catch (e: any) {
-            lastErr = e;
+            console.error(`[requireAuth] ${route} — 503 JWKS re-fetch failed:`, e?.message);
+            res.status(503).json({ error: 'Unable to verify token: JWKS unavailable' });
+            return;
           }
         }
-        // All candidate keys failed — token is invalid.
-        res.status(401).json({ error: 'Invalid or expired token' });
+
+        if (!result.ok) {
+          const failReason = (result as any).reason ?? 'unknown';
+          console.warn(`[requireAuth] ${route} — 401 ${alg} verification failed  token_exp=${tokenExp}  reason=${failReason}`);
+          res.status(401).json({ error: 'Invalid or expired token', reason: failReason });
+          return;
+        }
+
+        console.log(`[requireAuth] ${route} — ${alg} verified ok  email=${result.email}`);
+        req.supabaseUser = { id: result.sub, email: result.email };
+        next();
       })
-      .catch(() => {
-        res.status(401).json({ error: 'Unable to verify token: JWKS unavailable' });
+      .catch((e: any) => {
+        // JWKS fetch failed — this is a server-side infrastructure problem
+        // (cold-start, network blip), NOT a bad token.  Return 503 so the
+        // client's retry loop treats it as a transient error and retries,
+        // rather than treating it as an auth failure and logging the user out.
+        console.error(`[requireAuth] ${route} — 503 JWKS fetch failed:`, e?.message);
+        res.status(503).json({ error: 'Unable to verify token: JWKS unavailable' });
       });
   }
 }

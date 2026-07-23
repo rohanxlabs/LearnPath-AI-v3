@@ -411,7 +411,7 @@ function AppShell() {
 
         <main
           className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}
-          style={{ contain: 'layout style' }}
+          style={activeLesson ? undefined : { contain: 'layout style' }}
         >
           <ErrorBoundary key={activeLesson ? `lesson-${activeLesson.lessonId}` : activeTab}>
             <Suspense fallback={<TabFallback />}>
@@ -568,6 +568,7 @@ function RoadmapProviderWrapper({ children, bootRoadmaps }: { children: React.Re
   return (
     <RoadmapProvider
       isAuthenticated={isAuthenticated}
+      bootRoadmaps={bootRoadmaps}
       mutatingHeaders={mutatingHeaders}
       onAchievementUnlocked={handleAchievementUnlocked}
       onNotification={(n) => setNotifications((prev: SystemNotification[]) => [n, ...prev])}

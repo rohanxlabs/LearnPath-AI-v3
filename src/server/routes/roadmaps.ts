@@ -299,7 +299,16 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
     // Check BEFORE inserting so we know if this is the user's first roadmap.
     const existingBefore = await getRoadmapsByOwner(userEmail);
     await createRoadmapFromJson(userEmail, roadmap);
+
+    // Verify phases were actually written — a partial save (roadmap row exists but
+    // no phases) produces an empty shell that the UI cannot display. If that
+    // happened, delete the orphaned row and return an error so the client retries.
     const saved = await reconstructRoadmapJson(roadmap.id, userEmail);
+    if (!saved || !saved.phases || saved.phases.length === 0) {
+      console.error('[Roadmap] Partial save detected for', roadmap.id, '— cleaning up orphan');
+      await deleteRoadmap(roadmap.id).catch(() => {});
+      return res.status(500).json({ error: 'Roadmap generation was incomplete. Please try again.' });
+    }
 
     // Unlock "Roadmap Builder" on first roadmap creation.
     let newAchievement: { id: string; name: string; icon: string; xpReward: number } | null = null;
@@ -307,7 +316,7 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
       newAchievement = await unlockAchievement(userEmail, 'ach-3');
     }
 
-    return res.json({ success: true, roadmap: saved || roadmap, newAchievement });
+    return res.json({ success: true, roadmap: saved, newAchievement });
   } catch (error) {
     console.error('Create roadmap error:', error);
     return res.status(500).json({ error: 'Failed to create roadmap' });

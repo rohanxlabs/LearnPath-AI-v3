@@ -91,11 +91,23 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
 
     let markdownContent = '', summary: string | null = null, generatedAt: string | null = null;
     let contentStatus: string = lesson.content_status || 'pending';
-    try {
-      const generated = await getOrGenerateLessonContent(topicId);
-      if (generated) { markdownContent = generated.content || ''; summary = generated.summary; generatedAt = generated.generatedAt; contentStatus = generated.contentStatus; }
-    } catch (genErr: any) {
-      console.warn('[Lesson-Gen] topic content generation failed, serving metadata only:', genErr?.message || genErr);
+
+    // Check if content already exists in DB/cache without waiting for generation.
+    // If it does, serve it immediately. If not, kick off background generation and
+    // return right away so the client isn't blocked for 10-30 seconds — the workspace
+    // polls every 8s and will pick it up once generation completes.
+    const cached = await getOrGenerateLessonContent(topicId, { peekOnly: true });
+    if (cached && cached.content) {
+      markdownContent = cached.content;
+      summary = cached.summary;
+      generatedAt = cached.generatedAt;
+      contentStatus = cached.contentStatus;
+    } else {
+      // Fire-and-forget: start generation in the background so the next poll hits cache.
+      getOrGenerateLessonContent(topicId).catch((genErr: any) => {
+        console.warn('[Lesson-Gen] background generation failed:', genErr?.message || genErr);
+      });
+      contentStatus = 'generating';
     }
 
     let lastOpenedAt: string | null = null;
@@ -115,10 +127,18 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
     const prerequisiteNames = await resolveLessonNames(Array.isArray(lesson.prerequisites) ? lesson.prerequisites : []);
     const metadata = buildLessonMetadata({ lessonRow: lesson, content: markdownContent, prerequisiteNames, generatedAt, lastOpenedAt, contentStatus });
 
-    const [resources, project, quiz, video] = await Promise.all([
+    // Quiz generation can take several seconds — run it in the background so it
+    // doesn't block the initial topic load. The client polls every 5 s; by the
+    // second poll the quiz will be cached in the DB and served instantly.
+    getOrGenerateQuizForLesson(lesson).catch((err: any) => {
+      console.warn('[Quiz-Gen] background quiz generation failed:', err?.message || err);
+    });
+
+    const [resources, project, existingQuiz, video] = await Promise.all([
       getResourcesForLessonContext(lesson.module_id, lesson.phase_id).catch(() => []),
       getProjectForPhase(lesson.phase_id).catch(() => null),
-      getOrGenerateQuizForLesson(lesson),
+      // Only serve a quiz that is already in the DB — don't block for AI generation.
+      import('../db/queries').then(q => q.getQuizForLesson(lesson.id)).catch(() => null),
       findYouTubeVideoForTopic(lesson.title).catch(() => ({ videoId: null, title: null, searchUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(lesson.title + ' tutorial')}` }))
     ]);
 
@@ -129,8 +149,12 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
       difficulty: metadata.difficulty, skillsCovered: metadata.skillsCovered, prerequisites: metadata.prerequisites,
       completionChecklist: metadata.completionChecklist, contentStatus, generatedAt, lastOpenedAt, metadata,
       resources: resources.map((r: any) => ({ id: r.id, title: r.title, type: r.type, provider: r.provider, url: r.url, description: r.description, duration: r.duration })),
-      project: project ? { id: project.id, title: project.title, difficulty: project.difficulty, description: project.description, techStack: project.tech_stack, features: project.features, githubUrl: project.github_url } : null,
-      quiz: quiz ? { id: quiz.id, title: quiz.title, questions: quiz.questions } : null, video
+      // Drizzle returns camelCase field names — use techStack/githubUrl, not tech_stack/github_url.
+      project: project ? { id: project.id, title: project.title, difficulty: project.difficulty, description: project.description, techStack: project.techStack ?? project.tech_stack, features: project.features, githubUrl: project.githubUrl ?? project.github_url } : null,
+      quiz: (existingQuiz && Array.isArray(existingQuiz.questions) && existingQuiz.questions.length > 0)
+        ? { id: existingQuiz.id, title: existingQuiz.title, questions: existingQuiz.questions }
+        : null,
+      video
     };
 
     return res.json({ topic });

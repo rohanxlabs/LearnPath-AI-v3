@@ -782,8 +782,8 @@ export async function migrateRoadmapJsonToTables(
   if (!jsonRoadmap || !jsonRoadmap.id) return;
 
   const roadmapId = jsonRoadmap.id;
-  const _meta = (jsonRoadmap.resources || []).length;
 
+  // 1. Upsert the roadmap row first (everything else FKs to it).
   await upsertRoadmap({
     id: roadmapId,
     ownerEmail,
@@ -802,11 +802,36 @@ export async function migrateRoadmapJsonToTables(
     status: jsonRoadmap.status ?? 'current',
   });
 
+  // Build flat arrays of everything we need to insert so we can fire them in
+  // parallel batches instead of one sequential await per row.
+  // FK order: roadmap → phases → modules → lessons/resources/projects.
+
   const phasesArr = asArray(jsonRoadmap.phases);
+
+  // --- collect structured data ---
+  type PhaseRec  = Parameters<typeof upsertPhase>[0];
+  type ModRec    = Parameters<typeof upsertModule>[0];
+  type LesRec    = Parameters<typeof upsertLesson>[0];
+  type ResRec    = Parameters<typeof upsertResource>[0];
+  type ProjRec   = Parameters<typeof upsertPhaseProject>[0];
+  type LesContent = { lessonId: string; markdownContent: string | null; summary: string | null };
+  type QuizRec   = Parameters<typeof upsertQuiz>[0];
+  type AsgRec    = Parameters<typeof upsertAssignment>[0];
+
+  const phaseRecs:   PhaseRec[]   = [];
+  const modRecs:     ModRec[]     = [];
+  const lesRecs:     LesRec[]     = [];
+  const resRecs:     ResRec[]     = [];
+  const projRecs:    ProjRec[]    = [];
+  const lesContents: LesContent[] = [];
+  const quizRecs:    QuizRec[]    = [];
+  const asgRecs:     AsgRec[]     = [];
+
   for (let pIdx = 0; pIdx < phasesArr.length; pIdx++) {
     const phase = phasesArr[pIdx];
     const phaseId = phase.id || `ph-${roadmapId}-${pIdx}`;
-    await upsertPhase({
+
+    phaseRecs.push({
       id: phaseId,
       roadmapId,
       name: phase.name || `Phase ${pIdx + 1}`,
@@ -822,7 +847,8 @@ export async function migrateRoadmapJsonToTables(
     for (let lIdx = 0; lIdx < levelsArr.length; lIdx++) {
       const level = levelsArr[lIdx];
       const moduleId = level.id || `mod-${phaseId}-${lIdx}`;
-      await upsertModule({
+
+      modRecs.push({
         id: moduleId,
         phaseId,
         roadmapId,
@@ -837,7 +863,8 @@ export async function migrateRoadmapJsonToTables(
       for (let lesIdx = 0; lesIdx < lessonsArr.length; lesIdx++) {
         const lesson = lessonsArr[lesIdx];
         const lessonId = lesson.id || `les-${moduleId}-${lesIdx}`;
-        await upsertLesson({
+
+        lesRecs.push({
           id: lessonId,
           moduleId,
           phaseId,
@@ -857,16 +884,14 @@ export async function migrateRoadmapJsonToTables(
         });
 
         if (lesson.content) {
-          await upsertLessonContent({
+          lesContents.push({
             lessonId,
             markdownContent: typeof lesson.content === 'string' ? lesson.content : null,
             summary: lesson.summary ?? null,
-            modelUsed: 'migration-legacy-json',
-            generatedAt: nowIso(),
           });
         }
         if (lesson.type === 'quiz' && asArray(lesson.quizQuestions).length > 0) {
-          await upsertQuiz({
+          quizRecs.push({
             id: `quiz-${lessonId}`,
             lessonId,
             moduleId,
@@ -879,7 +904,7 @@ export async function migrateRoadmapJsonToTables(
         }
         if (lesson.codingExercise) {
           const ce = lesson.codingExercise;
-          await upsertAssignment({
+          asgRecs.push({
             id: `asg-${lessonId}`,
             lessonId,
             moduleId,
@@ -899,7 +924,7 @@ export async function migrateRoadmapJsonToTables(
       const modResources = asArray(level.resources);
       for (let resIdx = 0; resIdx < modResources.length; resIdx++) {
         const resource = modResources[resIdx];
-        await upsertResource({
+        resRecs.push({
           id: resource.id || `res-${moduleId}-${resIdx + 1}`,
           roadmapId,
           phaseId,
@@ -917,7 +942,7 @@ export async function migrateRoadmapJsonToTables(
     const phaseProjectsArr = asArray(phase.projects);
     for (let projIdx = 0; projIdx < phaseProjectsArr.length; projIdx++) {
       const project = phaseProjectsArr[projIdx];
-      await upsertPhaseProject({
+      projRecs.push({
         id: project.id || `proj-${phaseId}-${projIdx + 1}`,
         roadmapId,
         phaseId,
@@ -931,6 +956,25 @@ export async function migrateRoadmapJsonToTables(
       });
     }
   }
+
+  // 2. Write phases first (modules FK → phases).
+  await Promise.all(phaseRecs.map(r => upsertPhase(r)));
+
+  // 3. Write modules in parallel (lessons FK → modules).
+  await Promise.all(modRecs.map(r => upsertModule(r)));
+
+  // 4. Write lessons, resources, and projects in parallel
+  //    (lesson_content/quizzes/assignments FK → lessons, so lessons must land first).
+  await Promise.all(lesRecs.map(r => upsertLesson(r)));
+
+  // 5. Write everything that depends on lessons, plus resources/projects (no mutual deps).
+  await Promise.all([
+    ...lesContents.map(c => upsertLessonContent({ lessonId: c.lessonId, markdownContent: c.markdownContent, summary: c.summary, modelUsed: 'migration-legacy-json', generatedAt: nowIso() })),
+    ...quizRecs.map(r => upsertQuiz(r)),
+    ...asgRecs.map(r => upsertAssignment(r)),
+    ...resRecs.map(r => upsertResource(r)),
+    ...projRecs.map(r => upsertPhaseProject(r)),
+  ]);
 
   // Roadmap-level resources fallback (legacy shape).
   const existingResourceIds = new Set<string>();
@@ -1004,7 +1048,6 @@ export async function migrateRoadmapJsonToTables(
     }
   }
 
-  void _meta;
 }
 
 // ---------------------------------------------------------------------------
@@ -1180,7 +1223,12 @@ export async function getUserRoadmapsReconstructed(ownerEmail: string): Promise<
   const result: any[] = [];
   for (const r of roadmapRows) {
     const reconstructed = await reconstructRoadmapJson(r.id, ownerEmail);
-    if (reconstructed) result.push(reconstructed);
+    // Skip orphaned roadmap rows that have no phases — these are partial saves
+    // caused by a generation failure after upsertRoadmap but before upsertPhase.
+    // Returning them as empty shells breaks the roadmap list UI.
+    if (reconstructed && reconstructed.phases && reconstructed.phases.length > 0) {
+      result.push(reconstructed);
+    }
   }
   return result;
 }

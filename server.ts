@@ -227,6 +227,10 @@ async function bootstrap() {
     else if (platform() === 'darwin') exec(`open "http://localhost:${PORT}"`);
     else exec(`xdg-open "http://localhost:${PORT}"`);
   });
+  // Allow up to 120 s for any single request (Supabase pooler cold-start +
+  // large parallel DB writes can legitimately take 30–60 s on first connect).
+  server.requestTimeout = 120_000;
+  server.keepAliveTimeout = 65_000; // slightly above typical LB 60 s idle timeout
   return server;
 }
 

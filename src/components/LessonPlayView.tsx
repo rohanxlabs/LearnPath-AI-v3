@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ArrowLeft, CheckCircle2, AlertTriangle, Lightbulb, Code2, PlayCircle, RefreshCw, Swords, ChevronRight } from 'lucide-react';
 import { Lesson } from '../types';
 import { XPBadge } from './Badges';
@@ -110,8 +112,35 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
       case 'learn':
         return (
           <div className="space-y-4">
-            <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed whitespace-pre-wrap select-text selection:bg-purple-500/20">
-              {lesson.content}
+            <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed select-text selection:bg-purple-500/20">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  h1: ({ children }) => <h1 className="text-xl font-bold text-white mt-6 mb-3">{children}</h1>,
+                  h2: ({ children }) => <h2 className="text-lg font-bold text-white mt-5 mb-2">{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-base font-semibold text-zinc-200 mt-4 mb-2">{children}</h3>,
+                  h4: ({ children }) => <h4 className="text-sm font-semibold text-zinc-300 mt-3 mb-1">{children}</h4>,
+                  p: ({ children }) => <p className="text-zinc-300 leading-relaxed mb-3">{children}</p>,
+                  ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-3 text-zinc-300">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-3 text-zinc-300">{children}</ol>,
+                  li: ({ children }) => <li className="text-zinc-300 text-sm leading-relaxed">{children}</li>,
+                  code: ({ inline, children, ...props }: any) =>
+                    inline
+                      ? <code className="px-1.5 py-0.5 bg-white/10 rounded text-purple-300 font-mono text-xs" {...props}>{children}</code>
+                      : <code className="block bg-[#0d0d0d] border border-white/10 rounded-xl p-4 font-mono text-xs text-emerald-300 overflow-x-auto whitespace-pre mb-3" {...props}>{children}</code>,
+                  pre: ({ children }) => <>{children}</>,
+                  blockquote: ({ children }) => <blockquote className="border-l-2 border-purple-500 pl-4 italic text-zinc-400 my-3">{children}</blockquote>,
+                  strong: ({ children }) => <strong className="text-white font-semibold">{children}</strong>,
+                  em: ({ children }) => <em className="text-zinc-300 italic">{children}</em>,
+                  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">{children}</a>,
+                  hr: () => <hr className="border-white/10 my-4" />,
+                  table: ({ children }) => <div className="overflow-x-auto mb-3"><table className="w-full text-sm border-collapse">{children}</table></div>,
+                  th: ({ children }) => <th className="border border-white/10 px-3 py-2 text-left text-zinc-200 font-semibold bg-white/5">{children}</th>,
+                  td: ({ children }) => <td className="border border-white/10 px-3 py-2 text-zinc-300">{children}</td>,
+                }}
+              >
+                {lesson.content || ''}
+              </ReactMarkdown>
             </div>
 
             <div className="pt-6 border-t border-white/10 flex justify-end">

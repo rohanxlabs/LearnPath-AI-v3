@@ -411,7 +411,7 @@ export async function getLessonLastOpened(ownerEmail: string, lessonId: string):
 
 export async function getOrGenerateLessonContent(
   lessonId: string,
-  opts: { regenerate?: boolean } = {}
+  opts: { regenerate?: boolean; peekOnly?: boolean } = {}
 ): Promise<{ lesson: any; content: string; summary: string | null; contentStatus: string; generatedAt: string | null; cached: boolean } | null> {
   if (opts.regenerate) {
     clearLessonContentCacheEntry(lessonId);
@@ -430,6 +430,9 @@ export async function getOrGenerateLessonContent(
     setCachedLessonContent(lessonId, { content: existing, summary: lesson.summary ?? null, contentStatus, generatedAt, lessonMeta: snapshotLessonMeta(lesson) });
     return { lesson, content: existing, summary: lesson.summary ?? null, contentStatus, generatedAt, cached: true };
   }
+
+  // peekOnly: return null without triggering generation — caller will fire-and-forget separately.
+  if (opts.peekOnly) return null;
 
   const generatedAt = new Date().toISOString();
   let inflight = lessonGenerationInFlight.get(lessonId);

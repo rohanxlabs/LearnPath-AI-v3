@@ -128,7 +128,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     // via the Admin SDK before the email_confirm fix), auto-confirm and retry.
     if (error?.message?.toLowerCase().includes('email not confirmed')) {
       try {
-        const { data: userData } = await admin.auth.admin.getUserByEmail(normalizedEmail);
+        const { data: userData } = await (admin.auth.admin as any).getUserByEmail(normalizedEmail).catch(() => ({ data: null }));
         if (userData?.user?.id) {
           await admin.auth.admin.updateUserById(userData.user.id, { email_confirm: true });
           const retry = await getSupabaseAnon().auth.signInWithPassword({ email: normalizedEmail, password });

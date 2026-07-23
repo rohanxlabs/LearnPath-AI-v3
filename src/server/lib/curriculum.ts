@@ -427,7 +427,10 @@ export function validateAndNormalizeCurriculum(
         difficulty: moduleDiff,
         estimatedHours: moduleEstimatedHours,
         lessons: normalizedLessons,
-        resources: normalizedResources
+        resources: normalizedResources,
+        // Alias — the client Roadmap type uses `levels`, the DB migration accepts both.
+        type: moduleDiff,
+        status: 'current',
       });
     }
 
@@ -452,8 +455,14 @@ export function validateAndNormalizeCurriculum(
       estimatedHours: phaseEstimatedHours,
       difficulty: phaseDiff,
       skillsCovered: phaseSkills.size ? Array.from(phaseSkills) : asStringArray(phase.skillsCovered),
+      // Use `levels` — the client Roadmap type and all UI components expect this key.
+      // Keep `modules` as an alias so the DB migration (which accepts both) still works.
+      levels: normalizedModules,
       modules: normalizedModules,
-      projects: normalizedProjects
+      projects: normalizedProjects,
+      progress: 0,
+      xpEarned: 0,
+      status: 'current',
     });
   }
 
@@ -463,7 +472,7 @@ export function validateAndNormalizeCurriculum(
   let totalLessons = 0;
   for (const phase of normalizedPhases) {
     projects.push(...phase.projects);
-    for (const module of phase.modules) {
+    for (const module of phase.levels) {
       totalLessons += module.lessons.length;
       for (const les of module.lessons) for (const tag of les.skillTags) allSkillTags.add(tag);
       for (const r of module.resources) resources.push({ ...r, phaseId: phase.id, moduleId: module.id });
@@ -728,7 +737,9 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
     const projectTier = PROJECT_LADDER[Math.min(PROJECT_LADDER.length - 1, pIdx)];
     return {
       id: phaseId, name: plan.name, description: plan.description, estimatedHours: 12 + (pIdx * 2), difficulty: plan.difficulty,
-      skillsCovered: (plan as any).skillTags?.length ? (plan as any).skillTags : plan.moduleThemes.map((t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-')), modules,
+      skillsCovered: (plan as any).skillTags?.length ? (plan as any).skillTags : plan.moduleThemes.map((t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-')),
+      levels: modules, modules,
+      progress: 0, xpEarned: 0, status: 'current',
       projects: [{ id: `proj-${pIdx + 1}`, title: plan.projectTitle, difficulty: projectTier, description: `Apply everything from ${plan.name} to ship ${plan.projectTitle}. Build incrementally, test continuously, and document your work for ${goal}.`, techStack: plan.projectTech, features: ['Scaffold the project structure', 'Implement core feature set', 'Add tests and documentation', 'Deploy or demo the result'], progress: 0 }]
     };
   });
@@ -739,7 +750,7 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
   let totalLessons = 0;
   for (const phase of phases) {
     projects.push(...phase.projects);
-    for (const module of phase.modules) {
+    for (const module of phase.levels) {
       totalLessons += module.lessons.length;
       for (const les of module.lessons) for (const tag of les.skillTags) allSkillTags.add(tag);
       for (const r of module.resources) resources.push({ ...r, phaseId: phase.id, moduleId: module.id });
@@ -752,14 +763,14 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
     college: meta.college || null, branch: meta.branch || null, year: meta.year || null,
     progressPercent: 0, totalXp: 0, lessonsCompleted: 0, hoursRemaining: phases.reduce((a, p) => a + (p.estimatedHours || 0), 0),
     status: 'current', createdAt: new Date().toISOString(),
-    metadata: { totalPhases: phases.length, totalModules: phases.reduce((a, p) => a + p.modules.length, 0), totalLessons, skillTags: Array.from(allSkillTags), schemaVersion: 2, source: 'fallback' },
+    metadata: { totalPhases: phases.length, totalModules: phases.reduce((a, p) => a + (p.levels?.length || p.modules?.length || 0), 0), totalLessons, skillTags: Array.from(allSkillTags), schemaVersion: 2, source: 'fallback' },
     phases, resources, projects
   };
 }
 
 export function logCurriculumStats(tag: string, roadmap: any): void {
   const phases = Array.isArray(roadmap?.phases) ? roadmap.phases : [];
-  const modules = phases.reduce((a: number, p: any) => a + (p.modules?.length || 0), 0);
-  const lessons = phases.reduce((a: number, p: any) => a + (p.modules || []).reduce((b: number, m: any) => b + (m.lessons?.length || 0), 0), 0);
+  const modules = phases.reduce((a: number, p: any) => a + (p.levels?.length || p.modules?.length || 0), 0);
+  const lessons = phases.reduce((a: number, p: any) => a + (p.levels || p.modules || []).reduce((b: number, m: any) => b + (m.lessons?.length || 0), 0), 0);
   console.log(`[${tag}] Phases: ${phases.length}, Modules: ${modules}, Lessons: ${lessons}, Resources: ${roadmap?.resources?.length || 0}, Projects: ${roadmap?.projects?.length || 0}`);
 }

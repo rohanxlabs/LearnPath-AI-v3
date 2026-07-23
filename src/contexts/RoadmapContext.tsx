@@ -4,6 +4,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Roadmap, Achievement, SystemNotification } from '../types';
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 interface RoadmapContextValue {
   roadmaps: Roadmap[];
   setRoadmaps: React.Dispatch<React.SetStateAction<Roadmap[]>>;
@@ -36,6 +40,7 @@ export function useRoadmaps(): RoadmapContextValue {
 interface RoadmapProviderProps {
   children: React.ReactNode;
   isAuthenticated: boolean;
+  bootRoadmaps?: Roadmap[];
   mutatingHeaders: () => Promise<Record<string, string>>;
   onAchievementUnlocked: (ach: { id: string; name: string; icon: string; xpReward: number }) => void;
   onNotification: (notif: SystemNotification) => void;
@@ -46,14 +51,17 @@ interface RoadmapProviderProps {
 export function RoadmapProvider({
   children,
   isAuthenticated,
+  bootRoadmaps = [],
   mutatingHeaders,
   onAchievementUnlocked,
   onNotification,
   onShowToast,
   onTabChange,
 }: RoadmapProviderProps) {
-  const [roadmaps, setRoadmaps] = useState<Roadmap[]>([]);
-  const [activeRoadmapId, setActiveRoadmapId] = useState<string>('');
+  // Seed from bootstrap data so roadmaps appear immediately on login
+  // without waiting for a separate /api/roadmaps round-trip.
+  const [roadmaps, setRoadmaps] = useState<Roadmap[]>(bootRoadmaps);
+  const [activeRoadmapId, setActiveRoadmapId] = useState<string>(bootRoadmaps[0]?.id || '');
   const [selectedRoadmapId, setSelectedRoadmapId] = useState<string | null>(null);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
   const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
@@ -87,6 +95,30 @@ export function RoadmapProvider({
     loadProgress();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roadmapIdKey]);
+
+  // When bootRoadmaps prop changes (new login or logout), sync state.
+  // - New login:  bootRoadmaps has data → seed roadmaps immediately so the
+  //               list appears without waiting for a /api/roadmaps round-trip.
+  // - Logout:     bootRoadmaps is reset to [] → clear roadmap state so the
+  //               next user's session starts clean.
+  const prevBootRef = React.useRef<Roadmap[]>(bootRoadmaps);
+  React.useEffect(() => {
+    if (bootRoadmaps === prevBootRef.current) return; // same reference, skip
+    prevBootRef.current = bootRoadmaps;
+    if (bootRoadmaps.length > 0) {
+      setRoadmaps(bootRoadmaps);
+      setActiveRoadmapId(prev => {
+        const still = bootRoadmaps.some(r => r.id === prev);
+        return still ? prev : (bootRoadmaps[0]?.id || '');
+      });
+    } else {
+      // Logout — wipe roadmap state so next login starts fresh.
+      setRoadmaps([]);
+      setActiveRoadmapId('');
+      setSelectedRoadmapId(null);
+      setSelectedPhaseId(null);
+    }
+  }, [bootRoadmaps]);
 
   const syncRoadmapsFromDatabase = useCallback(async () => {
     if (!isAuthenticated) return;
