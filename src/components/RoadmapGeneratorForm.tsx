@@ -18,6 +18,8 @@ interface RoadmapGeneratorFormProps {
   onSubmit: (params: RoadmapGeneratorParams) => Promise<void>;
   isGenerating: boolean;
   onCancel?: () => void;
+  /** Returns auth headers (including Bearer token) for the SSE streaming fetch. */
+  getHeaders?: () => Promise<Record<string, string>>;
 }
 
 const GOAL_CHIPS = [
@@ -34,6 +36,7 @@ export function RoadmapGeneratorForm({
   onSubmit,
   isGenerating,
   onCancel,
+  getHeaders,
 }: RoadmapGeneratorFormProps) {
   const [goal, setGoal] = useState('');
   const [goalError, setGoalError] = useState('');
@@ -83,11 +86,12 @@ export function RoadmapGeneratorForm({
       abortRef.current = controller;
 
       try {
+        const authHeaders = getHeaders
+          ? await getHeaders()
+          : { 'Content-Type': 'application/json' };
         const res = await fetch('/api/generate-roadmap-stream', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: authHeaders,
           body: JSON.stringify(params),
           signal: controller.signal,
         });

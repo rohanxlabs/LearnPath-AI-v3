@@ -44,6 +44,8 @@ interface LearningWorkspaceProps {
   activeLesson: { phaseId: string; levelId: string; lessonId: string } | null;
   onCompleteLesson: (xpAdded: number, lessonId: string) => void;
   onNavigateToLesson: (phaseId: string, levelId: string, lessonId: string) => void;
+  /** Returns auth headers (including Bearer token) for all /api/topics fetches. */
+  getHeaders?: () => Promise<Record<string, string>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +126,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   activeLesson,
   onCompleteLesson,
   onNavigateToLesson,
+  getHeaders,
 }) => {
   const [selectedTopicId, setSelectedTopicId] = useState<string>(activeLesson?.lessonId || '');
   const [topicData, setTopicData] = useState<any>(null);
@@ -181,7 +184,8 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
     if (!topicData || !isGenerating || contentPollCount >= MAX_CONTENT_POLLS) return;
     const pollId = setTimeout(async () => {
       setContentPollCount(c => c + 1);
-      const res = await fetch(`/api/topics/${topicData.id}`).catch(() => null);
+      const authHeaders = getHeaders ? await getHeaders() : {};
+      const res = await fetch(`/api/topics/${topicData.id}`, { headers: authHeaders }).catch(() => null);
       if (res?.ok) {
         const d = await res.json();
         if (d.topic) {
@@ -218,7 +222,8 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   const loadTopicData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/topics/${selectedTopicId}`);
+      const authHeaders = getHeaders ? await getHeaders() : {};
+      const res = await fetch(`/api/topics/${selectedTopicId}`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setTopicData(data.topic);

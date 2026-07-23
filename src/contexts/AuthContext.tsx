@@ -298,11 +298,6 @@ export function AuthProvider({
         activityLog: data.activityLog || {},
         roadmaps: data.roadmaps || [],
       });
-      // Show onboarding for brand-new accounts (no prior profile data).
-      if (isNewUser) {
-        setShowOnboarding(true);
-        onShowOnboarding();
-      }
       console.log(`[Auth] bootstrap success  email=${email}  isNewUser=${!data.profile || Object.keys(data.profile).length === 0}`);
     } catch (err) {
       // 401/403 → genuine session expiry: show auth screen with a clear message.
@@ -394,19 +389,22 @@ export function AuthProvider({
         await fetch('/api/user-profile', {
           method: 'PUT',
           headers,
-          body: JSON.stringify({ profile, settings, achievements, notifications }),
+          body: JSON.stringify({ profile, settings, achievements, notifications, activityLog }),
         });
       } catch (err) {
         console.warn('Failed to save user profile:', err);
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [profile, settings, achievements, notifications, isAuthenticated]);
+  }, [profile, settings, achievements, notifications, activityLog, isAuthenticated]);
 
   // Persist chat history separately (debounced, 5 s) so that frequent AI
   // mentor messages don't trigger a full profile flush.
+  // Guard: skip when chats is empty — an empty array on first mount would
+  // otherwise overwrite real chat history stored in the DB (seen as the
+  // "request aborted" 12-byte PUT in logs).
   useEffect(() => {
-    if (!isAuthenticated || !profile.email) return;
+    if (!isAuthenticated || !profile.email || chats.length === 0) return;
     const timer = setTimeout(async () => {
       try {
         const headers = await mutatingHeaders();

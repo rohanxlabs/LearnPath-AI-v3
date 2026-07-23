@@ -78,7 +78,8 @@ export function RoadmapProvider({
   useEffect(() => {
     if (roadmaps.length === 0) return;
     const loadProgress = async () => {
-      const headers = getHeaders ? await getHeaders() : {};
+      if (!getHeaders) return; // no token source — skip silently
+      const headers = await getHeaders();
       const results = await Promise.all(
         roadmaps.map(async (roadmap) => {
           try {
@@ -280,7 +281,7 @@ export function RoadmapProvider({
 
   const handleDeleteRoadmap = useCallback(async (id: string) => {
     try {
-      const headers = getHeaders ? await getHeaders() : {};
+      const headers = getHeaders ? await getHeaders() : await mutatingHeaders();
       const response = await fetch(`/api/roadmaps/${id}`, { method: 'DELETE', headers });
       if (response.ok) {
         setRoadmaps(prev => {

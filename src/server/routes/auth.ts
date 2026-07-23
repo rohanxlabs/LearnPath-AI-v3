@@ -196,9 +196,19 @@ router.get('/bootstrap', requireAuth, async (req, res) => {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     const progress = dbData?.progress || {};
     const roadmaps = await getUserRoadmapsReconstructed(userEmail);
+
+    // Merge authoritative xp (users.xp column) and streak (users.streak column) into
+    // the profile object so AuthContext always restores real values on login.
+    // progress.profile.xp may be stale or missing; the column values are always correct.
+    const profileOut = {
+      ...(progress.profile || {}),
+      xp: dbData?.xp ?? (progress.profile as any)?.xp ?? 0,
+      streak: dbData?.streak ?? (progress.profile as any)?.streak ?? 0,
+    };
+
     return res.json({
       authenticated: true, email: userEmail,
-      profile: progress.profile || {}, settings: progress.settings || {},
+      profile: profileOut, settings: progress.settings || {},
       achievements: progress.achievements || [], notifications: progress.notifications || [],
       chats: progress.chats || [], activityLog: progress.activityLog || {}, roadmaps,
     });

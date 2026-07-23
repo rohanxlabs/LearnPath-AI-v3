@@ -112,6 +112,7 @@ export function AppRouter({
         roadmap={activeRoadmap} activeLesson={activeLesson}
         onCompleteLesson={(xpAdded, lessonId) => onLessonComplete(xpAdded, lessonId)}
         onNavigateToLesson={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
+        getHeaders={mutatingHeaders}
       />
     );
   }
@@ -236,6 +237,7 @@ export function AppRouter({
           isGenerating={isAiGeneratingRoadmap} profile={profile} isLoading={isLoadingAuth}
           onAiAction={handleAiActionInternal}
           onLessonClick={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
+          getHeaders={mutatingHeaders}
         />
       );
     }

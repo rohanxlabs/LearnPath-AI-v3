@@ -114,7 +114,7 @@ router.get('/user-profile', requireAuth, async (req, res) => {
 
 router.put('/user-profile', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
-  const { profile, settings, achievements, notifications, chats } = req.body;
+  const { profile, settings, achievements, notifications, chats, activityLog } = req.body;
 
   const PROFILE_BLOCKLIST = ['xp', 'level', 'streak', 'isPro', 'email', 'createdAt', 'id', 'tier'];
   function sanitizeProfile(input: any): Record<string, any> | null {
@@ -141,6 +141,10 @@ router.put('/user-profile', requireAuth, async (req, res) => {
     if (achievements) dbData.progress.achievements = Array.isArray(achievements) ? achievements : [];
     if (notifications) dbData.progress.notifications = Array.isArray(notifications) ? notifications : [];
     if (chats) dbData.progress.chats = Array.isArray(chats) ? chats : [];
+    if (activityLog && typeof activityLog === 'object' && !Array.isArray(activityLog)) {
+      dbData.progress.activityLog = activityLog;
+      dbData.activityLog = activityLog;
+    }
     await saveUserDB(userEmail, dbData);
     return res.json({ success: true });
   } catch (error) {

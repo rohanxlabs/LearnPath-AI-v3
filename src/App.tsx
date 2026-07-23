@@ -19,8 +19,6 @@ import { SplashScreen } from './components/SplashScreen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion } from 'motion/react';
 import { FeedbackWidget } from './components/FeedbackWidget';
-import { OnboardingWizard } from './components/OnboardingWizard';
-import type { OnboardingData } from './components/OnboardingWizard';
 import { TermsPage, PrivacyPage } from './components/LegalPages';
 import { useAnalytics } from './hooks/useAnalytics';
 import { PhaseCompletionModal } from './components/PhaseCompletionModal';
@@ -346,16 +344,6 @@ function AppShell() {
           onPrivacy={() => setLegalPage('privacy')}
         />
       </Suspense>
-    );
-  }
-
-  // --- Onboarding ---
-  if (showOnboarding) {
-    return (
-      <OnboardingWizard
-        userName={profile.name || 'there'}
-        onComplete={(data: OnboardingData) => { setShowOnboarding(false); track('onboarding_completed', { goal: data.goal, experience: data.experienceLevel }); handleGenerateRoadmap(data); }}
-      />
     );
   }
 

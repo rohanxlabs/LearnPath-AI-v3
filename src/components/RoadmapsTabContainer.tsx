@@ -19,6 +19,8 @@ interface RoadmapsTabContainerProps {
   isLoading?: boolean;
   onAiAction?: (actionType: string, phaseName?: string) => void;
   onLessonClick?: (phaseId: string, levelId: string, lessonId: string) => void;
+  /** Auth header factory threaded down to the SSE streaming fetch in RoadmapGeneratorForm. */
+  getHeaders?: () => Promise<Record<string, string>>;
 }
 
 export function RoadmapsTabContainer({
@@ -34,6 +36,7 @@ export function RoadmapsTabContainer({
   isLoading,
   onLessonClick,
   onAiAction,
+  getHeaders,
 }: RoadmapsTabContainerProps) {
   const [showGenerator, setShowGenerator] = useState(false);
 
@@ -80,6 +83,7 @@ export function RoadmapsTabContainer({
                 setShowGenerator(false);
               }}
               isGenerating={isGenerating}
+              getHeaders={getHeaders}
             />
           )}
         </div>
