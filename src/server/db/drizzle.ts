@@ -16,8 +16,7 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
-// Supabase's connection pooler (PgBouncer in transaction mode) does not support
-// named prepared statements. `{ prepare: false }` tells Drizzle to use the simple
-// query protocol instead of Parse/Describe/Bind/Execute for every statement.
-// Safe to set unconditionally — harmless on a direct (non-pooler) connection.
+// drizzle-orm/node-postgres uses `name: undefined` for non-.prepare() queries,
+// which makes pg use the simple query protocol — compatible with PgBouncer in
+// transaction mode. No additional options needed.
 export const db = drizzle(pool, { schema });

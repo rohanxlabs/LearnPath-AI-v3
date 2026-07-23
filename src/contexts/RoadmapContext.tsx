@@ -42,6 +42,7 @@ interface RoadmapProviderProps {
   isAuthenticated: boolean;
   bootRoadmaps?: Roadmap[];
   mutatingHeaders: () => Promise<Record<string, string>>;
+  getHeaders?: () => Promise<Record<string, string>>;
   onAchievementUnlocked: (ach: { id: string; name: string; icon: string; xpReward: number }) => void;
   onNotification: (notif: SystemNotification) => void;
   onShowToast: (message: string, type?: 'error' | 'success' | 'info') => void;
@@ -53,6 +54,7 @@ export function RoadmapProvider({
   isAuthenticated,
   bootRoadmaps = [],
   mutatingHeaders,
+  getHeaders,
   onAchievementUnlocked,
   onNotification,
   onShowToast,
@@ -76,10 +78,11 @@ export function RoadmapProvider({
   useEffect(() => {
     if (roadmaps.length === 0) return;
     const loadProgress = async () => {
+      const headers = getHeaders ? await getHeaders() : {};
       const results = await Promise.all(
         roadmaps.map(async (roadmap) => {
           try {
-            const res = await fetch(`/api/progress/${roadmap.id}`);
+            const res = await fetch(`/api/progress/${roadmap.id}`, { headers });
             if (res.ok) {
               const data = await res.json();
               if (data.progress) return { id: roadmap.id, progress: data.progress };
@@ -123,7 +126,8 @@ export function RoadmapProvider({
   const syncRoadmapsFromDatabase = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const response = await fetch('/api/roadmaps');
+      const headers = getHeaders ? await getHeaders() : {};
+      const response = await fetch('/api/roadmaps', { headers });
       if (response.ok) {
         const data = await response.json();
         const uniqueList: Roadmap[] = [];
@@ -212,10 +216,12 @@ export function RoadmapProvider({
           if (val.hasGaps || !val.prerequisitesMet) console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites);
         }
       } catch (e) { console.warn('Could not validate progression:', e); }
-      setRoadmaps(prev => [newRoadmap, ...prev]);
+      setRoadmaps(prev => {
+        if (prev.some(r => r.id === newRoadmap.id)) return prev;
+        return [newRoadmap, ...prev];
+      });
       setActiveRoadmapId(newRoadmap.id);
       setSelectedRoadmapId(newRoadmap.id);
-      syncRoadmapsFromDatabase();
       onNotification({ id: `notif-${Date.now()}`, title: 'New AI Syllabus Generated', message: `Your custom roadmap for "${newRoadmap.goal}" is ready. Start learning!`, category: 'roadmap', read: false, timestamp: new Date().toISOString() });
       onTabChange('roadmaps');
     } catch (err) {
@@ -258,10 +264,12 @@ export function RoadmapProvider({
           if (val.hasGaps || !val.prerequisitesMet) console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites);
         }
       } catch (e) { console.warn('Could not validate progression:', e); }
-      setRoadmaps(prev => [newRoadmap, ...prev]);
+      setRoadmaps(prev => {
+        if (prev.some(r => r.id === newRoadmap.id)) return prev;
+        return [newRoadmap, ...prev];
+      });
       setActiveRoadmapId(newRoadmap.id);
       setSelectedRoadmapId(newRoadmap.id);
-      syncRoadmapsFromDatabase();
       onNotification({ id: `notif-${Date.now()}`, title: 'New AI Syllabus Generated', message: `Your custom roadmap for "${newRoadmap.goal}" is now active.`, category: 'roadmap', read: false, timestamp: new Date().toISOString() });
       onTabChange('roadmaps');
     } catch (err) {
@@ -272,7 +280,8 @@ export function RoadmapProvider({
 
   const handleDeleteRoadmap = useCallback(async (id: string) => {
     try {
-      const response = await fetch(`/api/roadmaps/${id}`, { method: 'DELETE' });
+      const headers = getHeaders ? await getHeaders() : {};
+      const response = await fetch(`/api/roadmaps/${id}`, { method: 'DELETE', headers });
       if (response.ok) {
         setRoadmaps(prev => {
           const updated = prev.filter(r => r.id !== id);

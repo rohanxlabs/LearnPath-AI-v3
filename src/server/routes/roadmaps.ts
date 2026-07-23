@@ -32,7 +32,11 @@ router.post('/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;
   if (!goal) return res.status(400).json({ error: 'Goal is required' });
 
-  const meta = { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year };
+  // Generate a stable roadmapId before calling the AI so validateAndNormalizeCurriculum
+  // can prefix all child IDs (ph-1, mod-1-1, les-1-1-1) with it, making them globally
+  // unique across every roadmap the user creates.
+  const roadmapId = `roadmap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const meta = { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year, roadmapId };
   const universityContext = college && branch && year
     ? `\nLearner is a ${sanitizeForPrompt(year)} student at ${sanitizeForPrompt(college)} studying ${sanitizeForPrompt(branch)}; align topics and ordering with their university syllabus (AKTU where applicable).`
     : '';
@@ -109,6 +113,7 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
     let readableError = error.message || String(error);
     try { const pe = JSON.parse(error.message); if (pe?.error?.message) readableError = pe.error.message; } catch (_) {}
     console.error('[Roadmap] Generation failed, using offline fallback:', readableError);
+    // Pass meta (which includes roadmapId) so fallback IDs are also scoped.
     const fallbackRoadmap = buildFallbackCurriculum(meta);
     logCurriculumStats('AI-Fallback', fallbackRoadmap);
     return res.json(fallbackRoadmap);
@@ -138,7 +143,9 @@ router.post('/generate-roadmap-stream', aiLimiter, requireAuth, async (req, res)
     res.write(`data: ${JSON.stringify(payload)}\n\n`);
   };
 
-  const meta = { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year };
+  // Pre-generate the roadmapId so validateAndNormalizeCurriculum scopes all child IDs to it.
+  const roadmapId = `roadmap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const meta = { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year, roadmapId };
 
   // Emit the detected domain / phase plan upfront so the UI can show names
   // immediately, before the AI even responds.
@@ -298,17 +305,16 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
   try {
     // Check BEFORE inserting so we know if this is the user's first roadmap.
     const existingBefore = await getRoadmapsByOwner(userEmail);
+
+    const phaseCount = Array.isArray(roadmap.phases) ? roadmap.phases.length : 0;
+    console.log('[Roadmap] Saving roadmap', roadmap.id, 'with', phaseCount, 'phases');
     await createRoadmapFromJson(userEmail, roadmap);
 
-    // Verify phases were actually written — a partial save (roadmap row exists but
-    // no phases) produces an empty shell that the UI cannot display. If that
-    // happened, delete the orphaned row and return an error so the client retries.
-    const saved = await reconstructRoadmapJson(roadmap.id, userEmail);
-    if (!saved || !saved.phases || saved.phases.length === 0) {
-      console.error('[Roadmap] Partial save detected for', roadmap.id, '— cleaning up orphan');
-      await deleteRoadmap(roadmap.id).catch(() => {});
-      return res.status(500).json({ error: 'Roadmap generation was incomplete. Please try again.' });
-    }
+    // Return the incoming roadmap data directly — no post-write re-read needed.
+    // A PgBouncer transaction-mode pool may route the immediate SELECT to a
+    // different backend before the INSERTs are visible, producing a false empty.
+    // The client will get the authoritative list on the next GET /api/roadmaps.
+    const saved = { ...roadmap, ownerEmail: userEmail };
 
     // Unlock "Roadmap Builder" on first roadmap creation.
     let newAchievement: { id: string; name: string; icon: string; xpReward: number } | null = null;

@@ -177,9 +177,16 @@ export function AuthProvider({
   // Token helpers
   // ---------------------------------------------------------------------------
 
-  /** Get the current Supabase access token (refreshes automatically if needed). */
+  /** Get the current Supabase access token, refreshing it if expired.
+   *
+   * getSession() reads from localStorage and can return a stale/expired token
+   * on a cold reload (user was away > 1 hour). refreshSession() validates the
+   * refresh token with Supabase and returns a fresh access_token — it only
+   * hits the network when the cached token is actually expired, so it is not
+   * a performance concern for normal requests.
+   */
   const getAccessToken = useCallback(async (): Promise<string | null> => {
-    const { data } = await supabase.auth.getSession();
+    const { data } = await supabase.auth.refreshSession();
     return data.session?.access_token ?? null;
   }, []);
 

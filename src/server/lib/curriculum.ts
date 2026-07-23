@@ -303,9 +303,18 @@ export function normalizeResources(
 
 export function validateAndNormalizeCurriculum(
   input: any,
-  meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string }
+  meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string; roadmapId?: string }
 ): any {
   const goal = meta.goal || (typeof input.goal === 'string' ? input.goal : 'Learning Goal');
+  // Use a caller-supplied roadmapId when available so all child IDs are globally unique
+  // across multiple roadmaps for the same user.  Fallback to timestamp for backward compat.
+  const roadmapId = meta.roadmapId || `roadmap-${Date.now()}`;
+
+  // Helper: scope a raw AI-supplied short ID (e.g. "ph-1") to this roadmap so two roadmaps
+  // never produce the same phase/module/lesson primary key.
+  const scope = (rawId: string) =>
+    rawId.startsWith(`${roadmapId}-`) ? rawId : `${roadmapId}-${rawId}`;
+
   let phases = Array.isArray(input.phases) ? input.phases : [];
   if (phases.length > CURRICULUM_LIMITS.maxPhases) phases = phases.slice(0, CURRICULUM_LIMITS.maxPhases);
 
@@ -317,6 +326,8 @@ export function validateAndNormalizeCurriculum(
     phaseDifficulties.push(DIFFICULTY_LADDER[idx]);
   }
 
+  // Pre-scan: build an ordered lesson ID list using SCOPED IDs so prerequisite resolution
+  // (which compares IDs from this map) matches the scoped IDs used in the main loop below.
   const orderedLessonIds: string[] = [];
   const lessonIndexById = new Map<string, number>();
   for (let p = 0; p < phases.length; p++) {
@@ -327,7 +338,8 @@ export function validateAndNormalizeCurriculum(
       const lessons = Array.isArray(module.lessons) ? module.lessons.slice(0, CURRICULUM_LIMITS.maxLessonsPerModule) : [];
       for (let l = 0; l < lessons.length; l++) {
         const raw = lessons[l] || {};
-        const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : `les-${p + 1}-${m + 1}-${l + 1}`;
+        const rawId = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : `les-${p + 1}-${m + 1}-${l + 1}`;
+        const id = scope(rawId);
         if (!lessonIndexById.has(id)) { lessonIndexById.set(id, orderedLessonIds.length); orderedLessonIds.push(id); }
       }
     }
@@ -339,7 +351,8 @@ export function validateAndNormalizeCurriculum(
 
   for (let p = 0; p < phases.length; p++) {
     const phase = phases[p] || {};
-    const phaseId = typeof phase.id === 'string' ? phase.id : `ph-${p + 1}`;
+    const rawPhaseId = typeof phase.id === 'string' ? phase.id : `ph-${p + 1}`;
+    const phaseId = scope(rawPhaseId);
     const phaseDiff = phaseDifficulties[p] || 'beginner';
     const modules = Array.isArray(phase.modules) ? phase.modules.slice(0, CURRICULUM_LIMITS.maxModulesPerPhase) : [];
     const moduleCount = Math.max(1, modules.length);
@@ -357,7 +370,8 @@ export function validateAndNormalizeCurriculum(
 
     for (let m = 0; m < modules.length; m++) {
       const module = modules[m] || {};
-      const moduleId = typeof module.id === 'string' ? module.id : `mod-${p + 1}-${m + 1}`;
+      const rawModuleId = typeof module.id === 'string' ? module.id : `mod-${p + 1}-${m + 1}`;
+      const moduleId = scope(rawModuleId);
       const moduleDiff = moduleDifficulties[m] || phaseDiff;
       const lessons = Array.isArray(module.lessons) ? module.lessons.slice(0, CURRICULUM_LIMITS.maxLessonsPerModule) : [];
       const normalizedLessons: any[] = [];
@@ -365,7 +379,8 @@ export function validateAndNormalizeCurriculum(
       for (let l = 0; l < lessons.length; l++) {
         const lesson = lessons[l] || {};
         globalLessonCounter++;
-        const lessonId = typeof lesson.id === 'string' && lesson.id.trim() ? lesson.id.trim() : `les-${p + 1}-${m + 1}-${l + 1}`;
+        const rawLessonId = typeof lesson.id === 'string' && lesson.id.trim() ? lesson.id.trim() : `les-${p + 1}-${m + 1}-${l + 1}`;
+        const lessonId = scope(rawLessonId);
         const lessonOrd = lessonIndexById.get(lessonId) ?? -1;
         const isFirstOverall = lessonOrd === 0;
 
@@ -374,7 +389,9 @@ export function validateAndNormalizeCurriculum(
           ? declaredDiff
           : moduleDiff === 'expert' ? 'advanced' : moduleDiff;
 
-        let prereqs = asStringArray(lesson.prerequisites).filter((id) => {
+        // Prerequisites: the AI sends raw (unscoped) IDs — scope them before lookup so they
+        // resolve correctly against the scoped lessonIndexById map.
+        let prereqs = asStringArray(lesson.prerequisites).map(scope).filter((id) => {
           const ord = lessonIndexById.get(id);
           return ord !== undefined && ord < lessonOrd;
         });
@@ -437,7 +454,7 @@ export function validateAndNormalizeCurriculum(
     const rawProjects = Array.isArray(phase.projects) ? phase.projects.slice(0, 3) : [];
     const defaultTier = PROJECT_LADDER[Math.min(PROJECT_LADDER.length - 1, p)];
     const normalizedProjects = rawProjects.map((proj: any, pi: number) => ({
-      id: typeof proj.id === 'string' ? proj.id : `proj-${p + 1}-${pi + 1}`,
+      id: typeof proj.id === 'string' ? scope(proj.id) : scope(`proj-${p + 1}-${pi + 1}`),
       title: typeof proj.title === 'string' && proj.title.trim() ? proj.title.trim() : `${phase.name || `Phase ${p + 1}`} Project`,
       difficulty: normalizeProjectTier(proj.difficulty) || defaultTier,
       description: typeof proj.description === 'string' && proj.description.trim() ? proj.description.trim() : `Apply the skills from ${phase.name || `Phase ${p + 1}`} to build a project for: ${goal}.`,
@@ -475,12 +492,13 @@ export function validateAndNormalizeCurriculum(
     for (const module of phase.levels) {
       totalLessons += module.lessons.length;
       for (const les of module.lessons) for (const tag of les.skillTags) allSkillTags.add(tag);
-      for (const r of module.resources) resources.push({ ...r, phaseId: phase.id, moduleId: module.id });
+      for (const r of module.resources) resources.push({ ...r, phaseId: phase.id, moduleId: module.id,
+        id: r.id ? scope(r.id) : r.id });
     }
   }
 
   return {
-    id: `roadmap-${Date.now()}`,
+    id: roadmapId,
     title: typeof input.title === 'string' ? input.title : goal,
     goal,
     experienceLevel: meta.experienceLevel || 'Beginner',
@@ -681,25 +699,29 @@ function getDomainPhasePlan(domain: string, goal: string, goalTitle: string): Do
   ];
 }
 
-export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string }): any {
+export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string; roadmapId?: string }): any {
   const goal = meta.goal || 'the learning goal';
   const goalTitle = goal.charAt(0).toUpperCase() + goal.slice(1);
+  const roadmapId = meta.roadmapId || `roadmap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  // Scope every child ID to this roadmap so fallback IDs never collide across roadmaps.
+  const scope = (rawId: string) =>
+    rawId.startsWith(`${roadmapId}-`) ? rawId : `${roadmapId}-${rawId}`;
 
   const domain = detectGoalDomain(goal);
   const phasePlan = getDomainPhasePlan(domain, goal, goalTitle);
 
   const phases = phasePlan.map((plan, pIdx) => {
-    const phaseId = `ph-${pIdx + 1}`;
+    const phaseId = scope(`ph-${pIdx + 1}`);
     let lessonCounter = 0;
 
     const modules = plan.moduleThemes.map((theme, mIdx) => {
-      const moduleId = `mod-${pIdx + 1}-${mIdx + 1}`;
+      const moduleId = scope(`mod-${pIdx + 1}-${mIdx + 1}`);
       const lessonCount = 4 + ((pIdx + mIdx) % 3);
       const lessonIds: string[] = [];
       const lessons = [];
       for (let l = 0; l < lessonCount; l++) {
         lessonCounter++;
-        const lessonId = `les-${pIdx + 1}-${mIdx + 1}-${l + 1}`;
+        const lessonId = scope(`les-${pIdx + 1}-${mIdx + 1}-${l + 1}`);
         const isFirstOverall = pIdx === 0 && mIdx === 0 && l === 0;
         let prereqs: string[] = [];
         if (!isFirstOverall) {
@@ -740,7 +762,7 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
       skillsCovered: (plan as any).skillTags?.length ? (plan as any).skillTags : plan.moduleThemes.map((t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-')),
       levels: modules, modules,
       progress: 0, xpEarned: 0, status: 'current',
-      projects: [{ id: `proj-${pIdx + 1}`, title: plan.projectTitle, difficulty: projectTier, description: `Apply everything from ${plan.name} to ship ${plan.projectTitle}. Build incrementally, test continuously, and document your work for ${goal}.`, techStack: plan.projectTech, features: ['Scaffold the project structure', 'Implement core feature set', 'Add tests and documentation', 'Deploy or demo the result'], progress: 0 }]
+      projects: [{ id: scope(`proj-${pIdx + 1}`), title: plan.projectTitle, difficulty: projectTier, description: `Apply everything from ${plan.name} to ship ${plan.projectTitle}. Build incrementally, test continuously, and document your work for ${goal}.`, techStack: plan.projectTech, features: ['Scaffold the project structure', 'Implement core feature set', 'Add tests and documentation', 'Deploy or demo the result'], progress: 0 }]
     };
   });
 
@@ -758,7 +780,7 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
   }
 
   return {
-    id: `roadmap-${Date.now()}`, title: goalTitle, goal, experienceLevel: meta.experienceLevel || 'Beginner',
+    id: roadmapId, title: goalTitle, goal, experienceLevel: meta.experienceLevel || 'Beginner',
     weeklyHours: Number(meta.weeklyHours) || 5, preferredStyle: meta.preferredStyle || 'Hands-on',
     college: meta.college || null, branch: meta.branch || null, year: meta.year || null,
     progressPercent: 0, totalXp: 0, lessonsCompleted: 0, hoursRemaining: phases.reduce((a, p) => a + (p.estimatedHours || 0), 0),

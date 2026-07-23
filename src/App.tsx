@@ -48,13 +48,15 @@ export function renderHomeView(props: {
   setActiveTab: (tab: string) => void;
   setActiveLesson: (lesson: { phaseId: string; levelId: string; lessonId: string } | null) => void;
   handleSelectRecommendationTask: (rec: any) => void;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }) {
-  const { profile, activeRoadmap, activePhase, achievements, aiRecommendations, isRecsLoading, isLoading, roadmapProgress, getNextIncompleteLesson, setActiveTab, setActiveLesson, handleSelectRecommendationTask } = props;
+  const { profile, activeRoadmap, activePhase, achievements, aiRecommendations, isRecsLoading, isLoading, roadmapProgress, getNextIncompleteLesson, setActiveTab, setActiveLesson, handleSelectRecommendationTask, getAuthHeaders } = props;
   return (
     <HomeView
       profile={profile} activeRoadmap={activeRoadmap} activePhase={activePhase}
       achievements={achievements} aiRecommendations={aiRecommendations}
       isRecsLoading={isRecsLoading} isLoading={isLoading} roadmapProgress={roadmapProgress}
+      getAuthHeaders={getAuthHeaders}
       onContinueLearning={() => {
         const nextLesson = getNextIncompleteLesson(activeRoadmap!);
         if (nextLesson) setActiveLesson(nextLesson);
@@ -570,6 +572,7 @@ function RoadmapProviderWrapper({ children, bootRoadmaps }: { children: React.Re
       isAuthenticated={isAuthenticated}
       bootRoadmaps={bootRoadmaps}
       mutatingHeaders={mutatingHeaders}
+      getHeaders={mutatingHeaders}
       onAchievementUnlocked={handleAchievementUnlocked}
       onNotification={(n) => setNotifications((prev: SystemNotification[]) => [n, ...prev])}
       onShowToast={showToast}

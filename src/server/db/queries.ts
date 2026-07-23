@@ -41,6 +41,25 @@ function asTextArray(v: any): string[] {
   return asArray(v).map(String);
 }
 
+/**
+ * Run an array of async tasks with a bounded concurrency limit.
+ * Keeps at most `concurrency` promises in-flight at once, preventing
+ * pg pool exhaustion on large roadmap inserts (pool max = 10).
+ */
+async function runConcurrent<T>(tasks: (() => Promise<T>)[], concurrency: number): Promise<T[]> {
+  const results: T[] = [];
+  let i = 0;
+  async function worker() {
+    while (i < tasks.length) {
+      const idx = i++;
+      results[idx] = await tasks[idx]();
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, worker);
+  await Promise.all(workers);
+  return results;
+}
+
 // ---------------------------------------------------------------------------
 // Table bootstrap (no-op — migrations handle this now)
 // ---------------------------------------------------------------------------
@@ -109,6 +128,36 @@ export async function upsertRoadmap(roadmap: {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Insert a new roadmap row — no-op if the ID already exists.
+// Use this for the POST /api/roadmaps (create) path so a network retry never
+// overwrites an existing roadmap.  upsertRoadmap() is still used by the
+// POST /update-roadmap (edit) path.
+// Returns true if a new row was inserted, false if the ID was already present.
+// ---------------------------------------------------------------------------
+
+export async function insertRoadmapIfNew(roadmap: Parameters<typeof upsertRoadmap>[0]): Promise<boolean> {
+  const result = await db.insert(roadmaps).values({
+    id: roadmap.id,
+    ownerEmail: roadmap.ownerEmail.toLowerCase(),
+    title: roadmap.title,
+    goal: roadmap.goal,
+    experienceLevel: roadmap.experienceLevel ?? null,
+    weeklyHours: roadmap.weeklyHours ?? null,
+    preferredStyle: roadmap.preferredStyle ?? null,
+    college: roadmap.college ?? null,
+    branch: roadmap.branch ?? null,
+    year: roadmap.year ?? null,
+    progressPercent: roadmap.progressPercent ?? 0,
+    totalXp: roadmap.totalXp ?? 0,
+    lessonsCompleted: roadmap.lessonsCompleted ?? 0,
+    hoursRemaining: roadmap.hoursRemaining ?? null,
+    status: roadmap.status ?? 'current',
+    updatedAt: new Date(),
+  }).onConflictDoNothing({ target: roadmaps.id }).returning({ id: roadmaps.id });
+  return result.length > 0;
+}
+
 export async function getRoadmapById(roadmapId: string): Promise<any | null> {
   const rows = await db.select().from(roadmaps).where(eq(roadmaps.id, roadmapId));
   return rows[0] || null;
@@ -151,6 +200,7 @@ export async function upsertPhase(phase: {
   }).onConflictDoUpdate({
     target: phases.id,
     set: {
+      roadmapId: phase.roadmapId,
       name: phase.name,
       description: phase.description ?? null,
       estimatedHours: phase.estimatedHours ?? null,
@@ -189,6 +239,8 @@ export async function upsertModule(module: {
   }).onConflictDoUpdate({
     target: modules.id,
     set: {
+      roadmapId: module.roadmapId,
+      phaseId: module.phaseId,
       name: module.name,
       type: module.type ?? null,
       status: module.status ?? 'current',
@@ -241,9 +293,9 @@ export async function upsertLesson(lesson: {
   }).onConflictDoUpdate({
     target: lessons.id,
     set: {
+      roadmapId: lesson.roadmapId,
       moduleId: lesson.moduleId,
       phaseId: lesson.phaseId,
-      roadmapId: lesson.roadmapId,
       title: lesson.title,
       description: lesson.description ?? null,
       type: lesson.type ?? 'learn',
@@ -783,8 +835,10 @@ export async function migrateRoadmapJsonToTables(
 
   const roadmapId = jsonRoadmap.id;
 
-  // 1. Upsert the roadmap row first (everything else FKs to it).
-  await upsertRoadmap({
+  // 1. Insert the roadmap row first (everything else FKs to it).
+  // Use insertRoadmapIfNew so a network retry or duplicate submission never
+  // overwrites an existing roadmap owned by this user.
+  const isNew = await insertRoadmapIfNew({
     id: roadmapId,
     ownerEmail,
     title: jsonRoadmap.title || jsonRoadmap.goal || 'Untitled Roadmap',
@@ -801,6 +855,12 @@ export async function migrateRoadmapJsonToTables(
     hoursRemaining: typeof jsonRoadmap.hoursRemaining === 'number' ? jsonRoadmap.hoursRemaining : null,
     status: jsonRoadmap.status ?? 'current',
   });
+  // If the roadmap already exists (duplicate submission / retry), skip re-inserting
+  // all child rows — the data is already correct in the database.
+  if (!isNew) {
+    console.log('[Roadmap] Skipping child-row inserts — roadmap', roadmapId, 'already exists (idempotent)');
+    return;
+  }
 
   // Build flat arrays of everything we need to insert so we can fire them in
   // parallel batches instead of one sequential await per row.
@@ -957,24 +1017,32 @@ export async function migrateRoadmapJsonToTables(
     }
   }
 
+  // Pool has max:10 connections. Cap in-flight queries to 8 so 2 slots remain
+  // for background queries (reconstructRoadmapJson, getRoadmapsByOwner, etc.).
+  const POOL_CONCURRENCY = 8;
+
   // 2. Write phases first (modules FK → phases).
-  await Promise.all(phaseRecs.map(r => upsertPhase(r)));
+  console.log('[Roadmap] Writing', phaseRecs.length, 'phases for', roadmapId);
+  await runConcurrent(phaseRecs.map(r => () => upsertPhase(r)), POOL_CONCURRENCY);
 
   // 3. Write modules in parallel (lessons FK → modules).
-  await Promise.all(modRecs.map(r => upsertModule(r)));
+  console.log('[Roadmap] Writing', modRecs.length, 'modules for', roadmapId);
+  await runConcurrent(modRecs.map(r => () => upsertModule(r)), POOL_CONCURRENCY);
 
-  // 4. Write lessons, resources, and projects in parallel
-  //    (lesson_content/quizzes/assignments FK → lessons, so lessons must land first).
-  await Promise.all(lesRecs.map(r => upsertLesson(r)));
+  // 4. Write lessons (lesson_content/quizzes/assignments FK → lessons, so lessons must land first).
+  console.log('[Roadmap] Writing', lesRecs.length, 'lessons for', roadmapId);
+  await runConcurrent(lesRecs.map(r => () => upsertLesson(r)), POOL_CONCURRENCY);
 
   // 5. Write everything that depends on lessons, plus resources/projects (no mutual deps).
-  await Promise.all([
-    ...lesContents.map(c => upsertLessonContent({ lessonId: c.lessonId, markdownContent: c.markdownContent, summary: c.summary, modelUsed: 'migration-legacy-json', generatedAt: nowIso() })),
-    ...quizRecs.map(r => upsertQuiz(r)),
-    ...asgRecs.map(r => upsertAssignment(r)),
-    ...resRecs.map(r => upsertResource(r)),
-    ...projRecs.map(r => upsertPhaseProject(r)),
-  ]);
+  const step5Tasks: (() => Promise<void>)[] = [
+    ...lesContents.map(c => () => upsertLessonContent({ lessonId: c.lessonId, markdownContent: c.markdownContent, summary: c.summary, modelUsed: 'migration-legacy-json', generatedAt: nowIso() })),
+    ...quizRecs.map(r => () => upsertQuiz(r)),
+    ...asgRecs.map(r => () => upsertAssignment(r)),
+    ...resRecs.map(r => () => upsertResource(r)),
+    ...projRecs.map(r => () => upsertPhaseProject(r)),
+  ];
+  console.log('[Roadmap] Writing', step5Tasks.length, 'dependent records for', roadmapId);
+  await runConcurrent(step5Tasks, POOL_CONCURRENCY);
 
   // Roadmap-level resources fallback (legacy shape).
   const existingResourceIds = new Set<string>();
@@ -1223,10 +1291,12 @@ export async function getUserRoadmapsReconstructed(ownerEmail: string): Promise<
   const result: any[] = [];
   for (const r of roadmapRows) {
     const reconstructed = await reconstructRoadmapJson(r.id, ownerEmail);
-    // Skip orphaned roadmap rows that have no phases — these are partial saves
-    // caused by a generation failure after upsertRoadmap but before upsertPhase.
-    // Returning them as empty shells breaks the roadmap list UI.
-    if (reconstructed && reconstructed.phases && reconstructed.phases.length > 0) {
+    // Include any roadmap whose row exists, even with 0 phases.
+    // The racy post-write re-read that caused false-empty results has been removed
+    // (POST /api/roadmaps now returns incoming data directly), so a 0-phase result
+    // here means the generation genuinely failed partway through — still show it
+    // rather than silently dropping it, as the user's card should appear.
+    if (reconstructed) {
       result.push(reconstructed);
     }
   }

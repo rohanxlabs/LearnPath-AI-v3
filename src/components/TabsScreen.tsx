@@ -17,16 +17,18 @@ interface AnalyticsViewProps {
   profile: UserProfile;
   activityLog?: ActivityLog;
   onNavigate?: (tab: string) => void;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
-export function AnalyticsView({ profile, activityLog = {}, onNavigate }: AnalyticsViewProps) {
+export function AnalyticsView({ profile, activityLog = {}, onNavigate, getAuthHeaders }: AnalyticsViewProps) {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch('/api/user-stats');
+        const headers = getAuthHeaders ? await getAuthHeaders() : {};
+        const res = await fetch('/api/user-stats', { headers });
         const data = await res.json();
         setStats(data);
       } catch (err) {

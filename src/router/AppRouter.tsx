@@ -81,7 +81,7 @@ export function AppRouter({
   onSetSettings,
   onSetProfile,
 }: AppRouterProps) {
-  const { profile, settings, achievements, isLoadingAuth, activityLog } = useAuth();
+  const { profile, settings, achievements, isLoadingAuth, activityLog, mutatingHeaders } = useAuth();
   const {
     roadmaps,
     activeRoadmapId,
@@ -124,6 +124,7 @@ export function AppRouter({
         aiRecommendations: [], isRecsLoading: false, isLoading: isLoadingAuth,
         roadmapProgress: {}, getNextIncompleteLesson,
         setActiveTab, setActiveLesson, handleSelectRecommendationTask,
+        getAuthHeaders: mutatingHeaders,
       });
     }
     if (activeTab === 'mentor') {
@@ -135,7 +136,7 @@ export function AppRouter({
       );
     }
     if (activeTab === 'progress') {
-      return <AnalyticsView profile={profile} activityLog={activityLog} onNavigate={(tab) => { setActiveTab(tab); setActiveLesson(null); }} />;
+      return <AnalyticsView profile={profile} activityLog={activityLog} onNavigate={(tab) => { setActiveTab(tab); setActiveLesson(null); }} getAuthHeaders={mutatingHeaders} />;
     }
     if (activeTab === 'profile') {
       return (
@@ -175,6 +176,7 @@ export function AppRouter({
         aiRecommendations: [], isRecsLoading: false, isLoading: isLoadingAuth,
         roadmapProgress: {}, getNextIncompleteLesson,
         setActiveTab, setActiveLesson, handleSelectRecommendationTask,
+        getAuthHeaders: mutatingHeaders,
       });
 
     case 'roadmaps': {
@@ -247,7 +249,7 @@ export function AppRouter({
       );
 
     case 'progress':
-      return <AnalyticsView profile={profile} activityLog={activityLog} onNavigate={(tab) => { setActiveTab(tab); setActiveLesson(null); }} />;
+      return <AnalyticsView profile={profile} activityLog={activityLog} onNavigate={(tab) => { setActiveTab(tab); setActiveLesson(null); }} getAuthHeaders={mutatingHeaders} />;
 
     case 'achievements':
       return (

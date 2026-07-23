@@ -66,6 +66,7 @@ export interface HomeViewProps {
   onOpenMentor: () => void;
   onViewProgress: () => void;
   roadmapProgress?: Record<string, any>;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
 interface UserStatsWithVisit {
@@ -159,6 +160,7 @@ export function HomeView({
   onLaunchRecommendation,
   onOpenMentor,
   onViewProgress,
+  getAuthHeaders,
 }: HomeViewProps) {
   const firstName = profile.name.split(' ')[0] || profile.name;
 
@@ -166,10 +168,15 @@ export function HomeView({
   const [liveStats, setLiveStats] = useState<UserStatsWithVisit | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   useEffect(() => {
-    fetch('/api/user-stats')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setLiveStats({ streak: d.streak ?? 0, lessonsCompleted: d.lessonsCompleted ?? 0, daysSinceLastVisit: d.daysSinceLastVisit ?? null }); })
-      .catch(() => {});
+    (async () => {
+      try {
+        const headers = getAuthHeaders ? await getAuthHeaders() : {};
+        const r = await fetch('/api/user-stats', { headers });
+        if (!r.ok) return;
+        const d = await r.json();
+        setLiveStats({ streak: d.streak ?? 0, lessonsCompleted: d.lessonsCompleted ?? 0, daysSinceLastVisit: d.daysSinceLastVisit ?? null });
+      } catch { /* best-effort — banner simply stays hidden */ }
+    })();
   }, []);
 
   // Welcome-back: show when streak is 0 AND user has prior activity AND was away 2+ days
