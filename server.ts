@@ -8,7 +8,6 @@ import cors from 'cors';
 import path from 'path';
 import { exec } from 'child_process';
 import { platform } from 'os';
-import { fileURLToPath, pathToFileURL } from 'url';
 import { createServer as createViteServer } from 'vite';
 import pinoHttp from 'pino-http';
 import * as Sentry from '@sentry/node';
@@ -84,7 +83,7 @@ const allowedOrigins = process.env.FRONTEND_URL
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return callback(null, true);
+    if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true,
@@ -243,12 +242,8 @@ async function bootstrap() {
   return server;
 }
 
-const isMainModule = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
-
-if (isMainModule) {
-  bootstrap().catch((err) => {
-    logger.fatal({ err }, 'Server failed to start');
-    process.exit(1);
-  });
-}
+bootstrap().catch((err) => {
+  logger.fatal({ err }, 'Server failed to start');
+  process.exit(1);
+});
 
