@@ -158,8 +158,11 @@ export async function insertRoadmapIfNew(roadmap: Parameters<typeof upsertRoadma
   return result.length > 0;
 }
 
-export async function getRoadmapById(roadmapId: string): Promise<any | null> {
-  const rows = await db.select().from(roadmaps).where(eq(roadmaps.id, roadmapId));
+export async function getRoadmapById(roadmapId: string, ownerEmail?: string): Promise<any | null> {
+  const condition = ownerEmail
+    ? and(eq(roadmaps.id, roadmapId), eq(roadmaps.ownerEmail, ownerEmail.toLowerCase()))
+    : eq(roadmaps.id, roadmapId);
+  const rows = await db.select().from(roadmaps).where(condition);
   return rows[0] || null;
 }
 
@@ -593,6 +596,7 @@ export async function upsertUserLessonProgress(progress: {
   phaseId: string;
   completed?: boolean;
   completedAt?: string | null;
+  isUnlocked?: boolean;
   attempts?: number;
   quizScore?: number | null;
   studyMinutes?: number;
@@ -608,6 +612,7 @@ export async function upsertUserLessonProgress(progress: {
     phaseId: progress.phaseId,
     completed: progress.completed ?? false,
     completedAt,
+    isUnlocked: progress.isUnlocked ?? false,
     attempts: progress.attempts ?? 0,
     quizScore: progress.quizScore ?? null,
     studyMinutes: progress.studyMinutes ?? 0,
@@ -620,6 +625,7 @@ export async function upsertUserLessonProgress(progress: {
       phaseId: progress.phaseId,
       completed: drizzleSql`COALESCE(EXCLUDED.completed, user_lesson_progress.completed)`,
       completedAt: drizzleSql`COALESCE(EXCLUDED.completed_at, user_lesson_progress.completed_at)`,
+      isUnlocked: drizzleSql`(EXCLUDED.is_unlocked OR user_lesson_progress.is_unlocked)`,
       attempts: drizzleSql`GREATEST(user_lesson_progress.attempts, EXCLUDED.attempts)`,
       quizScore: drizzleSql`COALESCE(EXCLUDED.quiz_score, user_lesson_progress.quiz_score)`,
       studyMinutes: drizzleSql`GREATEST(user_lesson_progress.study_minutes, EXCLUDED.study_minutes)`,
@@ -729,7 +735,7 @@ export async function getRoadmapProgressPercent(roadmapId: string, ownerEmail: s
 // ---------------------------------------------------------------------------
 
 export async function getNormalizedRoadmap(roadmapId: string, ownerEmail?: string): Promise<any | null> {
-  const roadmap = await getRoadmapById(roadmapId);
+  const roadmap = await getRoadmapById(roadmapId, ownerEmail);
   if (!roadmap) return null;
 
   const [phaseRows, moduleRows, lessonRows, quizRows, assignmentRows, resourceRows, projectRows] =
@@ -743,24 +749,32 @@ export async function getNormalizedRoadmap(roadmapId: string, ownerEmail?: strin
       db.select().from(phaseProjects).where(eq(phaseProjects.roadmapId, roadmapId)).orderBy(asc(phaseProjects.orderIndex)),
     ]);
 
-  // Build per-user completion maps: completedAtMap (lessonId → ISO timestamp) and
-  // completedLessonIds (Set for O(1) status override in reconstructLesson).
+  // Build per-user progress maps from user_lesson_progress:
+  //   completedAtMap    — lessonId → ISO completion timestamp
+  //   completedLessonIds — Set of lesson IDs the user has completed
+  //   unlockedLessonIds  — Set of lesson IDs the user has had unlocked
   const completedAtMap = new Map<string, string>();
   const completedLessonIds = new Set<string>();
+  const unlockedLessonIds = new Set<string>();
   if (ownerEmail) {
     const progressRows = await db
-      .select({ lessonId: userLessonProgress.lessonId, completedAt: userLessonProgress.completedAt })
+      .select({
+        lessonId: userLessonProgress.lessonId,
+        completedAt: userLessonProgress.completedAt,
+        isUnlocked: userLessonProgress.isUnlocked,
+      })
       .from(userLessonProgress)
       .where(
         and(
           eq(userLessonProgress.ownerEmail, ownerEmail.toLowerCase()),
-          eq(userLessonProgress.roadmapId, roadmapId),
-          eq(userLessonProgress.completed, true)
+          eq(userLessonProgress.roadmapId, roadmapId)
         )
       );
     for (const row of progressRows) {
-      completedLessonIds.add(row.lessonId);
+      if (row.isUnlocked) unlockedLessonIds.add(row.lessonId);
+      // Only count/track the completedAt for actually-completed rows.
       if (row.completedAt) {
+        completedLessonIds.add(row.lessonId);
         completedAtMap.set(row.lessonId, row.completedAt instanceof Date ? row.completedAt.toISOString() : String(row.completedAt));
       }
     }
@@ -821,8 +835,9 @@ export async function getNormalizedRoadmap(roadmapId: string, ownerEmail?: strin
         assignments: assignmentsByLesson.get(lesson.id) || [],
         resources: resourcesByModule.get(module.id) || [],
         _completedAt: completedAtMap.get(lesson.id) ?? null,
-        // Carry the per-user completed flag so reconstructLesson can override status.
+        // Carry per-user flags so reconstructLesson derives status correctly.
         _completedByUser: completedLessonIds.has(lesson.id),
+        _unlockedByUser: unlockedLessonIds.has(lesson.id),
       })),
       quizzes: quizRows.filter((q: any) => q.moduleId === module.id),
       assignments: assignmentRows.filter((a: any) => a.moduleId === module.id),
@@ -1231,7 +1246,11 @@ function reconstructLesson(lesson: any): any {
   // authoritative source for 'completed' status.  Fall back to the global
   // lessons.status for 'available' / 'locked' ordering so unlock sequencing
   // is preserved even when ownerEmail was not supplied.
-  const status = lesson._completedByUser ? 'completed' : lesson.status;
+  const status = lesson._completedByUser
+    ? 'completed'
+    : lesson._unlockedByUser
+      ? 'available'
+      : lesson.status;
   const base: any = {
     id: lesson.id,
     name: lesson.title,
@@ -1374,8 +1393,7 @@ export async function completeLessonForUser(
     studyMinutes: studyMinutes ?? 0,
   });
 
-  await updateLessonStatus(lessonId, 'completed');
-  await unlockNextLesson(lessonId, moduleId);
+  await unlockNextLesson(lessonId, moduleId, ownerEmail);
 
   // Count totals from the authoritative per-user table, not the global
   // lessons.status column. This means a DB re-seed or migration that resets
@@ -1404,6 +1422,17 @@ export async function completeLessonForUser(
     .set({ lessonsCompleted: completedLessons, progressPercent, updatedAt: new Date() })
     .where(eq(roadmaps.id, roadmapId));
 
+  // If every lesson in the roadmap has a completed progress row for this user,
+  // mark the roadmap itself as completed.  This replaces the old global
+  // allLessonRows.every(l => l.status === 'completed') check that was in
+  // unlockNextLesson and was based on the shared lessons.status column.
+  if (totalLessons > 0 && completedLessons >= totalLessons) {
+    await db
+      .update(roadmaps)
+      .set({ status: 'completed', updatedAt: new Date() })
+      .where(eq(roadmaps.id, roadmapId));
+  }
+
   return { completedLessons, totalLessons, progressPercent };
 }
 
@@ -1413,8 +1442,10 @@ export async function completeLessonForUser(
 
 export async function unlockNextLesson(
   lessonId: string,
-  moduleId: string
+  moduleId: string,
+  ownerEmail: string
 ): Promise<void> {
+  // Fetch current lesson's context (order, phase, roadmap).
   const ctxRows = await db
     .select({
       orderIndex: lessons.orderIndex,
@@ -1429,14 +1460,25 @@ export async function unlockNextLesson(
 
   const { orderIndex: lessonOrder, phaseId, roadmapId } = ctxRows[0];
 
-  // 1) Next locked lesson in the same module.
+  // Helper: write an is_unlocked row for a resolved next lesson.
+  const writeUnlock = async (nextLessonId: string, nextModuleId: string, nextPhaseId: string) => {
+    await upsertUserLessonProgress({
+      ownerEmail,
+      roadmapId,
+      lessonId: nextLessonId,
+      moduleId: nextModuleId,
+      phaseId: nextPhaseId,
+      isUnlocked: true,
+    });
+  };
+
+  // 1) Next lesson in the same module (by order_index, no status filter).
   const nextInModule = await db
     .select({ id: lessons.id })
     .from(lessons)
     .where(
       and(
         eq(lessons.moduleId, moduleId),
-        eq(lessons.status, 'locked'),
         gt(lessons.orderIndex, lessonOrder ?? 0)
       )
     )
@@ -1444,12 +1486,12 @@ export async function unlockNextLesson(
     .limit(1);
 
   if (nextInModule[0]) {
-    await updateLessonStatus(nextInModule[0].id, 'available');
+    await writeUnlock(nextInModule[0].id, moduleId, phaseId);
     await promoteContainerStatuses(moduleId, phaseId, roadmapId);
     return;
   }
 
-  // 2) First locked lesson of the next module in the same phase.
+  // 2) First lesson of the next module in the same phase.
   const moduleRows = await db
     .select({ id: modules.id, phaseId: modules.phaseId, roadmapId: modules.roadmapId, orderIndex: modules.orderIndex })
     .from(modules)
@@ -1474,28 +1516,15 @@ export async function unlockNextLesson(
       const firstLesson = await db
         .select({ id: lessons.id })
         .from(lessons)
-        .where(and(eq(lessons.moduleId, nextModule[0].id), eq(lessons.status, 'locked')))
+        .where(eq(lessons.moduleId, nextModule[0].id))
         .orderBy(asc(lessons.orderIndex))
         .limit(1);
-      if (firstLesson[0]) await updateLessonStatus(firstLesson[0].id, 'available');
+      if (firstLesson[0]) await writeUnlock(firstLesson[0].id, nextModule[0].id, mod.phaseId);
       await promoteContainerStatuses(nextModule[0].id, mod.phaseId, mod.roadmapId);
       return;
     }
 
     // 3) First module of the next phase.
-    const nextPhase = await db
-      .select({ id: phases.id, roadmapId: phases.roadmapId, orderIndex: phases.orderIndex })
-      .from(phases)
-      .where(
-        and(
-          eq(phases.roadmapId, mod.roadmapId),
-          gt(phases.orderIndex, 0) // placeholder — need actual phase orderIndex
-        )
-      )
-      .orderBy(asc(phases.orderIndex))
-      .limit(1);
-
-    // Re-query with correct phase order context.
     const currentPhaseRows = await db
       .select({ orderIndex: phases.orderIndex })
       .from(phases)
@@ -1515,8 +1544,6 @@ export async function unlockNextLesson(
       .orderBy(asc(phases.orderIndex))
       .limit(1);
 
-    void nextPhase;
-
     if (nextPhaseRows[0]) {
       const firstModule = await db
         .select({ id: modules.id, phaseId: modules.phaseId })
@@ -1529,27 +1556,18 @@ export async function unlockNextLesson(
         const firstLesson = await db
           .select({ id: lessons.id })
           .from(lessons)
-          .where(and(eq(lessons.moduleId, firstModule[0].id), eq(lessons.status, 'locked')))
+          .where(eq(lessons.moduleId, firstModule[0].id))
           .orderBy(asc(lessons.orderIndex))
           .limit(1);
-        if (firstLesson[0]) await updateLessonStatus(firstLesson[0].id, 'available');
+        if (firstLesson[0]) {
+          await writeUnlock(firstLesson[0].id, firstModule[0].id, nextPhaseRows[0].id);
+        }
         await promoteContainerStatuses(firstModule[0].id, nextPhaseRows[0].id, nextPhaseRows[0].roadmapId);
       }
       return;
     }
 
-    // 4) Last module of last phase — check if roadmap is complete.
-    const allLessonRows = await db
-      .select({ status: lessons.status })
-      .from(lessons)
-      .where(eq(lessons.roadmapId, mod.roadmapId));
-    const allDone = allLessonRows.length > 0 && allLessonRows.every((l: any) => l.status === 'completed');
-    if (allDone) {
-      await db
-        .update(roadmaps)
-        .set({ status: 'completed', updatedAt: new Date() })
-        .where(eq(roadmaps.id, mod.roadmapId));
-    }
+    // 4) No next phase — roadmap completion is checked in completeLessonForUser.
     await promoteContainerStatuses(mod.id, mod.phaseId, mod.roadmapId);
   }
 }

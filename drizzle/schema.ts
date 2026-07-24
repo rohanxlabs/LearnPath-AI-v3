@@ -305,6 +305,7 @@ export const userLessonProgress = pgTable(
       .references(() => phases.id, { onDelete: 'cascade' }),
     completed: boolean('completed').notNull().default(false),
     completedAt: timestamp('completed_at'),
+    isUnlocked: boolean('is_unlocked').notNull().default(false),
     attempts: integer('attempts').notNull().default(0),
     quizScore: integer('quiz_score'),
     studyMinutes: integer('study_minutes').notNull().default(0),

@@ -8,7 +8,8 @@ import {
   upsertUserLessonProgress,
   getLessonById,
   getResourcesForLessonContext,
-  getProjectForPhase
+  getProjectForPhase,
+  getRoadmapsByOwner
 } from '../db/queries';
 import {
   getOrGenerateLessonContent,
@@ -26,11 +27,24 @@ import { sql } from '../lib/db';
 
 const router = Router();
 
+// ---------------------------------------------------------------------------
+// Shared ownership guard — returns true if the lesson belongs to a roadmap
+// owned by userEmail.  Returns false (→ 404) otherwise.
+// Uses 404 (not 403) to avoid lesson/roadmap ID enumeration.
+// ---------------------------------------------------------------------------
+async function userOwnsLesson(userEmail: string, roadmapId: string): Promise<boolean> {
+  const owned = await getRoadmapsByOwner(userEmail);
+  return owned.some((r: any) => r.id === roadmapId);
+}
+
 // Lesson content (lazy generate on first access)
 router.get('/lessons/:lessonId/content', requireAuth, async (req, res) => {
   const { lessonId } = req.params;
   const userEmail = req.supabaseUser!.email;
   try {
+    const ctx = await findLessonContext(lessonId);
+    if (!ctx) return res.status(404).json({ error: 'Lesson not found' });
+    if (!await userOwnsLesson(userEmail, ctx.roadmap_id)) return res.status(404).json({ error: 'Lesson not found' });
     const result = await getOrGenerateLessonContent(lessonId);
     if (!result) return res.status(404).json({ error: 'Lesson not found' });
     const payload = await assembleLessonResponse(userEmail, result);
@@ -47,6 +61,9 @@ router.post('/lessons/:lessonId/generate', aiLimiter, requireAuth, async (req, r
   const userEmail = req.supabaseUser!.email;
   const regenerate = req.body?.regenerate === true || req.query?.regenerate === 'true';
   try {
+    const ctx = await findLessonContext(lessonId);
+    if (!ctx) return res.status(404).json({ error: 'Lesson not found' });
+    if (!await userOwnsLesson(userEmail, ctx.roadmap_id)) return res.status(404).json({ error: 'Lesson not found' });
     const result = await getOrGenerateLessonContent(lessonId, { regenerate });
     if (!result) return res.status(404).json({ error: 'Lesson not found' });
     const payload = await assembleLessonResponse(userEmail, result);
@@ -62,8 +79,10 @@ router.get('/lessons/:lessonId/meta', requireAuth, async (req, res) => {
   const { lessonId } = req.params;
   const userEmail = req.supabaseUser!.email;
   try {
-    const lesson = await getLessonById(lessonId);
+    // Use findLessonContext instead of getLessonById so we get roadmap_id for ownership check.
+    const lesson = await findLessonContext(lessonId);
     if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
+    if (!await userOwnsLesson(userEmail, lesson.roadmap_id)) return res.status(404).json({ error: 'Lesson not found' });
     const prerequisiteNames = await resolveLessonNames(Array.isArray(lesson.prerequisites) ? lesson.prerequisites : []);
     const generatedAt = lesson.generated_at ? new Date(lesson.generated_at).toISOString() : null;
     const hasContent = !!(lesson.markdown_content && String(lesson.markdown_content).trim().length > 0);
@@ -90,6 +109,7 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
   try {
     const lesson = await findLessonContext(topicId);
     if (!lesson) return res.status(404).json({ error: 'Topic not found' });
+    if (!await userOwnsLesson(userEmail, lesson.roadmap_id)) return res.status(404).json({ error: 'Topic not found' });
 
     let markdownContent = '', summary: string | null = null, generatedAt: string | null = null;
     let contentStatus: string = lesson.contentStatus || 'pending';

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth } from '../lib/middleware';
+import { requireAuth, createLimiter } from '../lib/middleware';
 import { loadUserDB, saveUserDB, updateStreak, unlockAchievement, sql } from '../lib/db';
 import {
   getUserLessonCompletionStats,
@@ -36,6 +36,12 @@ function ensureFeedbackTable(): Promise<void> {
 }
 // Kick off table creation at module load time (fire-and-forget).
 ensureFeedbackTable();
+
+const feedbackLimiter = createLimiter({
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 1000 : 5,
+  message: { error: 'Too many feedback submissions. Please slow down.' },
+});
 
 const router = Router();
 
@@ -244,7 +250,7 @@ router.post('/progress', requireAuth, async (req, res) => {
 });
 
 // Feedback endpoint
-router.post('/feedback', async (req, res) => {
+router.post('/feedback', feedbackLimiter, async (req, res) => {
   const { sentiment, message, context } = req.body;
   if (!sentiment || !['positive', 'neutral', 'negative'].includes(sentiment)) {
     return res.status(400).json({ error: 'Valid sentiment is required' });
