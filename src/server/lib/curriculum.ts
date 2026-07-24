@@ -1,4 +1,4 @@
-import { cleanAndParseJSON, callOpenRouterChatCompletion, sanitizeForPrompt, OPENROUTER_MODELS } from './ai';
+import { cleanAndParseJSON, callGroqChatCompletion, sanitizeForPrompt, GROQ_MODELS } from './ai';
 
 // ---------------------------------------------------------------------------
 // Curriculum constants & types

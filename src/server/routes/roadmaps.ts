@@ -18,7 +18,7 @@ import {
   logCurriculumStats,
   CURRICULUM_LIMITS
 } from '../lib/curriculum';
-import { callOpenRouterChatCompletion, cleanAndParseJSON, sanitizeForPrompt, GROQ_MODELS } from '../lib/ai';
+import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt, GROQ_MODELS } from '../lib/ai';
 
 const router = Router();
 
@@ -77,7 +77,7 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
       const prompt = attempt === 0 ? buildRoadmapPrompt() : buildCorrectivePrompt(bestCandidate ? validateCurriculumQuality(bestCandidate.parsed).issues : []);
       let parsed: any;
       try {
-        const response = await callOpenRouterChatCompletion(prompt, { temperature: attempt === 0 ? 0.5 : 0.35, asJSON: true, timeoutMs: 30000, maxTokens: 8000 });
+        const response = await callGroqChatCompletion(prompt, { temperature: attempt === 0 ? 0.5 : 0.35, asJSON: true, timeoutMs: 30000, maxTokens: 8000 });
         parsed = cleanAndParseJSON(response, '{}');
       } catch (genErr: any) {
         console.warn(`[Roadmap] Generation attempt ${attempt + 1} failed:`, genErr.message);
@@ -193,7 +193,7 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
 
       let parsed: any;
       try {
-        const response = await callOpenRouterChatCompletion(prompt, { temperature: attempt === 0 ? 0.5 : 0.35, asJSON: true, timeoutMs: 30000, maxTokens: 8000 });
+        const response = await callGroqChatCompletion(prompt, { temperature: attempt === 0 ? 0.5 : 0.35, asJSON: true, timeoutMs: 30000, maxTokens: 8000 });
         parsed = cleanAndParseJSON(response, '{}');
       } catch (genErr: any) {
         console.warn(`[Roadmap-Stream] Generation attempt ${attempt + 1} failed:`, genErr.message);

@@ -32,8 +32,6 @@ services:
       # Secrets — set the actual values in the Render dashboard:
       - key: DATABASE_URL
         sync: false          # marks as secret, value entered in dashboard
-      - key: SESSION_SECRET
-        sync: false
       # Groq AI — required for AI features
       - key: GROQ_API_KEY
         sync: false

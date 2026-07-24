@@ -10,7 +10,11 @@ import {
 // works with Neon's HTTP proxy endpoint).
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  // Supabase/pg present valid public CAs — verify them in production.
+  // Set DATABASE_INSECURE_SSL=true only for a local self-signed dev database.
+  ssl: process.env.DATABASE_INSECURE_SSL === 'true'
+    ? { rejectUnauthorized: false }
+    : { rejectUnauthorized: true },
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
@@ -133,7 +137,8 @@ export async function loadUserDB(userEmail: string, options: { createIfMissing?:
         xp: row.xp ?? 0,
         passwordHash: row.password_hash || undefined,
         last_active_date: row.last_active_date,
-        streak: row.streak ?? 0
+        streak: row.streak ?? 0,
+        progress_backfilled_at: row.progress_backfilled_at || null,
       };
 
       // BACKWARD COMPATIBILITY: Migrate old single roadmap to roadmaps array.

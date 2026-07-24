@@ -52,7 +52,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],  // Vite HMR + React needs eval in dev
+      // Vite HMR needs eval + inline in dev only. Production serves a
+      // pre-built static bundle and must not permit either.
+      scriptSrc: isProduction
+        ? ["'self'"]
+        : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: [
@@ -97,7 +101,8 @@ app.use(pinoHttp({
 }));
 
 app.use(express.json({ limit: '4mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// No endpoint accepts large form-encoded bodies; 100 kb is generous.
+app.use(express.urlencoded({ limit: '100kb', extended: true }));
 app.use(cookieParser());
 
 // ---------------------------------------------------------------------------
@@ -158,8 +163,9 @@ app.get('/sw.js', (req, res, next) => {
   next();
 });
 
-// Global error handler — must be after all routes.
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+// Defined here, registered LAST inside bootstrap() so it also catches errors
+// thrown by the Vite/static frontend middleware.
+const errorHandler: express.ErrorRequestHandler = (err, req, res, _next) => {
   if (process.env.SENTRY_DSN) Sentry.captureException(err);
   logger.error({ err, url: req.url, method: req.method }, 'Unhandled request error');
   // Guard against ERR_HTTP_HEADERS_SENT when a route already started a response
@@ -167,7 +173,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   if (res.headersSent) return;
   const status = err.status || err.statusCode || 500;
   res.status(status).json({ error: isProduction ? 'Internal server error' : err.message });
-});
+};
 
 // ---------------------------------------------------------------------------
 // PWA asset preparation
@@ -228,12 +234,18 @@ async function bootstrap() {
     });
   }
 
+  // Must be the final middleware — after Vite/static so it catches their errors too.
+  app.use(errorHandler);
+
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server running on http://0.0.0.0:${PORT}`);
     logger.info(`Open in browser at http://localhost:${PORT}`);
-    if (platform() === 'win32') exec(`start "" "http://localhost:${PORT}"`);
-    else if (platform() === 'darwin') exec(`open "http://localhost:${PORT}"`);
-    else exec(`xdg-open "http://localhost:${PORT}"`);
+    // Auto-launch browser in dev only — containers and CI have no display.
+    if (!isProduction) {
+      if (platform() === 'win32') exec(`start "" "http://localhost:${PORT}"`);
+      else if (platform() === 'darwin') exec(`open "http://localhost:${PORT}"`);
+      else exec(`xdg-open "http://localhost:${PORT}"`);
+    }
   });
   // Allow up to 120 s for any single request (Supabase pooler cold-start +
   // large parallel DB writes can legitimately take 30–60 s on first connect).

@@ -40,9 +40,11 @@ jobs:
     needs: lint
     env:
       NODE_ENV: test
-      SESSION_SECRET: ci-test-session-secret-minimum-32-chars
       DATABASE_URL: postgres://test:test@localhost:5432/test
-      OPENROUTER_API_KEY: sk-or-test-key
+      GROQ_API_KEY: gsk_ci_placeholder_key
+      SUPABASE_URL: https://ci-placeholder.supabase.co
+      SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
     steps:
       - uses: actions/checkout@v4
 
@@ -58,8 +60,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
-        run: pnpm run test:ci
+      - name: Run tests with coverage
+        run: pnpm vitest run --coverage --reporter=verbose
 
   # ---------------------------------------------------------------------------
   # Production build — verifies the full frontend + server compiles cleanly
@@ -71,8 +73,10 @@ jobs:
     env:
       NODE_ENV: production
       DATABASE_URL: postgres://ci:ci@localhost:5432/ci
-      SESSION_SECRET: ci-build-session-secret-minimum-32-chars
-      OPENROUTER_API_KEY: sk-or-build-placeholder
+      GROQ_API_KEY: gsk_ci_placeholder_key
+      SUPABASE_URL: https://ci-placeholder.supabase.co
+      SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
     steps:
       - uses: actions/checkout@v4
 

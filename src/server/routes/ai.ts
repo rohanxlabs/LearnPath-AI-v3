@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, aiLimiter } from '../lib/middleware';
-import { callOpenRouterChatCompletion, cleanAndParseJSON, sanitizeForPrompt } from '../lib/ai';
+import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt } from '../lib/ai';
 import { recCache, REC_CACHE_TTL } from '../lib/db';
 
 const router = Router();
@@ -38,7 +38,7 @@ Rules:
 `;
 
   try {
-    const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.7, asJSON: true });
+    const response = await callGroqChatCompletion(prompt, { temperature: 0.7, asJSON: true });
     const parsed = cleanAndParseJSON(response, '{"projects":[]}');
     // Ensure all project descriptions are specific to the goal, not generic.
     const projects = (parsed.projects || []).filter(
@@ -86,7 +86,7 @@ Use clean formatting without markdown symbols like ** or ##.`;
       ? `\n\nConversation so far:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}`
       : '';
     const prompt = `User question: ${sanitizeForPrompt(message, 500)}${historyText}`;
-    const responseText = await callOpenRouterChatCompletion(prompt, {
+    const responseText = await callGroqChatCompletion(prompt, {
       temperature: 0.5,
       systemPrompt: systemInstruction,
     });
@@ -182,7 +182,7 @@ Concoct your response as a valid JSON object matching this structure:
 }`;
 
   try {
-    const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.3, asJSON: true });
+    const response = await callGroqChatCompletion(prompt, { temperature: 0.3, asJSON: true });
     return res.json(cleanAndParseJSON(response, '{}'));
   } catch (error: any) {
     console.error('OpenRouter Code Analysis fallback activation:', error.message);
@@ -218,7 +218,7 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 ]`;
 
   try {
-    const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.8, asJSON: true });
+    const response = await callGroqChatCompletion(prompt, { temperature: 0.8, asJSON: true });
     const parsed = cleanAndParseJSON(response, '[]');
     recCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
     return res.json(parsed);
@@ -277,7 +277,7 @@ Output MUST be a valid JSON object matching this schema:
 }`;
 
   try {
-    const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.6, asJSON: true });
+    const response = await callGroqChatCompletion(prompt, { temperature: 0.6, asJSON: true });
     return res.json(cleanAndParseJSON(response, '{}'));
   } catch (error: any) {
     console.warn('OpenRouter Topic Overview generator fallback:', error.message);
@@ -310,7 +310,7 @@ Return JSON with progressive hint levels:
 Level ${attemptNumber || 1} is requested. Keep hints educational, not giving away answers.`;
 
   try {
-    const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.5, asJSON: true });
+    const response = await callGroqChatCompletion(prompt, { temperature: 0.5, asJSON: true });
     const parsed = cleanAndParseJSON(response, '{"hints":[],"hintCostXp":10}');
     if (!parsed.hints || !Array.isArray(parsed.hints)) {
       parsed.hints = [
@@ -347,7 +347,7 @@ Rules: Be specific to the goal and phase. Be encouraging but honest. Mention one
 Return ONLY the summary text (no JSON, no preamble).`;
 
   try {
-    const text = await callOpenRouterChatCompletion(prompt, { temperature: 0.65, asJSON: false, maxTokens: 150 });
+    const text = await callGroqChatCompletion(prompt, { temperature: 0.65, asJSON: false, maxTokens: 150 });
     const data = { summary: text.trim() };
     recCache.set(cacheKey, { data, timestamp: Date.now() });
     return res.json(data);

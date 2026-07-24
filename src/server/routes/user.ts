@@ -86,9 +86,9 @@ router.get('/user-stats', requireAuth, async (req, res) => {
       overallMastery: Math.round(overallMastery),
       daysSinceLastVisit,
     });
-  } catch (error) {
-    console.error('Get user stats error:', error);
-    return res.json({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0, daysSinceLastVisit: null });
+  } catch (error: any) {
+    logger.error({ err: error?.message }, 'user-stats query failed');
+    return res.status(503).json({ error: 'Stats temporarily unavailable', code: 'STATS_FAILED' });
   }
 });
 

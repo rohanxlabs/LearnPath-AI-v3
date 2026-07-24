@@ -16,9 +16,10 @@
 import { Router } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { authLimiter, loginLimiter, isValidEmail, validatePassword, requireAuth } from '../lib/middleware';
-import { loadUserDB, saveUserDB } from '../lib/db';
+import { loadUserDB, saveUserDB, sql } from '../lib/db';
 import { getUserRoadmapsReconstructed, backfillUserLessonProgress } from '../db/queries';
 import { getSupabaseAdmin } from '../lib/supabaseAdmin';
+import { logger } from '../lib/logger';
 
 // ---------------------------------------------------------------------------
 // Lazy-singleton anon client — used for password-based sign-in and password
@@ -56,31 +57,21 @@ router.post('/register', authLimiter, async (req, res) => {
     const admin = getSupabaseAdmin();
 
     // Create user in Supabase Auth.
-    // email_confirm: true marks email as confirmed so signInWithPassword works
-    // immediately regardless of the project's "Confirm email" dashboard setting.
+    // email_confirm: false so the user must click the verification link
+    // sent to their inbox before they can sign in.
     const { data, error } = await admin.auth.admin.createUser({
       email: normalizedEmail,
       password,
       user_metadata: { name: name.trim() },
-      email_confirm: true,
+      email_confirm: false,
     });
 
     if (error) {
       if (error.message?.toLowerCase().includes('already registered') || error.code === 'email_exists') {
         return res.status(400).json({ error: 'User already exists' });
       }
-      console.error('[Auth] Supabase register error:', error);
+      logger.error({ err: error.message }, 'auth: Supabase register error');
       return res.status(400).json({ error: error.message || 'Registration failed' });
-    }
-
-    // Force-confirm the email via updateUserById as a belt-and-suspenders
-    // measure — some Supabase versions/plans ignore email_confirm on createUser.
-    if (data.user?.id) {
-      await admin.auth.admin.updateUserById(data.user.id, {
-        email_confirm: true,
-      }).catch((e: any) => {
-        console.warn('[Auth] email_confirm updateUserById failed (non-fatal):', e?.message);
-      });
     }
 
     // Seed local DB row with the profile name so other routes find it immediately.
@@ -92,7 +83,23 @@ router.post('/register', authLimiter, async (req, res) => {
       await saveUserDB(normalizedEmail, db);
     }
 
-    return res.json({ success: true, email: normalizedEmail, name: name.trim(), userId: data.user?.id });
+    // Trigger the Supabase confirmation email. Requires "Confirm email" to be
+    // enabled in the Supabase dashboard under Authentication → Providers → Email,
+    // and FRONTEND_URL to be set so the link redirects to the correct origin.
+    const { error: linkErr } = await getSupabaseAnon().auth.resend({
+      type: 'signup',
+      email: normalizedEmail,
+      options: { emailRedirectTo: `${process.env.FRONTEND_URL || ''}/auth/confirmed` },
+    });
+    if (linkErr) logger.warn({ err: linkErr.message }, 'auth: confirmation email failed to send');
+
+    return res.json({
+      success: true,
+      email: normalizedEmail,
+      name: name.trim(),
+      userId: data.user?.id,
+      requiresVerification: true,
+    });
   } catch (error: any) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -113,31 +120,21 @@ router.post('/login', loginLimiter, async (req, res) => {
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
-    const admin = getSupabaseAdmin();
-
     // Use the public (anon-key) sign-in so Supabase validates the password and
     // returns a fresh session with tokens.  The admin client skips password
     // validation so we use the singleton anon client instead.
-    let { data, error } = await getSupabaseAnon().auth.signInWithPassword({
+    const { data, error } = await getSupabaseAnon().auth.signInWithPassword({
       email: normalizedEmail,
       password,
     });
 
-    // If Supabase blocked sign-in because the email is not confirmed (can happen
-    // when the project has "Confirm email" enabled but the account was created
-    // via the Admin SDK before the email_confirm fix), auto-confirm and retry.
+    // Email not yet confirmed — return an actionable error so the UI can
+    // prompt the user to check their inbox.
     if (error?.message?.toLowerCase().includes('email not confirmed')) {
-      try {
-        const { data: userData } = await (admin.auth.admin as any).getUserByEmail(normalizedEmail).catch(() => ({ data: null }));
-        if (userData?.user?.id) {
-          await admin.auth.admin.updateUserById(userData.user.id, { email_confirm: true });
-          const retry = await getSupabaseAnon().auth.signInWithPassword({ email: normalizedEmail, password });
-          data = retry.data;
-          error = retry.error ?? null;
-        }
-      } catch (autoConfirmErr: any) {
-        console.warn('[Auth] Auto-confirm on login failed:', autoConfirmErr?.message);
-      }
+      return res.status(403).json({
+        error: 'Please confirm your email address. Check your inbox for the verification link.',
+        code: 'EMAIL_NOT_CONFIRMED',
+      });
     }
 
     if (error || !data.session) {
@@ -148,11 +145,13 @@ router.post('/login', loginLimiter, async (req, res) => {
     const dbUser = await loadUserDB(normalizedEmail, { createIfMissing: false });
     const storedName = dbUser?.progress?.profile?.name || data.user?.user_metadata?.name || null;
 
+    // Refresh token is managed by the Supabase SDK in the browser.
+    // Never return it in the JSON body — that would expose a long-lived
+    // credential to any JavaScript that can read the response.
     return res.json({
       ok: true,
       name: storedName,
       access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
       expires_in: data.session.expires_in,
     });
   } catch (error: any) {
@@ -195,10 +194,19 @@ router.get('/bootstrap', requireAuth, async (req, res) => {
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     const progress = dbData?.progress || {};
+
     // Backfill any completed lessons from the global lessons.status column into
     // user_lesson_progress so reconstructRoadmapJson can use per-user rows.
-    // Runs before reconstruction so the query sees the backfilled rows immediately.
-    await backfillUserLessonProgress(userEmail);
+    // Guarded by progress_backfilled_at so this expensive migration runs at
+    // most once per user lifetime, not on every bootstrap call.
+    if (!dbData?.progress_backfilled_at) {
+      await backfillUserLessonProgress(userEmail);
+      await sql`
+        UPDATE users SET progress_backfilled_at = NOW()
+        WHERE email = ${userEmail.toLowerCase()}
+      `.catch((e: any) => logger.warn({ err: e?.message }, 'bootstrap: failed to stamp backfill marker'));
+    }
+
     const roadmaps = await getUserRoadmapsReconstructed(userEmail);
 
     // Merge authoritative xp (users.xp column) and streak (users.streak column) into
@@ -216,11 +224,16 @@ router.get('/bootstrap', requireAuth, async (req, res) => {
       achievements: progress.achievements || [], notifications: progress.notifications || [],
       chats: progress.chats || [], activityLog: progress.activityLog || {}, roadmaps,
     });
-  } catch (error) {
-    console.error('Bootstrap error:', error);
-    return res.json({
-      authenticated: true, email: userEmail,
-      profile: {}, settings: {}, achievements: [], notifications: [], chats: [], activityLog: {}, roadmaps: [],
+  } catch (error: any) {
+    logger.error({ err: error?.message }, 'bootstrap failed');
+    if (process.env.SENTRY_DSN) {
+      const Sentry = await import('@sentry/node');
+      Sentry.captureException(error);
+    }
+    // Do NOT pretend the account is empty — that looks like data loss to the user.
+    return res.status(503).json({
+      error: 'Could not load your data right now. Please retry in a moment.',
+      code: 'BOOTSTRAP_FAILED',
     });
   }
 });

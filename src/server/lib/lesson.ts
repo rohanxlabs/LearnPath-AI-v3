@@ -6,7 +6,7 @@ import {
   getQuizForLesson,
   upsertQuiz
 } from '../db/queries';
-import { callOpenRouterChatCompletion, cleanAndParseJSON, sanitizeForPrompt, OPENROUTER_MODELS } from './ai';
+import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt, GROQ_MODELS } from './ai';
 import { sql } from './db';
 
 // ---------------------------------------------------------------------------
@@ -240,14 +240,14 @@ export async function generateLessonContent(ctx: {
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.6, asJSON: false, timeoutMs: 35000, maxTokens: 4500 });
+      const response = await callGroqChatCompletion(prompt, { temperature: 0.6, asJSON: false, timeoutMs: 35000, maxTokens: 4500 });
       const md = cleanLessonMarkdown(response);
       const { sectionsFound, ok } = scoreLessonMarkdown(md);
       if (sectionsFound > bestSections) { bestSections = sectionsFound; bestMarkdown = md; }
       if (ok) {
         const summary = extractLessonSummary(md);
         console.log(`[Lesson-Gen] ${ctx.lessonId} generated (${subject}, ${sectionsFound}/11 sections, attempt ${attempt + 1}).`);
-        return { markdown: md, summary, modelUsed: OPENROUTER_MODELS[0] };
+        return { markdown: md, summary, modelUsed: GROQ_MODELS[0] };
       }
       console.warn(`[Lesson-Gen] ${ctx.lessonId} attempt ${attempt + 1} incomplete (${sectionsFound}/11 sections).`);
     } catch (err: any) {
@@ -257,7 +257,7 @@ export async function generateLessonContent(ctx: {
 
   if (bestSections >= 6 && bestMarkdown) {
     console.warn(`[Lesson-Gen] ${ctx.lessonId} using best partial content (${bestSections}/11 sections).`);
-    return { markdown: bestMarkdown, summary: extractLessonSummary(bestMarkdown), modelUsed: OPENROUTER_MODELS[0] };
+    return { markdown: bestMarkdown, summary: extractLessonSummary(bestMarkdown), modelUsed: GROQ_MODELS[0] };
   }
 
   console.warn(`[Lesson-Gen] ${ctx.lessonId} falling back to offline lesson template.`);
@@ -545,7 +545,7 @@ Output must be a JSON array of questions:
 ]`;
 
   try {
-    const response = await callOpenRouterChatCompletion(prompt, { temperature: 0.7, asJSON: true });
+    const response = await callGroqChatCompletion(prompt, { temperature: 0.7, asJSON: true });
     const parsed = cleanAndParseJSON(response, '[]');
     if (Array.isArray(parsed)) {
       for (const q of parsed) if (!q.misconceptionNotes) q.misconceptionNotes = ['Common misunderstanding - test again.'];

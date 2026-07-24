@@ -48,14 +48,32 @@ export function cleanAndParseJSON(rawText: string | null | undefined, fallbackDe
   return fallbackVal;
 }
 
-export function sanitizeForPrompt(input: string | number | undefined | null, maxLength: number = 500): string {
+/**
+ * Best-effort neutralisation of untrusted text before embedding it in a prompt.
+ * NOT a security boundary — the real control is that model output is only ever
+ * rendered as study content, never executed and never used for authorisation.
+ */
+export function sanitizeForPrompt(input: string | number | undefined | null, maxLength = 500): string {
   if (input === null || input === undefined) return '';
-  let cleaned = String(input).trim();
-  if (cleaned.length > maxLength) cleaned = cleaned.slice(0, maxLength);
-  cleaned = cleaned
+  let s = String(input);
+
+  // Normalise so homoglyph/unicode-escape bypasses collapse to plain ASCII.
+  s = s.normalize('NFKC');
+
+  // Strip zero-width and bidi-override characters used to hide instructions.
+  s = s.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, '');
+
+  // Collapse control characters and excessive newlines (newline stuffing is the
+  // most common way to fake a new conversational turn).
+  s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/\n{3,}/g, '\n\n');
+
+  // Neutralise structural delimiters and role markers, tolerant of whitespace.
+  s = s
     .replace(/[`{}<>\\]/g, '')
-    .replace(/\b(system:|human:|assistant:)\b/gi, '');
-  return cleaned;
+    .replace(/^\s*(system|human|user|assistant|developer)\s*:/gim, '[role]')
+    .replace(/\b(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/gi, '[filtered]');
+
+  return s.trim().slice(0, maxLength);
 }
 
 // ---------------------------------------------------------------------------
@@ -80,9 +98,6 @@ export const GROQ_MODELS = [
   'llama-3.1-8b-instant',                       // last resort — very fast, 128k context
 ];
 
-// Keep the old export name as an alias so existing call-sites that import
-// OPENROUTER_MODELS still compile without change.
-export const OPENROUTER_MODELS = GROQ_MODELS;
 
 export const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -97,9 +112,6 @@ export interface GroqOptions {
   /** Override the default system prompt for this request. */
   systemPrompt?: string;
 }
-
-// Keep old interface name as alias.
-export type OpenRouterOptions = GroqOptions;
 
 export async function callGroqChatCompletion(
   prompt: string,
@@ -169,5 +181,3 @@ export async function callGroqChatCompletion(
   throw lastError || new Error('All Groq models failed');
 }
 
-// Keep old function name as alias so call-sites need zero changes.
-export const callOpenRouterChatCompletion = callGroqChatCompletion;
