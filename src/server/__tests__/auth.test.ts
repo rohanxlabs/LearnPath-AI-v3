@@ -180,6 +180,93 @@ describe('GET /api/bootstrap', () => {
     expect(res.body).toHaveProperty('achievements');
     expect(res.body).toHaveProperty('roadmaps');
   });
+
+  it('re-hydrates completed lesson progress on bootstrap refresh', async () => {
+    const token = await setupUser('refresh@test.com', 'Refresh User');
+    const roadmapId = 'rm-refresh-1';
+    const lessonId = 'les-refresh-1';
+    const roadmapPayload = {
+      id: roadmapId,
+      goal: 'Refresh persistence regression',
+      title: 'Refresh persistence regression',
+      experienceLevel: 'Beginner',
+      weeklyHours: 3,
+      preferredStyle: 'Hands-on',
+      progressPercent: 0,
+      totalXp: 0,
+      lessonsCompleted: 0,
+      hoursRemaining: 10,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      phases: [
+        {
+          id: 'ph-refresh-1',
+          name: 'Phase 1',
+          description: 'Phase 1 description',
+          estimatedHours: 4,
+          skillsCovered: ['basics'],
+          xpEarned: 0,
+          progress: 0,
+          status: 'current',
+          modules: [
+            {
+              id: 'lvl-refresh-1',
+              name: 'Level 1',
+              type: 'module',
+              status: 'current',
+              lessons: [
+                {
+                  id: lessonId,
+                  name: 'Lesson 1',
+                  title: 'Lesson 1',
+                  type: 'learn',
+                  status: 'available',
+                  xpReward: 25,
+                  estimatedMinutes: 15,
+                  summary: 'Summary',
+                  description: 'Description',
+                  learningObjectives: ['Intro'],
+                  prerequisites: [],
+                  difficulty: 'beginner',
+                  skillTags: ['basics'],
+                  contentStatus: 'ready',
+                  workedExamples: [],
+                  exercises: [],
+                  orderIndex: 1,
+                  content: '# Lesson 1',
+                },
+              ],
+              resources: [],
+            },
+          ],
+        },
+      ],
+      resources: [],
+      projects: [],
+    };
+
+    const createRes = await request(app)
+      .post('/api/roadmaps')
+      .set(authHeader(token))
+      .send(roadmapPayload);
+    expect(createRes.status).toBe(200);
+
+    const completeRes = await request(app)
+      .post('/api/complete-lesson')
+      .set(authHeader(token))
+      .send({ lessonId, roadmapId });
+    expect(completeRes.status).toBe(200);
+
+    const bootstrapRes = await request(app).get('/api/bootstrap').set(authHeader(token));
+    expect(bootstrapRes.status).toBe(200);
+    expect(Array.isArray(bootstrapRes.body.roadmaps)).toBe(true);
+
+    const refreshedRoadmap = bootstrapRes.body.roadmaps.find((r: any) => r.id === roadmapId);
+    expect(refreshedRoadmap).toBeTruthy();
+
+    const refreshedLesson = refreshedRoadmap.phases?.[0]?.levels?.[0]?.lessons?.find((l: any) => l.id === lessonId);
+    expect(refreshedLesson?.status).toBe('completed');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ import { Router } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { authLimiter, loginLimiter, isValidEmail, validatePassword, requireAuth } from '../lib/middleware';
 import { loadUserDB, saveUserDB } from '../lib/db';
-import { getUserRoadmapsReconstructed } from '../db/queries';
+import { getUserRoadmapsReconstructed, backfillUserLessonProgress } from '../db/queries';
 import { getSupabaseAdmin } from '../lib/supabaseAdmin';
 
 // ---------------------------------------------------------------------------
@@ -195,6 +195,10 @@ router.get('/bootstrap', requireAuth, async (req, res) => {
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     const progress = dbData?.progress || {};
+    // Backfill any completed lessons from the global lessons.status column into
+    // user_lesson_progress so reconstructRoadmapJson can use per-user rows.
+    // Runs before reconstruction so the query sees the backfilled rows immediately.
+    await backfillUserLessonProgress(userEmail);
     const roadmaps = await getUserRoadmapsReconstructed(userEmail);
 
     // Merge authoritative xp (users.xp column) and streak (users.streak column) into

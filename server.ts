@@ -111,6 +111,15 @@ import aiRouter from './src/server/routes/ai';
 import userRouter from './src/server/routes/user';
 import emailRouter from './src/server/routes/email';
 
+// Disable ETag-based 304 caching for all API routes.
+// Every /api endpoint is auth-gated and returns user-specific mutable data —
+// a stale 304 can hide lesson completion, progress updates, and profile changes
+// until the user hard-refreshes.
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 app.use('/api', authRouter);
 app.use('/api', roadmapsRouter);
 app.use('/api', lessonsRouter);

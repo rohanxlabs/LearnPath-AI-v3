@@ -78,6 +78,7 @@ function AppShell() {
   // Sub-Task 9: phase completion modal state + session dedup ref
   const [phaseCompletionData, setPhaseCompletionData] = useState<{ phase: Phase; nextPhase: Phase | null; xpEarned: number } | null>(null);
   const celebratedPhasesRef = useRef<Set<string>>(new Set());
+  const pendingProgressSaveRef = useRef<Promise<void> | null>(null);
   const {
     isAuthenticated, isLoadingAuth, profile, setProfile, settings, setSettings,
     achievements, setAchievements, notifications, setNotifications,
@@ -150,7 +151,7 @@ function AppShell() {
   }, []);
 
   // Lesson completion
-  const handleLessonComplete = useCallback((xpAdded: number, specificLessonId?: string) => {
+  const handleLessonComplete = useCallback(async (xpAdded: number, specificLessonId?: string) => {
     if (!activeLesson) return;
     const targetLessonId = specificLessonId || activeLesson.lessonId;
     const targetRoadmapId = selectedRoadmapId || activeRoadmapId;
@@ -207,43 +208,70 @@ function AppShell() {
       }
     }
 
-    if (targetRoadmapId) {
-      mutatingHeaders().then(h => fetch('/api/complete-lesson', { method: 'POST', headers: h, body: JSON.stringify({ lessonId: targetLessonId, roadmapId: targetRoadmapId }) }))
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (!data) return;
-          // Apply XP from the server's authoritative value (C-01 fix)
-          if (typeof data.xp === 'number') {
-            setProfile(prev => {
-              const newXp = data.xp;
-              const isNextLevel = newXp >= (prev.level * 200);
-              return { ...prev, xp: newXp, level: isNextLevel ? prev.level + 1 : prev.level };
-            });
-          }
-          // Write activity log entry from server XP delta (C-01 fix)
-          const xpEarned = typeof data.xp === 'number' ? (xpAdded || 0) : 0;
-          const todayKey = new Date().toISOString().split('T')[0];
-          setActivityLog(prev => {
-            const ex = prev[todayKey] || { xp: 0, lessonsCompleted: 0 };
-            return { ...prev, [todayKey]: { xp: ex.xp + xpEarned, lessonsCompleted: ex.lessonsCompleted + 1 } };
-          });
-          // Update roadmap XP/completion totals from server (C-01 fix)
-          if (typeof data.xp === 'number') {
-            setRoadmaps(prev => prev.map(r => r.id === targetRoadmapId
-              ? { ...r, totalXp: (r.totalXp || 0) + xpEarned, lessonsCompleted: r.lessonsCompleted + 1 }
-              : r
-            ));
-          }
-          if (data.newAchievement) handleAchievementUnlocked(data.newAchievement);
-          // Re-sync from DB so phase unlock statuses are authoritative (C-02 fix)
-          syncRoadmapsFromDatabase();
-        })
-        .catch(err => console.warn('Failed to complete lesson:', err));
+    const progressSave = async () => {
+      if (!targetRoadmapId) return;
+      const headers = await mutatingHeaders();
+      const response = await fetch('/api/complete-lesson', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ lessonId: targetLessonId, roadmapId: targetRoadmapId }),
+      });
+      const data = response.ok ? await response.json().catch(() => null) : null;
+      if (!data) return;
+      // Apply XP from the server's authoritative value (C-01 fix)
+      if (typeof data.xp === 'number') {
+        setProfile(prev => {
+          const newXp = data.xp;
+          const isNextLevel = newXp >= (prev.level * 200);
+          return { ...prev, xp: newXp, level: isNextLevel ? prev.level + 1 : prev.level };
+        });
+      }
+      // Write activity log entry from server XP delta (C-01 fix)
+      const xpEarned = typeof data.xp === 'number' ? (xpAdded || 0) : 0;
+      const todayKey = new Date().toISOString().split('T')[0];
+      setActivityLog(prev => {
+        const ex = prev[todayKey] || { xp: 0, lessonsCompleted: 0 };
+        return { ...prev, [todayKey]: { xp: ex.xp + xpEarned, lessonsCompleted: ex.lessonsCompleted + 1 } };
+      });
+      // Update roadmap XP/completion totals from server (C-01 fix)
+      if (typeof data.xp === 'number') {
+        setRoadmaps(prev => prev.map(r => r.id === targetRoadmapId
+          ? { ...r, totalXp: (r.totalXp || 0) + xpEarned, lessonsCompleted: r.lessonsCompleted + 1 }
+          : r
+        ));
+      }
+      if (data.newAchievement) handleAchievementUnlocked(data.newAchievement);
+      // Re-sync from DB so phase unlock statuses are authoritative (C-02 fix)
+      await syncRoadmapsFromDatabase();
+    };
+
+    const savePromise = progressSave();
+    pendingProgressSaveRef.current = savePromise;
+    try {
+      await savePromise;
+    } catch (err) {
+      console.warn('Failed to complete lesson:', err);
+    } finally {
+      if (pendingProgressSaveRef.current === savePromise) {
+        pendingProgressSaveRef.current = null;
+      }
     }
     if (!specificLessonId) setActiveLesson(null);
-  }, [activeLesson, selectedRoadmapId, activeRoadmapId, roadmaps, mutatingHeaders, syncRoadmapsFromDatabase]);
+  }, [activeLesson, selectedRoadmapId, activeRoadmapId, roadmaps, mutatingHeaders, syncRoadmapsFromDatabase, handleAchievementUnlocked, setActivityLog, setProfile, setRoadmaps]);
 
   // XP handler
+  const safeLogout = useCallback(async () => {
+    if (pendingProgressSaveRef.current) {
+      try {
+        await pendingProgressSaveRef.current;
+      } catch {
+        // Best-effort — logout should still proceed even if the persistence
+        // request fails or is slow.
+      }
+    }
+    await handleLogout();
+  }, [handleLogout]);
+
   const handleAddXp = useCallback((amount: number) => {
     const isNextLevel = profile.xp + amount >= (profile.level * 200);
     setProfile(prev => ({ ...prev, xp: prev.xp + amount, level: isNextLevel ? prev.level + 1 : prev.level }));
@@ -367,7 +395,7 @@ function AppShell() {
         <SideDrawer
           isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)}
           activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setActiveLesson(null); }}
-          profile={profile} onUpgradeClick={() => setActiveTab('profile')} onLogoutClick={handleLogout}
+          profile={profile} onUpgradeClick={() => setActiveTab('profile')} onLogoutClick={safeLogout}
         />
 
         {aiActive === false && showAiOfflineBanner && (

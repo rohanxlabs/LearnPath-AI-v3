@@ -169,8 +169,11 @@ export function HomeView({
   const [bannerDismissed, setBannerDismissed] = useState(false);
   useEffect(() => {
     (async () => {
+      // Skip fetch if no token source is available — avoids a guaranteed 401
+      // on the initial render before the Supabase session is hydrated.
+      if (!getAuthHeaders) return;
       try {
-        const headers = getAuthHeaders ? await getAuthHeaders() : {};
+        const headers = await getAuthHeaders();
         const r = await fetch('/api/user-stats', { headers });
         if (!r.ok) return;
         const d = await r.json();

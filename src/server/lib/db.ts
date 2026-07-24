@@ -216,7 +216,7 @@ export async function saveUserDB(userEmail: string, dbData: UserDB): Promise<voi
         activityLog: activityLog || currentProgress.activityLog || {}
       };
 
-      const xp = (profile as any)?.xp ?? (currentProgress.profile as any)?.xp ?? 0;
+      const xp = dbData.xp ?? (profile as any)?.xp ?? (currentProgress.profile as any)?.xp ?? 0;
 
       await sql`
         INSERT INTO users (email, password_hash, roadmap, progress, xp, updated_at)

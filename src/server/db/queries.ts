@@ -705,13 +705,22 @@ export async function getCurrentStreak(ownerEmail: string): Promise<number> {
 // Roadmap progress helpers
 // ---------------------------------------------------------------------------
 
-export async function getRoadmapProgressPercent(roadmapId: string): Promise<number> {
-  const lessonRows = await db
-    .select({ status: lessons.status })
-    .from(lessons)
-    .where(eq(lessons.roadmapId, roadmapId));
+export async function getRoadmapProgressPercent(roadmapId: string, ownerEmail: string): Promise<number> {
+  const [lessonRows, completedRows] = await Promise.all([
+    db.select({ id: lessons.id }).from(lessons).where(eq(lessons.roadmapId, roadmapId)),
+    db
+      .select({ lessonId: userLessonProgress.lessonId })
+      .from(userLessonProgress)
+      .where(
+        and(
+          eq(userLessonProgress.ownerEmail, ownerEmail.toLowerCase()),
+          eq(userLessonProgress.roadmapId, roadmapId),
+          eq(userLessonProgress.completed, true)
+        )
+      ),
+  ]);
   const totalLessons = lessonRows.length;
-  const completedLessons = lessonRows.filter((l: any) => l.status === 'completed').length;
+  const completedLessons = completedRows.length;
   return totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 }
 
@@ -734,7 +743,10 @@ export async function getNormalizedRoadmap(roadmapId: string, ownerEmail?: strin
       db.select().from(phaseProjects).where(eq(phaseProjects.roadmapId, roadmapId)).orderBy(asc(phaseProjects.orderIndex)),
     ]);
 
+  // Build per-user completion maps: completedAtMap (lessonId → ISO timestamp) and
+  // completedLessonIds (Set for O(1) status override in reconstructLesson).
   const completedAtMap = new Map<string, string>();
+  const completedLessonIds = new Set<string>();
   if (ownerEmail) {
     const progressRows = await db
       .select({ lessonId: userLessonProgress.lessonId, completedAt: userLessonProgress.completedAt })
@@ -747,6 +759,7 @@ export async function getNormalizedRoadmap(roadmapId: string, ownerEmail?: strin
         )
       );
     for (const row of progressRows) {
+      completedLessonIds.add(row.lessonId);
       if (row.completedAt) {
         completedAtMap.set(row.lessonId, row.completedAt instanceof Date ? row.completedAt.toISOString() : String(row.completedAt));
       }
@@ -808,6 +821,8 @@ export async function getNormalizedRoadmap(roadmapId: string, ownerEmail?: strin
         assignments: assignmentsByLesson.get(lesson.id) || [],
         resources: resourcesByModule.get(module.id) || [],
         _completedAt: completedAtMap.get(lesson.id) ?? null,
+        // Carry the per-user completed flag so reconstructLesson can override status.
+        _completedByUser: completedLessonIds.has(lesson.id),
       })),
       quizzes: quizRows.filter((q: any) => q.moduleId === module.id),
       assignments: assignmentRows.filter((a: any) => a.moduleId === module.id),
@@ -1212,12 +1227,17 @@ export async function reconstructRoadmapJson(roadmapId: string, ownerEmail?: str
 
 function reconstructLesson(lesson: any): any {
   const content = lesson.markdownContent ?? lesson.markdown_content ?? lesson.content;
+  // Use per-user completion from user_lesson_progress (_completedByUser) as the
+  // authoritative source for 'completed' status.  Fall back to the global
+  // lessons.status for 'available' / 'locked' ordering so unlock sequencing
+  // is preserved even when ownerEmail was not supplied.
+  const status = lesson._completedByUser ? 'completed' : lesson.status;
   const base: any = {
     id: lesson.id,
     name: lesson.title,
     title: lesson.title,
     type: lesson.type,
-    status: lesson.status,
+    status,
     xpReward: lesson.xpReward ?? lesson.xp_reward,
     content: content ?? '',
     summary: lesson.summary ?? null,
@@ -1357,13 +1377,26 @@ export async function completeLessonForUser(
   await updateLessonStatus(lessonId, 'completed');
   await unlockNextLesson(lessonId, moduleId);
 
-  const lessonRows = await db
-    .select({ id: lessons.id, status: lessons.status })
-    .from(lessons)
-    .where(eq(lessons.roadmapId, roadmapId));
+  // Count totals from the authoritative per-user table, not the global
+  // lessons.status column. This means a DB re-seed or migration that resets
+  // lessons.status can never corrupt the progress counters written back to
+  // the roadmaps table.
+  const [totalLessonRows, completedRows] = await Promise.all([
+    db.select({ id: lessons.id }).from(lessons).where(eq(lessons.roadmapId, roadmapId)),
+    db
+      .select({ lessonId: userLessonProgress.lessonId })
+      .from(userLessonProgress)
+      .where(
+        and(
+          eq(userLessonProgress.ownerEmail, ownerEmail.toLowerCase()),
+          eq(userLessonProgress.roadmapId, roadmapId),
+          eq(userLessonProgress.completed, true)
+        )
+      ),
+  ]);
 
-  const totalLessons = lessonRows.length;
-  const completedLessons = lessonRows.filter((l: any) => l.status === 'completed').length;
+  const totalLessons = totalLessonRows.length;
+  const completedLessons = completedRows.length;
   const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
   await db
@@ -1541,13 +1574,26 @@ async function promoteContainerStatuses(
 // Recompute roadmap counters
 // ---------------------------------------------------------------------------
 
-export async function recomputeRoadmapCounters(roadmapId: string): Promise<void> {
-  const lessonRows = await db
-    .select({ status: lessons.status })
-    .from(lessons)
-    .where(eq(lessons.roadmapId, roadmapId));
-  const totalLessons = lessonRows.length;
-  const completedLessons = lessonRows.filter((l: any) => l.status === 'completed').length;
+export async function recomputeRoadmapCounters(roadmapId: string, ownerEmail?: string): Promise<void> {
+  const [totalLessonRows, completedRows] = await Promise.all([
+    db.select({ id: lessons.id }).from(lessons).where(eq(lessons.roadmapId, roadmapId)),
+    // When ownerEmail is supplied, use the per-user table (authoritative).
+    // Without it (e.g. admin tooling), fall back to the global lessons.status.
+    ownerEmail
+      ? db
+          .select({ lessonId: userLessonProgress.lessonId })
+          .from(userLessonProgress)
+          .where(
+            and(
+              eq(userLessonProgress.ownerEmail, ownerEmail.toLowerCase()),
+              eq(userLessonProgress.roadmapId, roadmapId),
+              eq(userLessonProgress.completed, true)
+            )
+          )
+      : db.select({ lessonId: lessons.id }).from(lessons).where(and(eq(lessons.roadmapId, roadmapId), eq(lessons.status, 'completed'))),
+  ]);
+  const totalLessons = totalLessonRows.length;
+  const completedLessons = completedRows.length;
   const progressPercent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
   await db
     .update(roadmaps)
@@ -1661,12 +1707,84 @@ export async function getRoadmapProgressSnapshot(
 export async function getUserLessonCompletionStats(
   ownerEmail: string
 ): Promise<{ totalLessons: number; completedLessons: number }> {
-  const rows = await db
-    .select({ status: lessons.status })
+  // Count total lessons across all roadmaps owned by this user.
+  const allLessons = await db
+    .select({ id: lessons.id })
     .from(lessons)
     .innerJoin(roadmaps, eq(roadmaps.id, lessons.roadmapId))
     .where(eq(roadmaps.ownerEmail, ownerEmail.toLowerCase()));
-  const totalLessons = rows.length;
-  const completedLessons = rows.filter((l: any) => l.status === 'completed').length;
-  return { totalLessons, completedLessons };
+  const totalLessons = allLessons.length;
+
+  // Count completions from the per-user progress table — the authoritative source.
+  const completedRows = await db
+    .select({ lessonId: userLessonProgress.lessonId })
+    .from(userLessonProgress)
+    .where(
+      and(
+        eq(userLessonProgress.ownerEmail, ownerEmail.toLowerCase()),
+        eq(userLessonProgress.completed, true)
+      )
+    );
+  return { totalLessons, completedLessons: completedRows.length };
+}
+
+// ---------------------------------------------------------------------------
+// Backfill user_lesson_progress for lessons that are marked completed in the
+// global lessons table but have no per-user row yet.
+// Called at bootstrap so every completed lesson is visible via _completedByUser.
+// ---------------------------------------------------------------------------
+
+export async function backfillUserLessonProgress(ownerEmail: string): Promise<void> {
+  // Find all lessons owned by this user that are globally 'completed' but
+  // have no user_lesson_progress row for this user.
+  const completedLessonRows = await db
+    .select({
+      lessonId: lessons.id,
+      moduleId: lessons.moduleId,
+      phaseId: lessons.phaseId,
+      roadmapId: lessons.roadmapId,
+      estimatedMinutes: lessons.estimatedMinutes,
+    })
+    .from(lessons)
+    .innerJoin(roadmaps, eq(roadmaps.id, lessons.roadmapId))
+    .where(
+      and(
+        eq(roadmaps.ownerEmail, ownerEmail.toLowerCase()),
+        eq(lessons.status, 'completed')
+      )
+    );
+
+  if (completedLessonRows.length === 0) return;
+
+  // Find which ones already have a per-user row.
+  const existingRows = await db
+    .select({ lessonId: userLessonProgress.lessonId })
+    .from(userLessonProgress)
+    .where(eq(userLessonProgress.ownerEmail, ownerEmail.toLowerCase()));
+
+  const existingSet = new Set(existingRows.map((r: any) => r.lessonId));
+
+  const toBackfill = completedLessonRows.filter((r: any) => !existingSet.has(r.lessonId));
+  if (toBackfill.length === 0) return;
+
+  // Insert missing rows in chunks to avoid a single massive INSERT.
+  const CHUNK = 50;
+  for (let i = 0; i < toBackfill.length; i += CHUNK) {
+    const chunk = toBackfill.slice(i, i + CHUNK);
+    await db.insert(userLessonProgress).values(
+      chunk.map((r: any) => ({
+        id: `${ownerEmail.toLowerCase()}::${r.lessonId}`,
+        ownerEmail: ownerEmail.toLowerCase(),
+        roadmapId: r.roadmapId,
+        lessonId: r.lessonId,
+        moduleId: r.moduleId,
+        phaseId: r.phaseId,
+        completed: true,
+        completedAt: new Date(),
+        attempts: 1,
+        studyMinutes: Number(r.estimatedMinutes) || 0,
+        updatedAt: new Date(),
+      }))
+    ).onConflictDoNothing();
+  }
 }

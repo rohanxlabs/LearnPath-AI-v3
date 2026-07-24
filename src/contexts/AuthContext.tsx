@@ -154,6 +154,10 @@ export function AuthProvider({
   const [chats, setChats] = useState<ChatMessage[]>([]);
   const [activityLog, setActivityLog] = useState<Record<string, { xp: number; lessonsCompleted: number }>>({});
 
+  // Ref that tracks the pending profile-save debounce timer so we can cancel
+  // it on logout and flush the current state before clearing React state.
+  const profileSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Auth form fields
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -377,25 +381,46 @@ export function AuthProvider({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Shared profile-flush helper — called by both the debounce effect and logout.
+  // Captures the *current* closure values so the caller can invoke it at any time.
+  // ---------------------------------------------------------------------------
+  const flushProfileSave = useCallback(async (
+    currentProfile: UserProfile,
+    currentSettings: UserSettings,
+    currentAchievements: Achievement[],
+    currentNotifications: SystemNotification[],
+    currentActivityLog: Record<string, { xp: number; lessonsCompleted: number }>
+  ): Promise<void> => {
+    const headers = await mutatingHeaders();
+    await fetch('/api/user-profile', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        profile: currentProfile,
+        settings: currentSettings,
+        achievements: currentAchievements,
+        notifications: currentNotifications,
+        activityLog: currentActivityLog,
+      }),
+    });
+  }, [mutatingHeaders]);
+
   // Persist profile/settings/achievements/notifications (debounced, 1 s).
   // Chats are excluded — they are returned from /api/bootstrap and persisted
   // via a separate effect below with a longer debounce to avoid flushing the
   // full conversation history on every notification change.
   useEffect(() => {
     if (!isAuthenticated || !profile.email) return;
-    const timer = setTimeout(async () => {
-      try {
-        const headers = await mutatingHeaders();
-        await fetch('/api/user-profile', {
-          method: 'PUT',
-          headers,
-          body: JSON.stringify({ profile, settings, achievements, notifications, activityLog }),
-        });
-      } catch (err) {
+    if (profileSaveTimerRef.current) clearTimeout(profileSaveTimerRef.current);
+    profileSaveTimerRef.current = setTimeout(() => {
+      flushProfileSave(profile, settings, achievements, notifications, activityLog).catch((err) => {
         console.warn('Failed to save user profile:', err);
-      }
+      });
     }, 1000);
-    return () => clearTimeout(timer);
+    return () => {
+      if (profileSaveTimerRef.current) clearTimeout(profileSaveTimerRef.current);
+    };
   }, [profile, settings, achievements, notifications, activityLog, isAuthenticated]);
 
   // Persist chat history separately (debounced, 5 s) so that frequent AI
@@ -527,12 +552,27 @@ export function AuthProvider({
   };
 
   const handleLogout = async () => {
+    // Cancel any pending debounce timer so it cannot fire after state is cleared.
+    if (profileSaveTimerRef.current) {
+      clearTimeout(profileSaveTimerRef.current);
+      profileSaveTimerRef.current = null;
+    }
+    // Flush the current profile state before clearing React state.
+    // Race against a 2-second timeout so a slow/failed network never blocks logout.
+    try {
+      await Promise.race([
+        flushProfileSave(profile, settings, achievements, notifications, activityLog),
+        new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+      ]);
+    } catch { /* best-effort — proceed regardless */ }
+    // Sign out of Supabase (invalidates the refresh token server-side).
     try { await supabase.auth.signOut(); } catch { /* continue */ }
+    // Clear all React state.
     setIsAuthenticated(false);
     setAuthEmail(''); setAuthPassword(''); setAuthName('');
     setAuthMode('login'); setAuthError(''); setIsAuthenticating(false);
     setProfile(createEmptyProfile()); setSettings(DEFAULT_SETTINGS);
-    setAchievements([]); setNotifications([]); setChats([]);
+    setAchievements([]); setNotifications([]); setChats([]); setActivityLog({});
     setShowAuthModal(false);
     onLoggedOut();
   };

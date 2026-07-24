@@ -80,6 +80,10 @@ export function RoadmapProvider({
     const loadProgress = async () => {
       if (!getHeaders) return; // no token source — skip silently
       const headers = await getHeaders();
+      // Skip if the session token hasn't been hydrated yet — a request without
+      // an Authorization header will get a 401 and return empty progress,
+      // silently wiping the roadmapProgress state on every fresh login.
+      if (!headers.Authorization) return;
       const results = await Promise.all(
         roadmaps.map(async (roadmap) => {
           try {

@@ -43,10 +43,25 @@ const router = Router();
 router.get('/user-stats', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+    const [dbData, completionStats, studyMinutesRows] = await Promise.all([
+      loadUserDB(userEmail, { createIfMissing: false }),
+      getUserLessonCompletionStats(userEmail),
+      // Sum all study_minutes from completed lessons for this user — the
+      // authoritative source for hours studied (profile.hoursStudied is never written).
+      sql`
+        SELECT COALESCE(SUM(study_minutes), 0) AS total_minutes
+        FROM user_lesson_progress
+        WHERE owner_email = ${userEmail.toLowerCase()}
+          AND completed = TRUE
+      `.catch(() => [{ total_minutes: 0 }] as any[]),
+    ]);
+
     if (!dbData) return res.json({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0, daysSinceLastVisit: null });
-    const { totalLessons, completedLessons } = await getUserLessonCompletionStats(userEmail);
+
+    const { totalLessons, completedLessons } = completionStats;
     const overallMastery = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+    const totalMinutes = Number((studyMinutesRows as any[])[0]?.total_minutes ?? 0);
+    const hoursStudied = Math.round((totalMinutes / 60) * 10) / 10;
 
     // Compute days since last active date (null = no prior visit recorded)
     let daysSinceLastVisit: number | null = null;
@@ -60,7 +75,7 @@ router.get('/user-stats', requireAuth, async (req, res) => {
     return res.json({
       xp: dbData.xp || 0,
       streak: dbData.streak ?? 0,
-      hoursStudied: (dbData.profile as any)?.hoursStudied || 0,
+      hoursStudied,
       lessonsCompleted: completedLessons,
       overallMastery: Math.round(overallMastery),
       daysSinceLastVisit,
@@ -204,18 +219,15 @@ router.post('/progress', requireAuth, async (req, res) => {
 
   // dynamic import to avoid circular deps
   const { findLessonContext, completeLessonForUser, getRoadmapState, upsertRoadmapState } = await import('../db/queries');
-  const { sql } = await import('../lib/db');
 
   try {
     const lessonCtx = await findLessonContext(lessonId);
     if (!lessonCtx || lessonCtx.roadmap_id !== roadmapId) return res.status(404).json({ error: 'Lesson or roadmap not found' });
 
     if (action === 'complete') {
-      await completeLessonForUser(userEmail, lessonId, lessonCtx.module_id, lessonCtx.phase_id, roadmapId, null, 0);
-      const lessonRows = await sql`SELECT status FROM lessons WHERE roadmap_id = ${roadmapId}`;
-      const totalLessons = lessonRows.length;
-      const completedLessons = lessonRows.filter((l: any) => l.status === 'completed').length;
-      if (totalLessons > 0 && completedLessons >= totalLessons) {
+      const counters = await completeLessonForUser(userEmail, lessonId, lessonCtx.module_id, lessonCtx.phase_id, roadmapId, null, 0);
+      // Use per-user progress percent (already computed from user_lesson_progress inside completeLessonForUser)
+      if (counters.totalLessons > 0 && counters.completedLessons >= counters.totalLessons) {
         const state = await getRoadmapState(userEmail, roadmapId);
         await upsertRoadmapState({ ownerEmail: userEmail, roadmapId, completedAt: state?.completed_at ?? new Date().toISOString() });
       }

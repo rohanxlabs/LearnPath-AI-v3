@@ -45,19 +45,29 @@ const mocks = vi.hoisted(() => {
     return row;
   }
 
+  const roadmapsTable = new Map<string, any>();
+  const phasesTable = new Map<string, any>();
+  const modulesTable = new Map<string, any>();
+  const lessonsTable = new Map<string, any>();
+  const userLessonProgressTable = new Map<string, any>();
+  const quizzesTable = new Map<string, any>();
+  const assignmentsTable = new Map<string, any>();
+  const resourcesTable = new Map<string, any>();
+  const phaseProjectsTable = new Map<string, any>();
+  const lessonContentTable = new Map<string, any>();
+
   const sqlFn = ((strings: TemplateStringsArray, ...values: any[]) => {
     const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''), '');
-    const upper = text.trim().toUpperCase();
+    const queryText = text.trim();
+    const lower = queryText.replace(/\s+/g, ' ').trim().toLowerCase();
 
-    if (upper.includes('CREATE TABLE IF NOT EXISTS')) return Promise.resolve([]);
-    if (upper.includes('ALTER TABLE') && upper.includes('ADD COLUMN IF NOT EXISTS')) return Promise.resolve([]);
-
-    if (upper.startsWith('SELECT') && upper.includes('FROM USERS')) {
+    const usersSelect = lower.startsWith('select') && lower.includes('from users');
+    if (usersSelect) {
       const row = getRow(values[0]) ?? null;
       return Promise.resolve(row ? [{ ...row }] : []);
     }
 
-    if (upper.startsWith('INSERT INTO USERS')) {
+    if (lower.startsWith('insert into users')) {
       const emailIdx = values.findIndex((v: any) => typeof v === 'string' && v.includes('@'));
       const email = emailIdx >= 0 ? values[emailIdx] : values[0];
       const passwordHash = values[emailIdx + 1] ?? null;
@@ -73,18 +83,276 @@ const mocks = vi.hoisted(() => {
       return Promise.resolve([]);
     }
 
-    if (upper.startsWith('UPDATE USERS') && upper.includes('SET STREAK')) {
+    if (lower.startsWith('update users') && lower.includes('set streak')) {
       const row = ensureRow(values[2]);
       row.streak = values[0];
       row.last_active_date = values[1];
       return Promise.resolve([]);
     }
 
+    // Normalized roadmap tables used by Drizzle-based queries in tests.
+    const insertRoadmap = lower.startsWith('insert into "roadmaps"');
+    const insertPhase = lower.startsWith('insert into "phases"');
+    const insertModule = lower.startsWith('insert into "modules"');
+    const insertLesson = lower.startsWith('insert into "lessons"');
+    const insertUserLessonProgress = lower.startsWith('insert into "user_lesson_progress"');
+    const updateLessons = lower.startsWith('update "lessons"');
+    const selectRoadmapsByOwner = lower.includes('from "roadmaps"') && lower.includes('where "roadmaps"."owner_email" = $1');
+    const selectRoadmapById = lower.includes('from "roadmaps"') && lower.includes('where "roadmaps"."id" = $1');
+    const selectPhasesByRoadmap = lower.includes('from "phases"') && lower.includes('where "phases"."roadmap_id" = $1');
+    const selectModulesByRoadmap = lower.includes('from "modules"') && lower.includes('where "modules"."roadmap_id" = $1');
+    const selectLessonsByRoadmap = lower.includes('from "lessons"') && lower.includes('where "lessons"."roadmap_id" = $1');
+    const selectLessonByIdJoinModule = lower.includes('from "lessons"') && lower.includes('inner join "modules"') && lower.includes('where "lessons"."id" = $1');
+    const selectUserLessonProgressByOwnerRoadmapCompleted = lower.includes('from "user_lesson_progress"') && lower.includes('where') && lower.includes('completed = $3');
+    const selectUserLessonProgressByOwnerLesson = lower.includes('from "user_lesson_progress"') && lower.includes('where "user_lesson_progress"."owner_email" = $1') && lower.includes('"lesson_id" = $2');
+    const selectLessonsByModuleStatusOrder = lower.includes('from "lessons"') && lower.includes('"lessons"."module_id" = $1') && lower.includes('"lessons"."status" = $2') && lower.includes('"lessons"."order_index" > $3');
+    const selectModuleById = lower.includes('from "modules"') && lower.includes('where "modules"."id" = $1');
+    const selectPhaseById = lower.includes('from "phases"') && lower.includes('where "phases"."id" = $1');
+    const selectLessonsByModule = lower.includes('from "lessons"') && lower.includes('where "lessons"."module_id" = $1');
+    const selectLessonsByRoadmapStatusOrder = lower.includes('from "lessons"') && lower.includes('"lessons"."roadmap_id" = $1') && lower.includes('"lessons"."status" = $2') && lower.includes('order by');
+    const selectLessonsByStatus = lower.includes('from "lessons"') && lower.includes('where "lessons"."roadmap_id" = $1') && lower.includes('order by');
+    const selectPhasesByRoadmapOrder = lower.includes('from "phases"') && lower.includes('where "phases"."roadmap_id" = $1') && lower.includes('order by');
+    const selectModulesByPhaseOrder = lower.includes('from "modules"') && lower.includes('where "modules"."phase_id" = $1') && lower.includes('order by');
+    const selectLessonsForCompletedBackfill = lower.includes('from "lessons"') && lower.includes('inner join "roadmaps"') && lower.includes('where "roadmaps"."owner_email" = $1') && lower.includes('and "lessons"."status" = $2');
+    const selectUserLessonProgressByOwner = lower.includes('from "user_lesson_progress"') && lower.includes('where "user_lesson_progress"."owner_email" = $1') && lower.includes('"completed" = $2');
+    const updateRoadmaps = lower.startsWith('update "roadmaps"');
+
+    if (insertRoadmap) {
+      const row = {
+        id: values[0], ownerEmail: values[1], title: values[2], goal: values[3],
+        experienceLevel: values[4], weeklyHours: values[5], preferredStyle: values[6],
+        college: values[7], branch: values[8], year: values[9],
+        progressPercent: values[10], totalXp: values[11], lessonsCompleted: values[12],
+        hoursRemaining: values[13], status: values[14], updatedAt: values[15],
+        createdAt: new Date().toISOString(),
+      };
+      roadmapsTable.set(row.id, row);
+      return Promise.resolve([{ id: row.id }]);
+    }
+
+    if (insertPhase) {
+      const row = {
+        id: values[0], roadmapId: values[1], name: values[2], description: values[3],
+        estimatedHours: values[4], skillsCovered: values[5], xpEarned: values[6],
+        status: values[7], orderIndex: values[8], createdAt: values[9], updatedAt: values[10],
+      };
+      phasesTable.set(row.id, row);
+      return Promise.resolve([]);
+    }
+
+    if (insertModule) {
+      const row = {
+        id: values[0], phaseId: values[1], roadmapId: values[2], name: values[3],
+        type: values[4], status: values[5], orderIndex: values[6],
+        createdAt: values[7], updatedAt: values[8],
+      };
+      modulesTable.set(row.id, row);
+      return Promise.resolve([]);
+    }
+
+    if (insertLesson) {
+      const row = {
+        id: values[0], moduleId: values[1], phaseId: values[2], roadmapId: values[3],
+        title: values[4], description: values[5], type: values[6], xpReward: values[7],
+        status: values[8], learningObjectives: values[9], prerequisites: values[10],
+        difficulty: values[11], estimatedMinutes: values[12], skillTags: values[13],
+        contentStatus: values[14], orderIndex: values[15], createdAt: values[16], updatedAt: values[17],
+      };
+      lessonsTable.set(row.id, row);
+      return Promise.resolve([]);
+    }
+
+    if (insertUserLessonProgress) {
+      const row = {
+        id: values[0], ownerEmail: values[1], roadmapId: values[2], lessonId: values[3],
+        moduleId: values[4], phaseId: values[5], completed: values[6], completedAt: values[7],
+        attempts: values[8], quizScore: values[9], studyMinutes: values[10], updatedAt: values[11],
+      };
+      const key = `${row.ownerEmail.toLowerCase()}::${row.lessonId}`;
+      userLessonProgressTable.set(key, row);
+      return Promise.resolve([]);
+    }
+
+    if (updateLessons) {
+      const lessonId = values[values.length - 1];
+      const row = lessonsTable.get(lessonId);
+      if (row) {
+        if (lower.includes('set "status" = $1')) row.status = values[0];
+        if (lower.includes('set "updated_at" = $2')) row.updatedAt = values[1] || new Date().toISOString();
+        lessonsTable.set(lessonId, row);
+      }
+      return Promise.resolve([]);
+    }
+
+    if (selectRoadmapsByOwner) {
+      const ownerEmail = values[0];
+      const rows = Array.from(roadmapsTable.values()).filter((r) => r.ownerEmail === ownerEmail);
+      return Promise.resolve(rows);
+    }
+
+    if (selectRoadmapById) {
+      const row = roadmapsTable.get(values[0]);
+      return Promise.resolve(row ? [row] : []);
+    }
+
+    if (selectPhasesByRoadmap) {
+      const roadmapId = values[0];
+      const rows = Array.from(phasesTable.values()).filter((r) => r.roadmapId === roadmapId);
+      return Promise.resolve(rows);
+    }
+
+    if (selectModulesByRoadmap) {
+      const roadmapId = values[0];
+      const rows = Array.from(modulesTable.values()).filter((r) => r.roadmapId === roadmapId);
+      return Promise.resolve(rows);
+    }
+
+    if (selectLessonsByRoadmap) {
+      const roadmapId = values[0];
+      const rows = Array.from(lessonsTable.values()).filter((r) => r.roadmapId === roadmapId);
+      return Promise.resolve(rows);
+    }
+
+    if (selectLessonByIdJoinModule) {
+      const lesson = lessonsTable.get(values[0]);
+      if (!lesson) return Promise.resolve([]);
+      const module = modulesTable.get(lesson.moduleId);
+      return Promise.resolve([{ lesson, moduleId: module?.id, phaseId: module?.phaseId, roadmapId: module?.roadmapId }]);
+    }
+
+    if (selectUserLessonProgressByOwnerLesson) {
+      const ownerEmail = values[0].toLowerCase();
+      const lessonId = values[1];
+      const key = `${ownerEmail}::${lessonId}`;
+      const row = userLessonProgressTable.get(key);
+      return Promise.resolve(row ? [row] : []);
+    }
+
+    if (selectUserLessonProgressByOwnerRoadmapCompleted) {
+      const ownerEmail = values[0].toLowerCase();
+      const roadmapId = values[1];
+      const completed = values[2];
+      const rows = Array.from(userLessonProgressTable.values()).filter((r) =>
+        r.ownerEmail === ownerEmail && r.roadmapId === roadmapId && r.completed === completed
+      );
+      return Promise.resolve(rows);
+    }
+
+    if (selectUserLessonProgressByOwner) {
+      const ownerEmail = values[0].toLowerCase();
+      const completed = values[1];
+      const rows = Array.from(userLessonProgressTable.values()).filter((r) =>
+        r.ownerEmail === ownerEmail && r.completed === completed
+      );
+      return Promise.resolve(rows);
+    }
+
+    if (selectLessonsByModuleStatusOrder) {
+      const moduleId = values[0];
+      const status = values[1];
+      const orderIndex = values[2];
+      const rows = Array.from(lessonsTable.values())
+        .filter((r) => r.moduleId === moduleId && r.status === status && r.orderIndex > orderIndex)
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      return Promise.resolve(rows.slice(0, 1));
+    }
+
+    if (selectModuleById) {
+      const row = modulesTable.get(values[0]);
+      return Promise.resolve(row ? [row] : []);
+    }
+
+    if (selectPhaseById) {
+      const row = phasesTable.get(values[0]);
+      return Promise.resolve(row ? [row] : []);
+    }
+
+    if (selectLessonsByRoadmapStatusOrder) {
+      const roadmapId = values[0];
+      const status = values[1];
+      const rows = Array.from(lessonsTable.values())
+        .filter((r) => r.roadmapId === roadmapId && r.status === status)
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      return Promise.resolve(rows.slice(0, 1));
+    }
+
+    if (selectPhasesByRoadmapOrder) {
+      const roadmapId = values[0];
+      const rows = Array.from(phasesTable.values())
+        .filter((r) => r.roadmapId === roadmapId)
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      return Promise.resolve(rows);
+    }
+
+    if (selectModulesByPhaseOrder) {
+      const phaseId = values[0];
+      const rows = Array.from(modulesTable.values())
+        .filter((r) => r.phaseId === phaseId)
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      return Promise.resolve(rows);
+    }
+
+    if (selectLessonsByModule && lower.includes('order by')) {
+      const moduleId = values[0];
+      const rows = Array.from(lessonsTable.values())
+        .filter((r) => r.moduleId === moduleId)
+        .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
+      return Promise.resolve(rows);
+    }
+
+    if (selectLessonsByModule) {
+      const moduleId = values[0];
+      const rows = Array.from(lessonsTable.values()).filter((r) => r.moduleId === moduleId);
+      return Promise.resolve(rows);
+    }
+
+    if (selectLessonsForCompletedBackfill) {
+      const ownerEmail = values[0].toLowerCase();
+      const status = values[1];
+      const rows = Array.from(lessonsTable.values()).filter((lesson) => {
+        const roadmap = roadmapsTable.get(lesson.roadmapId);
+        return roadmap?.ownerEmail === ownerEmail && lesson.status === status;
+      }).map((lesson) => ({
+        lessonId: lesson.id,
+        moduleId: lesson.moduleId,
+        phaseId: lesson.phaseId,
+        roadmapId: lesson.roadmapId,
+        estimatedMinutes: lesson.estimatedMinutes,
+      }));
+      return Promise.resolve(rows);
+    }
+
+    if (updateRoadmaps) {
+      const roadmapId = values[values.length - 1];
+      const row = roadmapsTable.get(roadmapId);
+      if (row) {
+        if (values[0] !== undefined) row.lessonsCompleted = values[0];
+        if (values[1] !== undefined) row.progressPercent = values[1];
+        if (values[2] !== undefined) row.updatedAt = values[2];
+        roadmapsTable.set(roadmapId, row);
+      }
+      return Promise.resolve([]);
+    }
+
+    // Return empty results for other normalized-table reads that are not needed
+    // by the current test flow.
     return Promise.resolve([]);
   }) as any;
 
   sqlFn.unsafe = () => Promise.resolve([]);
-  sqlFn.reset = () => users.clear();
+  sqlFn.reset = () => {
+    users.clear();
+    roadmapsTable.clear();
+    phasesTable.clear();
+    modulesTable.clear();
+    lessonsTable.clear();
+    userLessonProgressTable.clear();
+    quizzesTable.clear();
+    assignmentsTable.clear();
+    resourcesTable.clear();
+    phaseProjectsTable.clear();
+    lessonContentTable.clear();
+  };
 
   // -------------------------------------------------------------------------
   // In-memory Supabase Auth store
@@ -213,10 +481,19 @@ vi.mock('@neondatabase/serverless', () => ({
 // Vitest 4 requires constructors to use 'function' or 'class' syntax (not arrow fns).
 vi.mock('pg', () => {
   const Pool = vi.fn(function (this: any) {
-    this.query = async (text: string, values: any[]) => {
+    this.query = async (text: any, values?: any[]) => {
+      // Drizzle / pg can call query() with a config object { text, values }.
+      // Normalize that shape here so the in-memory mock can still execute.
+      if (text && typeof text === 'object' && typeof text.text === 'string') {
+        values = values ?? text.values ?? [];
+        text = text.text;
+      }
       // Reconstruct a tagged-template call from the parameterised query so
       // the existing mockSql logic can handle it.
-      const strings = text.split(/\$\d+/) as unknown as TemplateStringsArray;
+      const queryText = typeof text === 'string' ? text : String(text);
+      console.log('[mock-pg] query:', queryText);
+      if (values && values.length) console.log('[mock-pg] values:', values);
+      const strings = queryText.split(/\$\d+/) as unknown as TemplateStringsArray;
       (strings as any).raw = strings;
       const rows = await mocks.mockSql(strings, ...(values ?? []));
       return { rows: Array.isArray(rows) ? rows : [] };

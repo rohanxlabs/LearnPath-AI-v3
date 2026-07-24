@@ -25,27 +25,31 @@ export function AnalyticsView({ profile, activityLog = {}, onNavigate, getAuthHe
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchStats() {
+      // Skip fetch if no token source is available — avoids a guaranteed 401
+      // on the initial render before the Supabase session is hydrated.
+      if (!getAuthHeaders) { setIsLoading(false); return; }
       try {
-        const headers = getAuthHeaders ? await getAuthHeaders() : {};
+        const headers = await getAuthHeaders();
+        if (!headers.Authorization) { setIsLoading(false); return; }
         const res = await fetch('/api/user-stats', { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        setStats(data);
+        if (!cancelled) setStats(data);
       } catch (err) {
         console.error('Failed to fetch user stats:', err);
-        setStats({
-          xp: 0,
-          streak: 0,
-          hoursStudied: 0,
-          lessonsCompleted: 0,
-          overallMastery: 0
-        });
+        if (!cancelled) setStats({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0 });
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
     fetchStats();
-  }, []);
+    return () => { cancelled = true; };
+  // Re-fetch every time the component mounts (tab switch) and whenever
+  // getAuthHeaders reference changes (new login session).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getAuthHeaders]);
 
   const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const maxHour = 8;

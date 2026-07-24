@@ -4,6 +4,8 @@ import { loadUserDB, saveUserDB, updateStreak, unlockAchievement } from '../lib/
 import {
   findLessonContext,
   completeLessonForUser,
+  getLessonProgress,
+  upsertUserLessonProgress,
   getLessonById,
   getResourcesForLessonContext,
   getProjectForPhase
@@ -181,9 +183,28 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
       if (targetRoadmapId && targetRoadmapId !== lessonCtx.roadmap_id) throw new HttpError(400, 'Lesson does not belong to the provided roadmap');
 
       if (lessonCtx.status === 'completed') {
+        // The global lessons.status is 'completed', but user_lesson_progress may
+        // not have a row for this user yet (e.g. completions that pre-date the
+        // per-user table, or lessons completed on another session). Backfill the
+        // row so reconstructRoadmapJson correctly shows this lesson as completed
+        // for this user via _completedByUser.
+        const existingProgress = await getLessonProgress(userEmail, lessonId);
+        if (!existingProgress) {
+          await upsertUserLessonProgress({
+            ownerEmail: userEmail,
+            roadmapId: lessonCtx.roadmap_id,
+            lessonId,
+            moduleId: lessonCtx.module_id,
+            phaseId: lessonCtx.phase_id,
+            completed: true,
+            completedAt: new Date().toISOString(),
+            attempts: 1,
+            studyMinutes: Number(lessonCtx.estimated_minutes) || 0,
+          });
+        }
         const dbData = await loadUserDB(userEmail, { createIfMissing: false });
         const { getCurrentStreak, getRoadmapProgressPercent } = await import('../db/queries');
-        return { xp: dbData?.xp || 0, streak: await getCurrentStreak(userEmail), completionPercent: await getRoadmapProgressPercent(lessonCtx.roadmap_id), alreadyCompleted: true, message: 'Lesson already completed.' };
+        return { xp: dbData?.xp || 0, streak: await getCurrentStreak(userEmail), completionPercent: await getRoadmapProgressPercent(lessonCtx.roadmap_id, userEmail), alreadyCompleted: true, message: 'Lesson already completed.' };
       }
 
       const xpValue = Number(lessonCtx.xp_reward) || 0;
