@@ -217,7 +217,13 @@ function AppShell() {
         body: JSON.stringify({ lessonId: targetLessonId, roadmapId: targetRoadmapId }),
       });
       const data = response.ok ? await response.json().catch(() => null) : null;
-      if (!data) return;
+      if (!response.ok || !data) {
+        console.error('[completeLesson] save failed, status:', response.status);
+        showToast('Could not save your progress. Please check your connection and try again.');
+        // revert the optimistic local update instead of leaving it dangling
+        await syncRoadmapsFromDatabase();
+        return;
+      }
       // Apply XP from the server's authoritative value (C-01 fix)
       if (typeof data.xp === 'number') {
         setProfile(prev => {
@@ -257,7 +263,7 @@ function AppShell() {
       }
     }
     if (!specificLessonId) setActiveLesson(null);
-  }, [activeLesson, selectedRoadmapId, activeRoadmapId, roadmaps, mutatingHeaders, syncRoadmapsFromDatabase, handleAchievementUnlocked, setActivityLog, setProfile, setRoadmaps]);
+  }, [activeLesson, selectedRoadmapId, activeRoadmapId, roadmaps, mutatingHeaders, syncRoadmapsFromDatabase, handleAchievementUnlocked, setActivityLog, setProfile, setRoadmaps, showToast]);
 
   // XP handler
   const safeLogout = useCallback(async () => {

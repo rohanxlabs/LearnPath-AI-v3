@@ -324,12 +324,12 @@ export function buildLessonMetadata(args: {
   generatedAt: string | null; lastOpenedAt: string | null; contentStatus: string;
 }): LessonMetadata {
   const { lessonRow, content, prerequisiteNames, generatedAt, lastOpenedAt, contentStatus } = args;
-  const objectives = Array.isArray(lessonRow.learning_objectives) ? lessonRow.learning_objectives : [];
-  const skillTags = Array.isArray(lessonRow.skill_tags) ? lessonRow.skill_tags : [];
+  const objectives = Array.isArray(lessonRow.learningObjectives) ? lessonRow.learningObjectives : [];
+  const skillTags = Array.isArray(lessonRow.skillTags) ? lessonRow.skillTags : [];
   const subject = detectSubjectKind({ title: lessonRow.title, description: lessonRow.description ?? undefined, skillTags });
   return {
     lessonId: lessonRow.id, title: lessonRow.title,
-    estimatedMinutes: Number(lessonRow.estimated_minutes) || 20,
+    estimatedMinutes: Number(lessonRow.estimatedMinutes) || 20,
     difficulty: lessonRow.difficulty || 'beginner', subject,
     prerequisites: prerequisiteNames, skillsCovered: skillTags, learningObjectives: objectives,
     completionChecklist: buildCompletionChecklist(content, objectives),
@@ -381,7 +381,7 @@ export function clearLessonContentCacheEntry(lessonId: string): void {
 }
 
 function snapshotLessonMeta(lesson: any): LessonContentCacheEntry['lessonMeta'] {
-  return { id: lesson.id, title: lesson.title, content_status: lesson.content_status, generated_at: lesson.generated_at ?? null, learning_objectives: lesson.learning_objectives, skill_tags: lesson.skill_tags, prerequisites: lesson.prerequisites, estimated_minutes: lesson.estimated_minutes, difficulty: lesson.difficulty };
+  return { id: lesson.id, title: lesson.title, content_status: lesson.contentStatus, generated_at: lesson.generatedAt ?? null, learning_objectives: lesson.learningObjectives, skill_tags: lesson.skillTags, prerequisites: lesson.prerequisites, estimated_minutes: lesson.estimatedMinutes, difficulty: lesson.difficulty };
 }
 
 // ---------------------------------------------------------------------------
@@ -423,10 +423,10 @@ export async function getOrGenerateLessonContent(
   const lesson = await getLessonById(lessonId);
   if (!lesson) return null;
 
-  const existing = lesson.markdown_content;
+  const existing = lesson.markdownContent;
   if (!opts.regenerate && existing && String(existing).trim().length > 0) {
-    const generatedAt = lesson.generated_at ? new Date(lesson.generated_at).toISOString() : null;
-    const contentStatus = lesson.content_status || 'ready';
+    const generatedAt = lesson.generatedAt ? new Date(lesson.generatedAt).toISOString() : null;
+    const contentStatus = lesson.contentStatus || 'ready';
     setCachedLessonContent(lessonId, { content: existing, summary: lesson.summary ?? null, contentStatus, generatedAt, lessonMeta: snapshotLessonMeta(lesson) });
     return { lesson, content: existing, summary: lesson.summary ?? null, contentStatus, generatedAt, cached: true };
   }
@@ -484,9 +484,9 @@ export async function buildLessonGenerationContext(lessonId: string, lessonRow: 
 
   return {
     lessonId, title: lessonRow.title, description: lessonRow.description ?? undefined,
-    difficulty: lessonRow.difficulty ?? undefined, estimatedMinutes: lessonRow.estimated_minutes ?? undefined,
-    learningObjectives: Array.isArray(lessonRow.learning_objectives) ? lessonRow.learning_objectives : [],
-    skillTags: Array.isArray(lessonRow.skill_tags) ? lessonRow.skill_tags : [],
+    difficulty: lessonRow.difficulty ?? undefined, estimatedMinutes: lessonRow.estimatedMinutes ?? undefined,
+    learningObjectives: Array.isArray(lessonRow.learningObjectives) ? lessonRow.learningObjectives : [],
+    skillTags: Array.isArray(lessonRow.skillTags) ? lessonRow.skillTags : [],
     prerequisiteNames, goal: m.goal ?? undefined, moduleName: m.module_name ?? undefined,
     phaseName: m.phase_name ?? undefined, nextLessonName
   };

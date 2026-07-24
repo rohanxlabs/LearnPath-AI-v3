@@ -92,7 +92,7 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
     if (!lesson) return res.status(404).json({ error: 'Topic not found' });
 
     let markdownContent = '', summary: string | null = null, generatedAt: string | null = null;
-    let contentStatus: string = lesson.content_status || 'pending';
+    let contentStatus: string = lesson.contentStatus || 'pending';
 
     // Check if content already exists in DB/cache without waiting for generation.
     // If it does, serve it immediately. If not, kick off background generation and
@@ -122,8 +122,8 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
       summary = `### ${name}\n\n**Key Concepts:**\n- Core principles of ${name.toLowerCase()}\n- Practical applications and examples\n\n**Common Mistakes:**\n- Misunderstanding basic concepts\n- Forgetting syntax details`;
     }
 
-    const objectives = Array.isArray(lesson.learning_objectives) && lesson.learning_objectives.length
-      ? lesson.learning_objectives
+    const objectives = Array.isArray(lesson.learningObjectives) && lesson.learningObjectives.length
+      ? lesson.learningObjectives
       : [`Understand ${lesson.title.toLowerCase()} fundamentals`, `Apply concepts in practical scenarios`, `Complete exercises to reinforce learning`];
 
     const prerequisiteNames = await resolveLessonNames(Array.isArray(lesson.prerequisites) ? lesson.prerequisites : []);
@@ -146,8 +146,8 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
 
     const topic = {
       id: lesson.id, name: lesson.title, type: lesson.type, phaseId: lesson.phase_id, levelId: lesson.module_id,
-      status: lesson.status, xpReward: lesson.xp_reward, content: markdownContent, summary, objectives,
-      estimatedTime: lesson.estimated_minutes ?? lesson.xp_reward ?? 15,
+      status: lesson.status, xpReward: lesson.xpReward, content: markdownContent, summary, objectives,
+      estimatedTime: lesson.estimatedMinutes ?? lesson.xpReward ?? 15,
       difficulty: metadata.difficulty, skillsCovered: metadata.skillsCovered, prerequisites: metadata.prerequisites,
       completionChecklist: metadata.completionChecklist, contentStatus, generatedAt, lastOpenedAt, metadata,
       resources: resources.map((r: any) => ({ id: r.id, title: r.title, type: r.type, provider: r.provider, url: r.url, description: r.description, duration: r.duration })),
@@ -199,7 +199,7 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
             completed: true,
             completedAt: new Date().toISOString(),
             attempts: 1,
-            studyMinutes: Number(lessonCtx.estimated_minutes) || 0,
+            studyMinutes: Number(lessonCtx.estimatedMinutes) || 0,
           });
         }
         const dbData = await loadUserDB(userEmail, { createIfMissing: false });
@@ -207,11 +207,11 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
         return { xp: dbData?.xp || 0, streak: await getCurrentStreak(userEmail), completionPercent: await getRoadmapProgressPercent(lessonCtx.roadmap_id, userEmail), alreadyCompleted: true, message: 'Lesson already completed.' };
       }
 
-      const xpValue = Number(lessonCtx.xp_reward) || 0;
+      const xpValue = Number(lessonCtx.xpReward) || 0;
       if (xpValue <= 0) throw new HttpError(400, 'Lesson has no valid XP reward');
 
       const clientStudyMinutes = Number((req.body as any)?.studyMinutes);
-      const autoStudyMinutes = Number(lessonCtx.estimated_minutes) || 0;
+      const autoStudyMinutes = Number(lessonCtx.estimatedMinutes) || 0;
       const studyMinutes = Number.isFinite(clientStudyMinutes) && clientStudyMinutes > 0 ? Math.min(clientStudyMinutes, 600) : autoStudyMinutes;
 
       const counters = await completeLessonForUser(userEmail, lessonId, lessonCtx.module_id, lessonCtx.phase_id, lessonCtx.roadmap_id, null, studyMinutes);

@@ -190,8 +190,17 @@ export function AuthProvider({
    * a performance concern for normal requests.
    */
   const getAccessToken = useCallback(async (): Promise<string | null> => {
-    const { data } = await supabase.auth.refreshSession();
-    return data.session?.access_token ?? null;
+    const { data } = await supabase.auth.getSession();
+    const session = data.session;
+    if (!session) return null;
+
+    const expiresAt = (session.expires_at ?? 0) * 1000; // seconds -> ms
+    const isExpiringSoon = expiresAt - Date.now() < 60_000; // refresh if <60s left
+
+    if (!isExpiringSoon) return session.access_token;
+
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    return refreshed.session?.access_token ?? session.access_token; // fall back rather than null
   }, []);
 
   /** Returns headers with Bearer token for all mutating API calls. */
