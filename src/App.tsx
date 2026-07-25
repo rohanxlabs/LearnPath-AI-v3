@@ -1,6 +1,6 @@
 // App.tsx — thin shell that composes all providers and the router.
 // All business logic has been extracted into:
-//   src/contexts/AuthContext.tsx    — auth, session, profile, settings
+//   src/auth/AuthProvider.tsx       — Supabase session, profile, settings
 //   src/contexts/RoadmapContext.tsx — roadmap list, generation, deletion
 //   src/contexts/UIContext.tsx      — tab, sidebar, toast, AI status, theme
 //   src/contexts/PWAContext.tsx     — online/offline, update, email verified
@@ -10,7 +10,7 @@ import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 
 import { CheckCircle } from 'lucide-react';
 import { Toast } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
-import { AuthScreen } from './components/AuthScreen';
+import { AuthGateway } from './auth/AuthGateway';
 import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification } from './types';
 import { getPhaseUnlockStatus, calcPhaseProgress, isPhaseComplete } from './lib/roadmapUtils';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
@@ -23,7 +23,8 @@ import { TermsPage, PrivacyPage } from './components/LegalPages';
 import { useAnalytics } from './hooks/useAnalytics';
 import { PhaseCompletionModal } from './components/PhaseCompletionModal';
 
-import { AuthProvider, useAuth, createEmptyProfile, DEFAULT_SETTINGS } from './contexts/AuthContext';
+import { AuthProvider, createEmptyProfile, DEFAULT_SETTINGS } from './auth/AuthProvider';
+import { useAuth } from './auth/authHooks';
 import { RoadmapProvider, useRoadmaps } from './contexts/RoadmapContext';
 import { UIProvider, useUI } from './contexts/UIContext';
 import { PWAProvider, usePWAContext } from './contexts/PWAContext';
@@ -75,6 +76,12 @@ export function renderHomeView(props: {
 
 function AppShell() {
   const { track, identify } = useAnalytics();
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const onPop = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   // Sub-Task 9: phase completion modal state + session dedup ref
   const [phaseCompletionData, setPhaseCompletionData] = useState<{ phase: Phase; nextPhase: Phase | null; xpEarned: number } | null>(null);
   const celebratedPhasesRef = useRef<Set<string>>(new Set());
@@ -83,13 +90,7 @@ function AppShell() {
     isAuthenticated, isLoadingAuth, profile, setProfile, settings, setSettings,
     achievements, setAchievements, notifications, setNotifications,
     chats, setChats, activityLog, setActivityLog,
-    authEmail, setAuthEmail, authPassword, setAuthPassword, authName, setAuthName,
-    authMode, setAuthMode, authStep, pendingSignupEmail, authError, setAuthError, isAuthenticating,
-    showAuthModal, setShowAuthModal, showOnboarding, setShowOnboarding,
-    forgotPasswordMode, setForgotPasswordMode, forgotEmail, setForgotEmail,
-    forgotStatus, setForgotStatus, resetToken, setResetToken,
-    resetPassword, setResetPassword, resetStatus, setResetStatus,
-    handleAuthenticate, verifySignupOtp, handleForgotPassword, handleResetPassword, handleLogout,
+    handleLogout,
     mutatingHeaders, getStoredUserEmail,
   } = useAuth();
 
@@ -335,6 +336,13 @@ function AppShell() {
   }, [mutatingHeaders]);
 
   // --- Loading state ---
+  // Cold page load (no session confirmed yet): show splash so the auth gateway
+  // never flashes before the session check completes.
+  // Token refresh while already authenticated: keep the app skeleton so the
+  // user doesn't see a full-screen spinner mid-session.
+  if (isLoadingAuth && !isAuthenticated) {
+    return <SplashScreen />;
+  }
   if (isLoadingAuth) {
     return (
       <div className={`min-h-screen pb-20 ${themeClass} transition-colors duration-300`} style={customBackground}>
@@ -350,31 +358,13 @@ function AppShell() {
   if (!isAuthenticated) {
     if (legalPage === 'terms') return <TermsPage onBack={() => setLegalPage(null)} />;
     if (legalPage === 'privacy') return <PrivacyPage onBack={() => setLegalPage(null)} />;
-    if (showAuthModal) {
-      return (
-        <AuthScreen
-          authMode={authMode} setAuthMode={setAuthMode}
-          authEmail={authEmail} setAuthEmail={setAuthEmail}
-          authPassword={authPassword} setAuthPassword={setAuthPassword}
-          authName={authName} setAuthName={setAuthName}
-          authStep={authStep} pendingSignupEmail={pendingSignupEmail} verifySignupOtp={verifySignupOtp}
-          authError={authError} setAuthError={setAuthError}
-          isAuthenticating={isAuthenticating}
-          forgotPasswordMode={forgotPasswordMode} setForgotPasswordMode={setForgotPasswordMode}
-          forgotEmail={forgotEmail} setForgotEmail={setForgotEmail}
-          forgotStatus={forgotStatus} setForgotStatus={setForgotStatus}
-          resetToken={resetToken} resetPassword={resetPassword}
-          setResetPassword={setResetPassword} resetStatus={resetStatus} setResetStatus={setResetStatus}
-          handleAuthenticate={handleAuthenticate} handleForgotPassword={handleForgotPassword} handleResetPassword={handleResetPassword}
-        />
-      );
-    }
+    if (['/login', '/register', '/forgot-password', '/reset-password'].includes(currentPath)) return <AuthGateway />;
     const LandingPage = lazy(() => import('./components/LandingPage').then(m => ({ default: m.LandingPage })));
     return (
       <Suspense fallback={<SplashScreen />}>
         <LandingPage
-          onGetStarted={() => { setAuthMode('signup'); setShowAuthModal(true); }}
-          onSignIn={() => { setAuthMode('login'); setShowAuthModal(true); }}
+          onGetStarted={() => { window.history.pushState({}, '', '/register'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          onSignIn={() => { window.history.pushState({}, '', '/login'); window.dispatchEvent(new PopStateEvent('popstate')); }}
           onTerms={() => setLegalPage('terms')}
           onPrivacy={() => setLegalPage('privacy')}
         />
@@ -556,9 +546,6 @@ export default function App() {
           identify(data.email, { name: data.profile?.name || '' });
         }}
         onLoggedOut={() => setBootRoadmaps([])}
-        onShowOnboarding={() => {}}
-        onRedirectAfterLogin={() => {}}
-        track={track}
         identify={identify}
       >
         <UIProviderWrapper>
@@ -571,7 +558,7 @@ export default function App() {
   );
 }
 
-// Wrappers that read from AuthContext to supply props to child providers
+// Wrappers that read from AuthProvider to supply props to child providers
 function UIProviderWrapper({ children }: { children: React.ReactNode }) {
   const { settings } = useAuth();
   return <UIProvider settingsTheme={settings.theme}>{children}</UIProvider>;

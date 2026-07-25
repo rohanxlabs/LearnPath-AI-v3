@@ -382,7 +382,6 @@ const mocks = vi.hoisted(() => {
 
   const authUsers = new Map<string, AuthUser>();    // email → user
   const authTokens = new Map<string, AuthUser>();   // token → user (shared reference exposed as authTokenStore)
-  const recoveryTokens = new Set<string>();         // tokens created via password-recovery flow
   let tokenCounter = 1;
 
   function makeToken() { return `test-token-${tokenCounter++}`; }
@@ -416,17 +415,6 @@ const mocks = vi.hoisted(() => {
           if (!user) return Promise.resolve({ data: { user: null }, error: { message: 'Invalid token' } });
           return Promise.resolve({ data: { user }, error: null });
         },
-        // verifyOtp only succeeds when the token was explicitly tagged as a recovery token.
-        verifyOtp: ({ token_hash, type }: { token_hash: string; type: string }) => {
-          if (type !== 'recovery') {
-            return Promise.resolve({ data: { user: null }, error: { message: 'Invalid OTP type' } });
-          }
-          const user = authTokens.get(token_hash) ?? null;
-          if (!user || !recoveryTokens.has(token_hash)) {
-            return Promise.resolve({ data: { user: null }, error: { message: 'Invalid or expired recovery token' } });
-          }
-          return Promise.resolve({ data: { user }, error: null });
-        },
       },
     };
   }
@@ -456,20 +444,9 @@ const mocks = vi.hoisted(() => {
         // from the admin client to the anon client (security fix ST-3).
         // Only succeeds when the token was explicitly tagged as a recovery token
         // by the test (via globalThis.__recoveryTokenStore.add(token)).
-        verifyOtp: ({ token_hash, type }: { token_hash: string; type: string }) => {
-          if (type !== 'recovery') {
-            return Promise.resolve({ data: { user: null }, error: { message: 'Invalid OTP type' } });
-          }
-          const user = authTokens.get(token_hash) ?? null;
-          if (!user || !recoveryTokens.has(token_hash)) {
-            return Promise.resolve({ data: { user: null }, error: { message: 'Invalid or expired recovery token' } });
-          }
-          return Promise.resolve({ data: { user }, error: null });
-        },
         // resend is called by /api/register to send the confirmation email.
         // In tests users are always treated as confirmed (the admin mock adds
         // them to authUsers unconditionally), so this is a no-op.
-        resend: (_params: any) => Promise.resolve({ data: {}, error: null }),
         persistSession: false,
         autoRefreshToken: false,
       },
@@ -484,14 +461,13 @@ const mocks = vi.hoisted(() => {
   const resetAuth = () => {
     authUsers.clear();
     authTokens.clear();
-    recoveryTokens.clear();
     tokenCounter = 1;
   };
 
   // authTokenStore is the same Map reference — exposed so the jwt mock can do
   // synchronous token lookups without async getUser calls.
   // recoveryTokenStore is exposed so tests can tag a token as a recovery token.
-  return { mockSql: sqlFn, supabaseCreateClient, resetAuth, authTokenStore: authTokens, recoveryTokenStore: recoveryTokens };
+  return { mockSql: sqlFn, supabaseCreateClient, resetAuth, authTokenStore: authTokens };
 });
 
 // ---------------------------------------------------------------------------
@@ -504,7 +480,6 @@ vi.stubGlobal('__resetMockDb', () => {
 });
 vi.stubGlobal('__supabaseCreateClient', mocks.supabaseCreateClient);
 vi.stubGlobal('__authTokenStore', mocks.authTokenStore);
-vi.stubGlobal('__recoveryTokenStore', mocks.recoveryTokenStore);
 
 // ---------------------------------------------------------------------------
 // Module mocks

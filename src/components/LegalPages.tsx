@@ -198,7 +198,7 @@ export function PrivacyPage({ onBack }: LegalPageProps) {
 
       <Section title="6. Security">
         <p>
-          Passwords are hashed with bcrypt (cost factor 10). Data in transit is encrypted via
+          Password credentials and sessions are managed by Supabase Auth. Data in transit is encrypted via
           TLS. Database connections use SSL. We apply security headers (helmet) on every response.
         </p>
       </Section>

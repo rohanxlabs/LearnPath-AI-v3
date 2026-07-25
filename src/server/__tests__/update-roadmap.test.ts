@@ -14,25 +14,19 @@ vi.mock('../db/queries', async (importOriginal) => {
 });
 
 const email = 'roadmap@test.com';
-const password = 'Password1';
-
-async function setupUser() {
-  await request(app).post('/api/register').send({ email, password, name: 'Roadmap User' });
-}
-
-async function loginToken(): Promise<string> {
-  const res = await request(app).post('/api/login').send({ email, password });
-  return res.body?.access_token ?? '';
+function loginToken(): string {
+  const token = 'roadmap-supabase-session';
+  (globalThis as any).__authTokenStore.set(token, { id: 'roadmap-user', email });
+  return token;
 }
 
 describe('update-roadmap allowlist', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     resetMockDb();
-    await setupUser();
   });
 
   it('rejects disallowed (ownership) fields without needing an existing roadmap', async () => {
-    const token = await loginToken();
+    const token = loginToken();
     const res = await request(app)
       .post('/api/update-roadmap')
       .set('Authorization', `Bearer ${token}`)

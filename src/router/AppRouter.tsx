@@ -2,7 +2,7 @@
 // Extracted from App.tsx renderTabContent() + lazy imports.
 
 import React, { lazy, useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../auth/authHooks';
 import { useRoadmaps } from '../contexts/RoadmapContext';
 import { useUI } from '../contexts/UIContext';
 import { renderHomeView } from '../App';

@@ -4,25 +4,19 @@ import { app } from '../../../server.ts';
 import { resetMockDb } from './mockDb';
 
 const email = 'progress@test.com';
-const password = 'Password1';
-
-async function setupUser() {
-  await request(app).post('/api/register').send({ email, password, name: 'Progress User' });
-}
-
-async function loginToken(): Promise<string> {
-  const res = await request(app).post('/api/login').send({ email, password });
-  return res.body?.access_token ?? '';
+function loginToken(): string {
+  const token = 'progress-supabase-session';
+  (globalThis as any).__authTokenStore.set(token, { id: 'progress-user', email });
+  return token;
 }
 
 describe('progress endpoint', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     resetMockDb();
-    await setupUser();
   });
 
   it('GET /api/user-stats — returns xp and streak for authenticated user', async () => {
-    const token = await loginToken();
+    const token = loginToken();
     const res = await request(app)
       .get('/api/user-stats')
       .set('Authorization', `Bearer ${token}`);

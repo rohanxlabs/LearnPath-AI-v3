@@ -1,4 +1,4 @@
-// Browser-side Supabase client — used only in React components / AuthContext.
+// Browser-side Supabase client — used only by the modular auth client.
 // The service-role admin client lives in src/server/lib/supabaseAdmin.ts and
 // must never be imported in any client-side file.
 

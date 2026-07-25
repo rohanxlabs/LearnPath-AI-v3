@@ -65,7 +65,8 @@ app.use(helmet({
       scriptSrc: isProduction
         ? ["'self'"]
         : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      styleSrcElem: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: [
         "'self'",
@@ -74,8 +75,10 @@ app.use(helmet({
         // Supabase — auth, realtime, storage (the subdomain matches the project ref)
         'https://*.supabase.co',
         'wss://*.supabase.co',
+        // Vite HMR websocket (dev only)
+        ...(!isProduction ? ['ws://localhost:24678', 'ws://localhost:3000'] : []),
       ],
-      fontSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
@@ -121,7 +124,6 @@ import roadmapsRouter from './src/server/routes/roadmaps';
 import lessonsRouter from './src/server/routes/lessons';
 import aiRouter from './src/server/routes/ai';
 import userRouter from './src/server/routes/user';
-import emailRouter from './src/server/routes/email';
 
 // Disable ETag-based 304 caching for all API routes.
 // Every /api endpoint is auth-gated and returns user-specific mutable data —
@@ -141,7 +143,6 @@ app.use('/api', roadmapsRouter);
 app.use('/api', lessonsRouter);
 app.use('/api', aiRouter);
 app.use('/api', userRouter);
-app.use('/api', emailRouter);
 
 // ---------------------------------------------------------------------------
 // Redis-backed rate-limit store (Upstash).
