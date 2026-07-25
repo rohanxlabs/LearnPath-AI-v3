@@ -198,11 +198,16 @@ router.post('/progress', requireAuth, async (req, res) => {
   if (!roadmapId || !lessonId) return res.status(400).json({ error: 'roadmapId and lessonId are required' });
 
   // dynamic import to avoid circular deps
-  const { findLessonContext, completeLessonForUser, getRoadmapState, upsertRoadmapState } = await import('../db/queries');
+  const { findLessonContext, completeLessonForUser, getRoadmapState, upsertRoadmapState, getRoadmapById } = await import('../db/queries');
 
   try {
     const lessonCtx = await findLessonContext(lessonId);
     if (!lessonCtx || lessonCtx.roadmap_id !== roadmapId) return res.status(404).json({ error: 'Lesson or roadmap not found' });
+    // Do not let a valid lesson/roadmap pair from another account mutate this
+    // user's progress rows or the roadmap's aggregate counters.
+    if (!await getRoadmapById(roadmapId, userEmail)) {
+      return res.status(404).json({ error: 'Lesson or roadmap not found' });
+    }
 
     if (action === 'complete') {
       const counters = await completeLessonForUser(userEmail, lessonId, lessonCtx.module_id, lessonCtx.phase_id, roadmapId, null, 0);

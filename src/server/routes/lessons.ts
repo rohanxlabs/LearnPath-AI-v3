@@ -9,7 +9,7 @@ import {
   getLessonById,
   getResourcesForLessonContext,
   getProjectForPhase,
-  getRoadmapsByOwner
+  getRoadmapById
 } from '../db/queries';
 import {
   getOrGenerateLessonContent,
@@ -33,8 +33,7 @@ const router = Router();
 // Uses 404 (not 403) to avoid lesson/roadmap ID enumeration.
 // ---------------------------------------------------------------------------
 async function userOwnsLesson(userEmail: string, roadmapId: string): Promise<boolean> {
-  const owned = await getRoadmapsByOwner(userEmail);
-  return owned.some((r: any) => r.id === roadmapId);
+  return Boolean(await getRoadmapById(roadmapId, userEmail));
 }
 
 // Lesson content (lazy generate on first access)
@@ -201,6 +200,11 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
 
       const targetRoadmapId = roadmapId || lessonCtx.roadmap_id;
       if (targetRoadmapId && targetRoadmapId !== lessonCtx.roadmap_id) throw new HttpError(400, 'Lesson does not belong to the provided roadmap');
+      // A lesson ID is not an authorization boundary. Verify ownership before
+      // creating progress, unlocking lessons, or changing roadmap counters.
+      if (!await userOwnsLesson(userEmail, lessonCtx.roadmap_id)) {
+        throw new HttpError(404, 'Lesson not found');
+      }
 
       if (lessonCtx.status === 'completed') {
         // The global lessons.status is 'completed', but user_lesson_progress may

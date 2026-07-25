@@ -5,8 +5,11 @@
 -- Enabling RLS with no public policies denies anon/authenticated API access
 -- by default, closing the externally exposed-table findings from Supabase.
 
-ALTER TABLE public."session" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+-- These legacy tables are not part of the initial schema in every deployment.
+-- IF EXISTS keeps the migration chain deployable; feedback is created and
+-- protected explicitly in 0007.
+ALTER TABLE IF EXISTS public."session" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE IF EXISTS public.feedback ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE public.lessons ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE public.assignments ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE public.modules ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
