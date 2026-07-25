@@ -17,7 +17,7 @@ services:
     plan: starter           # starter (free) | standard | pro
     branch: main
 
-    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build && pnpm run db:migrate
     startCommand: node dist/server.cjs
 
     healthCheckPath: /api/health

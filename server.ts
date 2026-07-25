@@ -19,6 +19,8 @@ import { ensureRoadmapTables } from './src/server/db/queries';
 // ---------------------------------------------------------------------------
 // Startup env-var validation — fail fast with a clear message.
 // ---------------------------------------------------------------------------
+const isProduction = process.env.NODE_ENV === 'production';
+
 // SUPABASE_JWT_SECRET is only required for HS256 projects (older Supabase).
 // ES256 projects (newer Supabase) use JWKS — SUPABASE_URL is sufficient.
 const requiredEnvVars = ['DATABASE_URL', 'GROQ_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY'];
@@ -28,10 +30,16 @@ if (missingEnvVars.length > 0) {
   process.exit(1);
 }
 
+// FRONTEND_URL is required in production for CORS to work correctly.
+// Without it, allowedOrigins is empty and all browser requests are blocked.
+if (isProduction && !process.env.FRONTEND_URL) {
+  logger.fatal('FRONTEND_URL must be set in production (required for CORS). Set it to your public service URL, e.g. https://learnpath-ai.onrender.com');
+  process.exit(1);
+}
+
 // ---------------------------------------------------------------------------
 // Sentry — must be initialised before any other instrumentation.
 // ---------------------------------------------------------------------------
-const isProduction = process.env.NODE_ENV === 'production';
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
@@ -124,6 +132,10 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), aiActive: !!process.env.GROQ_API_KEY });
+});
+
 app.use('/api', authRouter);
 app.use('/api', roadmapsRouter);
 app.use('/api', lessonsRouter);
@@ -142,14 +154,24 @@ app.use('/api', emailRouter);
 // ---------------------------------------------------------------------------
 async function buildAuthLimiters() {
   const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) return;
+  if (!redisUrl) {
+    if (isProduction) {
+      logger.warn('[RateLimit] REDIS_URL not set in production — auth rate-limits are per-process only. Brute-force protection will not be shared across instances.');
+    }
+    return;
+  }
   try {
     const { default: RedisStore } = await import('./src/server/lib/redisStore');
-    const store = await RedisStore.create(redisUrl);
-    // setAuthLimiters replaces the lazy-wrapper instances in middleware.ts so
-    // the first request to /api/register, /api/login, etc. uses the Redis store.
+    // Create a single Redis connection then derive three isolated stores, one per
+    // limiter.  express-rate-limit v8 throws ERR_ERL_STORE_REUSE if the same
+    // store object is shared across multiple rateLimit() calls.
+    const baseStore = await RedisStore.create(redisUrl);
     const { setAuthLimiters } = await import('./src/server/lib/middleware');
-    setAuthLimiters(store);
+    setAuthLimiters({
+      auth:    baseStore.withPrefix('rl:auth:'),
+      login:   baseStore.withPrefix('rl:login:'),
+      refresh: baseStore.withPrefix('rl:refresh:'),
+    });
     logger.info('[RateLimit] Upgraded to Redis-backed store (Upstash)');
   } catch (err: any) {
     logger.warn({ err: err?.message }, '[RateLimit] Redis store init failed, staying in-memory');

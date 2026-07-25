@@ -1326,15 +1326,11 @@ function reconstructProject(project: any): any {
 // ---------------------------------------------------------------------------
 
 export async function getUserRoadmapsReconstructed(ownerEmail: string): Promise<any[]> {
-  const roadmapRows = await getRoadmapsByOwner(ownerEmail);
+  const normalizedEmail = ownerEmail.toLowerCase();
+  const roadmapRows = await getRoadmapsByOwner(normalizedEmail);
   const result: any[] = [];
   for (const r of roadmapRows) {
-    const reconstructed = await reconstructRoadmapJson(r.id, ownerEmail);
-    // Include any roadmap whose row exists, even with 0 phases.
-    // The racy post-write re-read that caused false-empty results has been removed
-    // (POST /api/roadmaps now returns incoming data directly), so a 0-phase result
-    // here means the generation genuinely failed partway through — still show it
-    // rather than silently dropping it, as the user's card should appear.
+    const reconstructed = await reconstructRoadmapJson(r.id, normalizedEmail);
     if (reconstructed) {
       result.push(reconstructed);
     }
@@ -1347,23 +1343,38 @@ export async function getUserRoadmapsReconstructed(ownerEmail: string): Promise<
 // ---------------------------------------------------------------------------
 
 export async function findLessonContext(lessonId: string): Promise<any | null> {
-  const rows = await db
-    .select({
-      lesson: lessons,
-      moduleId: modules.id,
-      phaseId: modules.phaseId,
-      roadmapId: modules.roadmapId,
-    })
-    .from(lessons)
-    .innerJoin(modules, eq(modules.id, lessons.moduleId))
-    .where(eq(lessons.id, lessonId))
-    .limit(1);
-  if (!rows[0]) return null;
+  // Use db.execute() (raw SQL, no rowMode:'array') so the mock returns a plain
+  // camelCase/snake_case object that callers can read without positional mapping.
+  // The lessons table stores moduleId/phaseId/roadmapId directly — no join needed.
+  const result = await db.execute(drizzleSql`
+    SELECT id, module_id, phase_id, roadmap_id, title, description, type,
+           xp_reward, status, learning_objectives, prerequisites, difficulty,
+           estimated_minutes, skill_tags, content_status, order_index,
+           created_at, updated_at
+    FROM lessons
+    WHERE id = ${lessonId}
+    LIMIT 1
+  `) as { rows: any[] };
+  const row = result.rows?.[0];
+  if (!row) return null;
+  // Normalise: camelCase keys (from mock) or snake_case keys (from real pg).
   return {
-    ...rows[0].lesson,
-    module_id: rows[0].moduleId,
-    phase_id: rows[0].phaseId,
-    roadmap_id: rows[0].roadmapId,
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    type: row.type,
+    status: row.status,
+    xpReward: row.xpReward ?? row.xp_reward,
+    estimatedMinutes: row.estimatedMinutes ?? row.estimated_minutes,
+    contentStatus: row.contentStatus ?? row.content_status,
+    orderIndex: row.orderIndex ?? row.order_index,
+    learningObjectives: row.learningObjectives ?? row.learning_objectives,
+    prerequisites: row.prerequisites,
+    difficulty: row.difficulty,
+    skillTags: row.skillTags ?? row.skill_tags,
+    module_id: row.moduleId ?? row.module_id,
+    phase_id: row.phaseId ?? row.phase_id,
+    roadmap_id: row.roadmapId ?? row.roadmap_id,
   };
 }
 

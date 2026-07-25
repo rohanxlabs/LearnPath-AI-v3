@@ -22,11 +22,6 @@ import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt, GROQ_MODE
 
 const router = Router();
 
-// Health check
-router.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), aiActive: !!process.env.GROQ_API_KEY, aiModel: GROQ_MODELS[0] });
-});
-
 // Generate roadmap
 router.post('/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;

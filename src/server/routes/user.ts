@@ -13,30 +13,6 @@ import { logger } from '../lib/logger';
 let publicStatsCache: { roadmapsGenerated: number; skillsCovered: number; ts: number } | null = null;
 const PUBLIC_STATS_TTL = 5 * 60 * 1000;
 
-// ---------------------------------------------------------------------------
-// Feedback table bootstrap (idempotent) — called at module load, never inside handlers.
-// ---------------------------------------------------------------------------
-let feedbackTableReady: Promise<void> | null = null;
-function ensureFeedbackTable(): Promise<void> {
-  if (!feedbackTableReady) {
-    feedbackTableReady = sql`
-      CREATE TABLE IF NOT EXISTS feedback (
-        id SERIAL PRIMARY KEY,
-        user_email TEXT,
-        sentiment TEXT NOT NULL,
-        message TEXT,
-        context TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `.then(() => undefined as void).catch((err: any) => {
-      logger.warn({ err: err?.message }, '[Feedback] Table setup failed — feedback writes will silently fail');
-    });
-  }
-  return feedbackTableReady!;
-}
-// Kick off table creation at module load time (fire-and-forget).
-ensureFeedbackTable();
-
 const feedbackLimiter = createLimiter({
   windowMs: 60 * 1000,
   max: process.env.NODE_ENV === 'test' ? 1000 : 5,
@@ -100,8 +76,8 @@ router.get('/user-resource-states', requireAuth, async (req, res) => {
     const states = dbData?.progress?.resource_states || { completedIds: [], savedIds: [] };
     return res.json(states);
   } catch (error) {
-    console.error('Get resource states error:', error);
-    return res.json({ completedIds: [], savedIds: [] });
+    logger.error({ err: error }, 'user-resource-states query failed');
+    return res.status(503).json({ error: 'Resource states temporarily unavailable', code: 'RESOURCE_STATES_FAILED' });
   }
 });
 
@@ -128,14 +104,17 @@ router.get('/user-profile', requireAuth, async (req, res) => {
     const progress = dbData?.progress || {};
     return res.json({ profile: progress.profile || {}, settings: progress.settings || {}, achievements: progress.achievements || [], notifications: progress.notifications || [], chats: progress.chats || [] });
   } catch (error) {
-    console.error('Get user profile error:', error);
-    return res.json({ profile: {}, settings: {}, achievements: [], notifications: [], chats: [] });
+    logger.error({ err: error }, 'user-profile query failed');
+    return res.status(503).json({ error: 'Profile temporarily unavailable', code: 'PROFILE_FAILED' });
   }
 });
 
 router.put('/user-profile', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
-  const { profile, settings, achievements, notifications, chats, activityLog } = req.body;
+  // achievements and activityLog are intentionally excluded from the client-writable surface.
+  // achievements: must only be modified server-side via unlockAchievement() to prevent self-unlocking.
+  // activityLog: must only be written by server-side lesson completion handlers to prevent fabrication.
+  const { profile, settings, notifications, chats } = req.body;
 
   const PROFILE_BLOCKLIST = ['xp', 'level', 'streak', 'isPro', 'email', 'createdAt', 'id', 'tier'];
   function sanitizeProfile(input: any): Record<string, any> | null {
@@ -159,13 +138,8 @@ router.put('/user-profile', requireAuth, async (req, res) => {
       dbData.profile = merged;
     }
     if (settings && typeof settings === 'object' && !Array.isArray(settings)) dbData.progress.settings = settings;
-    if (achievements) dbData.progress.achievements = Array.isArray(achievements) ? achievements : [];
     if (notifications) dbData.progress.notifications = Array.isArray(notifications) ? notifications : [];
     if (chats) dbData.progress.chats = Array.isArray(chats) ? chats : [];
-    if (activityLog && typeof activityLog === 'object' && !Array.isArray(activityLog)) {
-      dbData.progress.activityLog = activityLog;
-      dbData.activityLog = activityLog;
-    }
     await saveUserDB(userEmail, dbData);
     return res.json({ success: true });
   } catch (error) {
@@ -181,8 +155,8 @@ router.get('/topic-wise-quizzes', requireAuth, async (req, res) => {
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     return res.json(dbData?.topic_wise_quizzes || []);
   } catch (error) {
-    console.error('Get topic wise quizzes error:', error);
-    return res.json([]);
+    logger.error({ err: error }, 'topic-wise-quizzes query failed');
+    return res.status(503).json({ error: 'Quizzes temporarily unavailable', code: 'TOPIC_QUIZZES_FAILED' });
   }
 });
 
@@ -249,18 +223,23 @@ router.post('/progress', requireAuth, async (req, res) => {
   }
 });
 
-// Feedback endpoint
-router.post('/feedback', feedbackLimiter, async (req, res) => {
+// Strip null bytes and ASCII control characters (except tab/newline/CR) from
+// user-supplied strings before they reach the database.
+function sanitizeFeedbackText(raw: unknown, maxLen: number): string {
+  return String(raw || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').slice(0, maxLen);
+}
+
+// Feedback endpoint — requires authentication to prevent anonymous spam.
+router.post('/feedback', requireAuth, feedbackLimiter, async (req, res) => {
   const { sentiment, message, context } = req.body;
   if (!sentiment || !['positive', 'neutral', 'negative'].includes(sentiment)) {
     return res.status(400).json({ error: 'Valid sentiment is required' });
   }
   try {
-    const userEmail = req.supabaseUser?.email || 'anonymous';
-    await ensureFeedbackTable();
+    const userEmail = req.supabaseUser!.email;
     await sql`
       INSERT INTO feedback (user_email, sentiment, message, context)
-      VALUES (${userEmail}, ${sentiment}, ${(message || '').slice(0, 500)}, ${(context || '').slice(0, 200)})
+      VALUES (${userEmail}, ${sentiment}, ${sanitizeFeedbackText(message, 500)}, ${sanitizeFeedbackText(context, 200)})
     `.catch(() => {});
     return res.json({ ok: true });
   } catch (error) {

@@ -36,6 +36,13 @@
       "when": 1784366000000,
       "tag": "0004_add_is_unlocked_to_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784369000000,
+      "tag": "0005_add_backfill_marker",
+      "breakpoints": true
     }
   ]
 }

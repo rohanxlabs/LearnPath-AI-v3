@@ -347,13 +347,18 @@ export const userRoadmapState = pgTable(
 // Users table — FK target for all child tables.
 export const users = pgTable('users', {
   email: text('email').primaryKey(),
-  passwordHash: text('password_hash'),
+  // password_hash column intentionally omitted from the Drizzle model.
+  // Authentication is fully delegated to Supabase Auth; this column exists
+  // in the database for backward compatibility but is never populated.
   roadmap: jsonb('roadmap'),
   progress: jsonb('progress'),
   xp: integer('xp').notNull().default(0),
   streak: integer('streak').notNull().default(0),
   lastActiveDate: text('last_active_date'), // DATE stored as ISO string (YYYY-MM-DD)
   emailVerified: boolean('email_verified').notNull().default(false),
+  // Set once, the first time the JSONB -> user_lesson_progress backfill runs
+  // for this account. NULL means the backfill has not happened yet.
+  progressBackfilledAt: timestamp('progress_backfilled_at', { withTimezone: true }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

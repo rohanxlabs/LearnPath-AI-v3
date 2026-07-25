@@ -24,6 +24,10 @@ export default defineConfig({
       SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
       SUPABASE_JWT_SECRET: 'test-jwt-secret-at-least-32-chars-long!!',
       GROQ_API_KEY: 'test-groq-key',
+      // Explicitly unset so buildAuthLimiters() skips Redis and stays in-memory.
+      // A real REDIS_URL in .env would otherwise leak into tests and cause
+      // live network calls to Upstash when rate-limit counters are incremented.
+      REDIS_URL: '',
     },
     // Override environment per file pattern.
     // Vitest >=1.0 supports this via the `browser` field or inline docblock.

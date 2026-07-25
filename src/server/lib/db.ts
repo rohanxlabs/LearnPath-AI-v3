@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import { withUserLock } from './middleware';
+import { logger } from './logger';
 import {
   getRoadmapsByOwner,
   migrateRoadmapJsonToTables
@@ -22,9 +23,12 @@ const pool = new Pool({
 
 // Provide a tagged-template `sql` interface compatible with the existing call
 // sites (sql`SELECT ...` returns rows as an array).
-export async function sql(strings: TemplateStringsArray, ...values: any[]): Promise<any[]> {
+// Raw SQL call sites use different projections. Defaulting to a string-keyed
+// row keeps untyped projections usable while explicit callers can still supply
+// a narrower row type with `sql<MyRow>`.
+export async function sql<T = Record<string, any>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> {
   const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''), '');
-  const { rows } = await pool.query(text, values);
+  const { rows } = await pool.query<T>(text, values);
   return rows;
 }
 
@@ -43,7 +47,9 @@ const ROADMAP_CACHE_TTL = 30 * 1000;
 // Users table bootstrap
 // ---------------------------------------------------------------------------
 export type UserDB = {
-  passwordHash?: string;
+  // passwordHash intentionally omitted — authentication is delegated to Supabase Auth.
+  // The password_hash column still exists in the DB for backward compatibility but is
+  // never populated by application code. Do not re-add this field.
   [key: string]: any;
 };
 
@@ -51,31 +57,26 @@ let usersTableReady: Promise<void> | null = null;
 
 export async function ensureUsersTable(): Promise<void> {
   if (!process.env.DATABASE_URL) {
-    console.warn('[Database Warning] DATABASE_URL not set.');
+    logger.warn('DATABASE_URL not set — database features disabled');
     return Promise.resolve();
   }
   if (!usersTableReady) {
-    usersTableReady = sql`
-      CREATE TABLE IF NOT EXISTS users (
-        email TEXT PRIMARY KEY,
-        password_hash TEXT,
-        roadmap JSONB,
-        progress JSONB,
-        xp INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `
-      .then(async () => {
-        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_date DATE`;
-        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS streak INTEGER DEFAULT 0`;
-        await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE`;
-        console.log('[Database] Connected to Neon PostgreSQL successfully');
-        return undefined;
+    usersTableReady = sql<{ t: string | null }>`SELECT to_regclass('public.users') AS t`
+      .then((rows) => {
+        const exists = Boolean(rows[0]?.t);
+        if (!exists) {
+          if (process.env.NODE_ENV === 'test') {
+            logger.warn('users table missing in test env — continuing without runtime DDL');
+            return;
+          }
+          logger.fatal('users table missing — run `pnpm run db:migrate` before starting');
+          process.exit(1);
+        }
+        logger.info('Database schema verified');
       })
       .catch((err: any) => {
-        console.error('[Database Error] Failed to initialize users table:', err);
-        return undefined;
+        logger.fatal({ err: err?.message }, 'Database connectivity check failed');
+        process.exit(1);
       });
   }
   return usersTableReady;
@@ -120,7 +121,8 @@ export async function loadUserDB(userEmail: string, options: { createIfMissing?:
 
   try {
     const result = await sql`
-      SELECT password_hash, roadmap, progress, xp, last_active_date, streak
+      SELECT roadmap, progress, xp, last_active_date, streak,
+             progress_backfilled_at
       FROM users
       WHERE email = ${userEmail.toLowerCase()}
     `;
@@ -135,7 +137,6 @@ export async function loadUserDB(userEmail: string, options: { createIfMissing?:
         ...progress,
         progress,
         xp: row.xp ?? 0,
-        passwordHash: row.password_hash || undefined,
         last_active_date: row.last_active_date,
         streak: row.streak ?? 0,
         progress_backfilled_at: row.progress_backfilled_at || null,
@@ -202,7 +203,7 @@ export async function saveUserDB(userEmail: string, dbData: UserDB): Promise<voi
       const currentRoadmap = result[0]?.roadmap || {};
       const currentProgress = result[0]?.progress || {};
 
-      const { passwordHash, roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats, resource_states, activityLog } = dbData;
+      const { roadmaps, curated_resources, projects, topic_wise_quizzes, profile, settings, achievements, notifications, chats, resource_states, activityLog } = dbData;
 
       const newRoadmapData = {
         roadmaps: roadmaps || currentRoadmap.roadmaps || [],
@@ -223,12 +224,13 @@ export async function saveUserDB(userEmail: string, dbData: UserDB): Promise<voi
 
       const xp = dbData.xp ?? (profile as any)?.xp ?? (currentProgress.profile as any)?.xp ?? 0;
 
+      // password_hash column is intentionally excluded — auth is handled by Supabase.
+      // The column still exists in the DB schema for backward compatibility.
       await sql`
-        INSERT INTO users (email, password_hash, roadmap, progress, xp, updated_at)
-        VALUES (${userEmail.toLowerCase()}, ${passwordHash || null}, ${newRoadmapData}, ${newProgressData}, ${xp}, NOW())
+        INSERT INTO users (email, roadmap, progress, xp, updated_at)
+        VALUES (${userEmail.toLowerCase()}, ${newRoadmapData}, ${newProgressData}, ${xp}, NOW())
         ON CONFLICT (email)
         DO UPDATE SET
-          password_hash = COALESCE(EXCLUDED.password_hash, users.password_hash),
           roadmap = EXCLUDED.roadmap,
           progress = EXCLUDED.progress,
           xp = COALESCE(EXCLUDED.xp, users.xp),

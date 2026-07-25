@@ -62,4 +62,15 @@ export default class RedisStore {
   async resetKey(key: string): Promise<void> {
     await this.redis.del(`${this.prefix}${key}`).catch(() => {});
   }
+
+  /**
+   * Return a new RedisStore that shares this instance's underlying Redis
+   * connection but uses a different key prefix.  Each express-rate-limit
+   * instance must have its own store object (v8 enforces this via
+   * ERR_ERL_STORE_REUSE), so call withPrefix() to create one store per
+   * limiter without opening extra Redis connections.
+   */
+  withPrefix(newPrefix: string): RedisStore {
+    return new RedisStore(this.redis, this.windowMs, newPrefix);
+  }
 }

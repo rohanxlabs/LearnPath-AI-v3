@@ -12,6 +12,19 @@ import { supabase } from '../lib/supabaseClient';
 const DEFAULT_AVATAR =
   'data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" rx="64" fill="%238b5cf6"/%3E%3Ccircle cx="64" cy="48" r="22" fill="white" opacity=".9"/%3E%3Cpath d="M28 112c7-22 20-33 36-33s29 11 36 33" fill="white" opacity=".9"/%3E%3C/svg%3E';
 
+const ALLOWED_REDIRECT_TABS = new Set([
+  'home', 'roadmaps', 'mentor', 'progress',
+  'achievements', 'notifications', 'profile',
+]);
+
+function passwordValidationError(password: string): string | null {
+  if (password.length < 10) return 'Password must be at least 10 characters.';
+  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+    return 'Password must contain at least one letter and one number.';
+  }
+  return null;
+}
+
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: 'system',
   notificationsEnabled: true,
@@ -220,10 +233,6 @@ export function AuthProvider({
   const bootstrapUser = useCallback(async (accessToken: string, email: string) => {
     // Clear any stale error from a previous attempt before we start.
     setAuthError('');
-    // Decode the token locally so we can log the expiry time without a round-trip.
-    const tokenPayload = (() => { try { return JSON.parse(atob(accessToken.split('.')[1])); } catch { return null; } })();
-    const tokenExp = tokenPayload?.exp ? new Date(tokenPayload.exp * 1000).toISOString() : 'unknown';
-    console.log(`[Auth] bootstrapUser called  email=${email}  token_exp=${tokenExp}  token_prefix=${accessToken.slice(0, 20)}…`);
     // Retry transient failures (cold-start / network blip) instead of treating
     // them as "not logged in" — only a 401/403 from our server means the
     // session itself is invalid and should log the user out.
@@ -231,48 +240,41 @@ export function AuthProvider({
     let response: Response | null = null;
     let lastErr: unknown = null;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      console.log(`[Auth] /api/bootstrap fetch attempt ${attempt}/${MAX_ATTEMPTS}`);
       try {
         response = await fetch('/api/bootstrap', {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
-        console.log(`[Auth] /api/bootstrap response status=${response.status}`);
         if (response.ok) break;
         if (response.status === 401 || response.status === 403) {
-          // Read the body to get the server's reason (e.g. "invalid signature", "jwt expired")
           const body = await response.clone().json().catch(() => ({}));
-          console.warn(`[Auth] /api/bootstrap returned ${response.status} — stopping retries (auth failure)  server_reason=${body?.reason ?? body?.error ?? 'none'}`);
-          break; // real auth failure, don't retry
+          throw new Error(body?.reason ?? body?.error ?? 'Bootstrap failed: unauthorized');
+        }
+        if (response.status === 503 && attempt < MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 2 ** (attempt - 1) * 1000));
+          continue;
         }
         lastErr = new Error(`Bootstrap failed: ${response.status}`);
-        console.warn(`[Auth] /api/bootstrap non-auth failure status=${response.status}, will retry`);
       } catch (err) {
         lastErr = err;
         response = null;
-        console.warn(`[Auth] /api/bootstrap network error on attempt ${attempt}:`, err);
       }
       if (attempt < MAX_ATTEMPTS) {
-        const delay = attempt * 800;
-        console.log(`[Auth] waiting ${delay}ms before retry…`);
-        await new Promise((r) => setTimeout(r, delay)); // 800ms, 1600ms backoff
+        const delay = 2 ** (attempt - 1) * 1000;
+        await new Promise((r) => setTimeout(r, delay));
       }
     }
 
     try {
       if (!response) {
-        console.error('[Auth] all bootstrap attempts failed with network errors, lastErr:', lastErr);
         throw lastErr ?? new Error('Bootstrap failed: no response');
       }
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          console.error(`[Auth] bootstrap unauthorized (${response.status}) — token may be expired. token_exp=${tokenExp}`);
           throw new Error('Bootstrap failed: unauthorized');
         }
         // Non-auth failure after retries — keep the user's session alive and
         // surface a retryable error instead of silently logging them out.
-        console.error(`[Auth] bootstrap non-auth failure after all retries, status=${response.status}`);
-        setAuthError('Could not load your account. Please try again.');
-        setIsAuthenticated(false);
+        setAuthError('We could not load your learning data. Please retry in a moment.');
         return;
       }
       const data = await response.json();
@@ -311,13 +313,16 @@ export function AuthProvider({
         activityLog: data.activityLog || {},
         roadmaps: data.roadmaps || [],
       });
-      console.log(`[Auth] bootstrap success  email=${email}  isNewUser=${!data.profile || Object.keys(data.profile).length === 0}`);
     } catch (err) {
       // 401/403 → genuine session expiry: show auth screen with a clear message.
       // Any other unexpected throw (e.g. JSON parse error) gets the same treatment
       // so the user always knows why they were signed out.
       const isAuthErr = err instanceof Error && err.message.includes('unauthorized');
-      console.error(`[Auth] bootstrapUser catch  isAuthErr=${isAuthErr}  email=${email}  token_exp=${tokenExp}  err=`, err);
+      if (isAuthErr) {
+        // Remove the rejected local session. Otherwise every reload retries the
+        // same invalid token and leaves the user stuck in an auth-error loop.
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+      }
       setIsAuthenticated(false);
       setShowAuthModal(true);
       setAuthError(
@@ -337,19 +342,15 @@ export function AuthProvider({
     // will hand us a stale, expired access_token if the user was away > 1 hour,
     // causing the server to return 401 and the client to show "session expired"
     // even though the user's refresh token is still valid.
-    console.log('[Auth] useEffect: calling refreshSession()…');
     supabase.auth.refreshSession().then(({ data: { session }, error }) => {
       if (error) {
-        console.warn('[Auth] refreshSession error:', error.message);
+        // Ignore refresh-session errors and fall back to an unauthenticated state.
       }
       if (session?.user?.email && session.access_token) {
-        const exp = (() => { try { const p = JSON.parse(atob(session.access_token.split('.')[1])); return new Date(p.exp * 1000).toISOString(); } catch { return 'unknown'; } })();
-        console.log(`[Auth] refreshSession returned valid session  email=${session.user.email}  token_exp=${exp}`);
         bootstrapUser(session.access_token, session.user.email).finally(() =>
           setIsLoadingAuth(false)
         );
       } else {
-        console.log('[Auth] refreshSession returned no session — user is logged out');
         setIsAuthenticated(false);
         setIsLoadingAuth(false);
       }
@@ -359,7 +360,11 @@ export function AuthProvider({
     // isLoadingAuth is set to true immediately so the app shows a loading screen
     // instead of flashing the landing page while bootstrapUser fetches the profile.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log(`[Auth] onAuthStateChange  event=${event}  email=${session?.user?.email ?? 'none'}`);
+      if (import.meta.env.DEV) {
+        const raw = session?.user?.email ?? 'none';
+        const masked = raw === 'none' ? raw : raw.replace(/^(.{2}).*(@.*)$/, '$1***$2');
+        console.log(`[Auth] onAuthStateChange  event=${event}  email=${masked}`);
+      }
       if (event === 'PASSWORD_RECOVERY') {
         setResetToken('recovery');
         setShowAuthModal(true);
@@ -369,19 +374,16 @@ export function AuthProvider({
       // refreshSession() call above — skip it here to avoid a second concurrent
       // bootstrapUser call racing the one already started above.
       if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
-        console.log(`[Auth] onAuthStateChange skipping ${event} (handled by refreshSession path)`);
         return;
       }
       if (session?.user?.email && session.access_token) {
         // Show loading immediately so the unauthenticated branch never renders
         // during the async bootstrapUser fetch.
         setIsLoadingAuth(true);
-        console.log(`[Auth] onAuthStateChange triggering bootstrapUser  event=${event}  email=${session.user.email}`);
         bootstrapUser(session.access_token, session.user.email).finally(() =>
           setIsLoadingAuth(false)
         );
       } else if (!session) {
-        console.log('[Auth] onAuthStateChange no session — setting isAuthenticated=false');
         setIsAuthenticated(false);
       }
     });
@@ -389,6 +391,16 @@ export function AuthProvider({
     return () => subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Navigate only after bootstrap has completed successfully. Redirecting in
+  // the submit handler races the protected app state and can briefly render a
+  // requested tab before the session/profile is available.
+  useEffect(() => {
+    if (!isAuthenticated || !redirectAfterLogin) return;
+    const rawTab = redirectAfterLogin.replace('/', '') || 'home';
+    onRedirectAfterLogin(ALLOWED_REDIRECT_TABS.has(rawTab) ? rawTab : 'home');
+    setRedirectAfterLogin(null);
+  }, [isAuthenticated, onRedirectAfterLogin, redirectAfterLogin]);
 
   // ---------------------------------------------------------------------------
   // Shared profile-flush helper — called by both the debounce effect and logout.
@@ -468,6 +480,13 @@ export function AuthProvider({
       setAuthError(mode === 'signup' ? 'Name, email, and password are required.' : 'Email and password are required.');
       return;
     }
+    if (mode === 'signup') {
+      const passwordError = passwordValidationError(password);
+      if (passwordError) {
+        setAuthError(passwordError);
+        return;
+      }
+    }
     setIsAuthenticating(true);
     try {
       if (mode === 'signup') {
@@ -480,8 +499,20 @@ export function AuthProvider({
         const data = await response.json().catch(() => ({}));
         if (!response.ok) { setAuthError(data.error || 'Registration failed.'); return; }
 
-        // Sign in via our server route (not direct Supabase SDK) so the
-        // auto-confirm logic runs server-side before sign-in is attempted.
+        // The server no longer force-confirms email addresses. Supabase has sent a
+        // verification link; any sign-in attempt will 403 until it is clicked, so
+        // stop here and tell the user what to do instead of failing a login.
+        if (data.requiresVerification) {
+          identify(email, { name: authName.trim() });
+          track('user_signed_up');
+          setAuthMode('login');
+          setAuthPassword('');
+          setAuthError(`Almost there — we sent a verification link to ${email}. Click it, then sign in.`);
+          return;
+        }
+
+        // Legacy path: projects with email confirmation disabled still return no
+        // requiresVerification flag and can sign in immediately.
         const loginRes = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -509,7 +540,12 @@ export function AuthProvider({
         // Login — call Supabase directly from the client for best UX
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error || !data.session) {
-          setAuthError(error?.message || 'Invalid credentials.');
+          const message = error?.message?.toLowerCase() || '';
+          setAuthError(
+            message.includes('email not confirmed')
+              ? 'Please confirm your email address. Check your inbox for the verification link.'
+              : 'Invalid email or password.'
+          );
           return;
         }
         // onAuthStateChange will fire and call bootstrapUser automatically
@@ -519,9 +555,14 @@ export function AuthProvider({
 
       // Modal close + form clear is handled in bootstrapUser once the profile
       // is loaded — avoids the landing-page flash during the async fetch gap.
-      // Only handle the post-login redirect here.
-      if (redirectAfterLogin) {
-        onRedirectAfterLogin(redirectAfterLogin.replace('/', '') || 'home');
+      // The effect above normally performs the redirect after bootstrap. This
+      // branch only covers an already-authenticated re-entry.
+      if (isAuthenticated && redirectAfterLogin) {
+        // Validate against the known tab names to prevent open-redirect if this
+        // value is ever sourced from a URL parameter in the future.
+        const rawTab = redirectAfterLogin.replace('/', '') || 'home';
+        const safeTab = ALLOWED_REDIRECT_TABS.has(rawTab) ? rawTab : 'home';
+        onRedirectAfterLogin(safeTab);
         setRedirectAfterLogin(null);
       }
     } catch (err) {
@@ -549,6 +590,13 @@ export function AuthProvider({
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetPassword) return;
+    const passwordError = passwordValidationError(resetPassword);
+    if (passwordError) {
+      setAuthError(passwordError);
+      setResetStatus('error');
+      return;
+    }
+    setAuthError('');
     setResetStatus('submitting');
     try {
       // Update password using the active Supabase session from the reset link
@@ -574,6 +622,16 @@ export function AuthProvider({
         new Promise<void>((resolve) => setTimeout(resolve, 2000)),
       ]);
     } catch { /* best-effort — proceed regardless */ }
+    // Revoke the server-side session before the SDK removes the local bearer
+    // token. This also clears the HttpOnly refresh cookie for legacy clients.
+    try {
+      const token = await getAccessToken();
+      await fetch('/api/logout', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        credentials: 'same-origin',
+      });
+    } catch { /* best-effort — local sign-out below still clears this device */ }
     // Sign out of Supabase (invalidates the refresh token server-side).
     try { await supabase.auth.signOut(); } catch { /* continue */ }
     // Clear all React state.

@@ -7,9 +7,10 @@ const mocks = vi.hoisted(() => {
   // -------------------------------------------------------------------------
   // In-memory SQL store (mirrors the neon mock that was already here)
   // -------------------------------------------------------------------------
+  // password_hash removed: auth is delegated to Supabase — the field is never
+  // populated by application code and is excluded from SELECT/INSERT queries.
   type UserRow = {
     email: string;
-    password_hash: string | null;
     roadmap: any;
     progress: any;
     xp: number;
@@ -25,13 +26,12 @@ const mocks = vi.hoisted(() => {
     return users.get(String(email).toLowerCase());
   }
 
-  function ensureRow(email: string, passwordHash: string | null = null): UserRow {
+  function ensureRow(email: string): UserRow {
     const key = String(email).toLowerCase();
     let row = users.get(key);
     if (!row) {
       row = {
         email: key,
-        password_hash: passwordHash,
         roadmap: {},
         progress: {},
         xp: 0,
@@ -68,14 +68,13 @@ const mocks = vi.hoisted(() => {
     }
 
     if (lower.startsWith('insert into users')) {
+      // INSERT INTO users (email, roadmap, progress, xp, updated_at) — no password_hash
       const emailIdx = values.findIndex((v: any) => typeof v === 'string' && v.includes('@'));
       const email = emailIdx >= 0 ? values[emailIdx] : values[0];
-      const passwordHash = values[emailIdx + 1] ?? null;
-      const roadmap = values[emailIdx + 2];
-      const progress = values[emailIdx + 3];
-      const xp = values[emailIdx + 4] ?? 0;
-      const row = ensureRow(email, passwordHash);
-      if (passwordHash) row.password_hash = passwordHash;
+      const roadmap = values[emailIdx + 1];
+      const progress = values[emailIdx + 2];
+      const xp = values[emailIdx + 3] ?? 0;
+      const row = ensureRow(email);
       if (roadmap !== undefined && roadmap !== null) row.roadmap = roadmap;
       if (progress !== undefined && progress !== null) row.progress = progress;
       if (xp !== undefined && xp !== null) row.xp = xp ?? row.xp;
@@ -97,18 +96,23 @@ const mocks = vi.hoisted(() => {
     const insertLesson = lower.startsWith('insert into "lessons"');
     const insertUserLessonProgress = lower.startsWith('insert into "user_lesson_progress"');
     const updateLessons = lower.startsWith('update "lessons"');
-    const selectRoadmapsByOwner = lower.includes('from "roadmaps"') && lower.includes('where "roadmaps"."owner_email" = $1');
-    const selectRoadmapById = lower.includes('from "roadmaps"') && lower.includes('where "roadmaps"."id" = $1');
+    const selectRoadmapsByOwner = lower.includes('from "roadmaps"') && lower.includes('"roadmaps"."owner_email"');
+    const selectRoadmapById = lower.includes('from "roadmaps"') && lower.includes('"roadmaps"."id"');
     const selectPhasesByRoadmap = lower.includes('from "phases"') && lower.includes('where "phases"."roadmap_id" = $1');
     const selectModulesByRoadmap = lower.includes('from "modules"') && lower.includes('where "modules"."roadmap_id" = $1');
     const selectLessonsByRoadmap = lower.includes('from "lessons"') && lower.includes('where "lessons"."roadmap_id" = $1');
     const selectLessonByIdJoinModule = lower.includes('from "lessons"') && lower.includes('inner join "modules"') && lower.includes('where "lessons"."id" = $1');
+    const selectLessonById = (
+      (lower.includes('from "lessons"') && lower.includes('where "lessons"."id" = $1') && !lower.includes('inner join')) ||
+      (lower.includes('from lessons') && lower.includes('where id = $1'))
+    );
     const selectUserLessonProgressByOwnerRoadmapCompleted = lower.includes('from "user_lesson_progress"') && lower.includes('where') && lower.includes('completed = $3');
     const selectUserLessonProgressByOwnerLesson = lower.includes('from "user_lesson_progress"') && lower.includes('where "user_lesson_progress"."owner_email" = $1') && lower.includes('"lesson_id" = $2');
     const selectLessonsByModuleStatusOrder = lower.includes('from "lessons"') && lower.includes('"lessons"."module_id" = $1') && lower.includes('"lessons"."status" = $2') && lower.includes('"lessons"."order_index" > $3');
     const selectModuleById = lower.includes('from "modules"') && lower.includes('where "modules"."id" = $1');
     const selectPhaseById = lower.includes('from "phases"') && lower.includes('where "phases"."id" = $1');
     const selectLessonsByModule = lower.includes('from "lessons"') && lower.includes('where "lessons"."module_id" = $1');
+    const selectUserLessonProgressByOwnerRoadmap = lower.includes('from "user_lesson_progress"') && lower.includes('where "user_lesson_progress"."owner_email" = $1') && lower.includes('"roadmap_id" = $2');
     const selectLessonsByRoadmapStatusOrder = lower.includes('from "lessons"') && lower.includes('"lessons"."roadmap_id" = $1') && lower.includes('"lessons"."status" = $2') && lower.includes('order by');
     const selectLessonsByStatus = lower.includes('from "lessons"') && lower.includes('where "lessons"."roadmap_id" = $1') && lower.includes('order by');
     const selectPhasesByRoadmapOrder = lower.includes('from "phases"') && lower.includes('where "phases"."roadmap_id" = $1') && lower.includes('order by');
@@ -191,7 +195,8 @@ const mocks = vi.hoisted(() => {
     }
 
     if (selectRoadmapById) {
-      const row = roadmapsTable.get(values[0]);
+      const idCandidate = values.find((v: any) => typeof v === 'string' && roadmapsTable.has(v));
+      const row = idCandidate ? roadmapsTable.get(idCandidate) : roadmapsTable.get(values[0]);
       return Promise.resolve(row ? [row] : []);
     }
 
@@ -220,12 +225,27 @@ const mocks = vi.hoisted(() => {
       return Promise.resolve([{ lesson, moduleId: module?.id, phaseId: module?.phaseId, roadmapId: module?.roadmapId }]);
     }
 
+    if (selectLessonById) {
+      // Return the stored camelCase row directly — findLessonContext reads camelCase fields.
+      const lesson = lessonsTable.get(values[0]);
+      return Promise.resolve(lesson ? [lesson] : []);
+    }
+
     if (selectUserLessonProgressByOwnerLesson) {
       const ownerEmail = values[0].toLowerCase();
       const lessonId = values[1];
       const key = `${ownerEmail}::${lessonId}`;
       const row = userLessonProgressTable.get(key);
       return Promise.resolve(row ? [row] : []);
+    }
+
+    if (selectUserLessonProgressByOwnerRoadmap) {
+      const ownerEmail = values[0].toLowerCase();
+      const roadmapId = values[1];
+      const rows = Array.from(userLessonProgressTable.values()).filter((r) =>
+        r.ownerEmail === ownerEmail && r.roadmapId === roadmapId
+      );
+      return Promise.resolve(rows);
     }
 
     if (selectUserLessonProgressByOwnerRoadmapCompleted) {
@@ -432,6 +452,24 @@ const mocks = vi.hoisted(() => {
         resetPasswordForEmail: (_email: string, _opts?: any) => {
           return Promise.resolve({ data: {}, error: null });
         },
+        // verifyOtp is used by /api/password-reset/confirm — the route was moved
+        // from the admin client to the anon client (security fix ST-3).
+        // Only succeeds when the token was explicitly tagged as a recovery token
+        // by the test (via globalThis.__recoveryTokenStore.add(token)).
+        verifyOtp: ({ token_hash, type }: { token_hash: string; type: string }) => {
+          if (type !== 'recovery') {
+            return Promise.resolve({ data: { user: null }, error: { message: 'Invalid OTP type' } });
+          }
+          const user = authTokens.get(token_hash) ?? null;
+          if (!user || !recoveryTokens.has(token_hash)) {
+            return Promise.resolve({ data: { user: null }, error: { message: 'Invalid or expired recovery token' } });
+          }
+          return Promise.resolve({ data: { user }, error: null });
+        },
+        // resend is called by /api/register to send the confirmation email.
+        // In tests users are always treated as confirmed (the admin mock adds
+        // them to authUsers unconditionally), so this is a no-op.
+        resend: (_params: any) => Promise.resolve({ data: {}, error: null }),
         persistSession: false,
         autoRefreshToken: false,
       },

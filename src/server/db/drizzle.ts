@@ -10,7 +10,11 @@ import * as schema from '../../../drizzle/schema';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // required for Supabase (and most managed Postgres)
+  // Verify TLS certificates in production. Set DATABASE_INSECURE_SSL=true only
+  // for a local self-signed dev database (same env gate as db.ts).
+  ssl: process.env.DATABASE_INSECURE_SSL === 'true'
+    ? { rejectUnauthorized: false }
+    : { rejectUnauthorized: true },
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,

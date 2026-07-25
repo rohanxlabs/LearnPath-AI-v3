@@ -15,11 +15,13 @@
 
 import { Router } from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { authLimiter, loginLimiter, isValidEmail, validatePassword, requireAuth } from '../lib/middleware';
+import { authLimiter, loginLimiter, refreshLimiter, isValidEmail, validatePassword, requireAuth } from '../lib/middleware';
 import { loadUserDB, saveUserDB, sql } from '../lib/db';
 import { getUserRoadmapsReconstructed, backfillUserLessonProgress } from '../db/queries';
 import { getSupabaseAdmin } from '../lib/supabaseAdmin';
 import { logger } from '../lib/logger';
+
+const isProduction = process.env.NODE_ENV === 'production';
 
 // ---------------------------------------------------------------------------
 // Lazy-singleton anon client — used for password-based sign-in and password
@@ -71,7 +73,8 @@ router.post('/register', authLimiter, async (req, res) => {
         return res.status(400).json({ error: 'User already exists' });
       }
       logger.error({ err: error.message }, 'auth: Supabase register error');
-      return res.status(400).json({ error: error.message || 'Registration failed' });
+      // Never forward raw Supabase error messages to the client — they may expose internal details.
+      return res.status(400).json({ error: 'Registration failed. Please try again.' });
     }
 
     // Seed local DB row with the profile name so other routes find it immediately.
@@ -97,11 +100,12 @@ router.post('/register', authLimiter, async (req, res) => {
       success: true,
       email: normalizedEmail,
       name: name.trim(),
-      userId: data.user?.id,
+      // userId intentionally omitted — exposing the Supabase UUID is unnecessary
+      // and increases the attack surface for future IDOR vulnerabilities.
       requiresVerification: true,
     });
   } catch (error: any) {
-    console.error('Registration error:', error);
+    logger.error({ err: error?.message }, 'auth: registration failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -138,7 +142,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     if (error || !data.session) {
-      return res.status(401).json({ error: error?.message || 'Invalid credentials' });
+      // Credential failures should not disclose Supabase implementation details.
+      // The confirmation case above remains actionable and deliberately distinct.
+      if (error) logger.warn({ err: error.message }, 'auth: login rejected');
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     // Fetch display name from our DB (may differ from Supabase metadata)
@@ -148,6 +155,14 @@ router.post('/login', loginLimiter, async (req, res) => {
     // Refresh token is managed by the Supabase SDK in the browser.
     // Never return it in the JSON body — that would expose a long-lived
     // credential to any JavaScript that can read the response.
+    res.cookie('lp_refresh', data.session.refresh_token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      path: '/api/refresh',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
     return res.json({
       ok: true,
       name: storedName,
@@ -155,7 +170,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       expires_in: data.session.expires_in,
     });
   } catch (error: any) {
-    console.error('Login error:', error);
+    logger.error({ err: error?.message }, 'auth: login failed');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -167,14 +182,64 @@ router.post('/login', loginLimiter, async (req, res) => {
 // for backward compat (the client still calls it).
 // ---------------------------------------------------------------------------
 router.post('/logout', async (req, res) => {
-  // Optionally revoke the server-side session via admin if a token is present.
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (token) {
+  // Revoke the long-lived refresh-token session so it cannot be replayed after logout.
+  // Best-effort: any failure still clears the cookie and returns ok.
+  const refreshToken = req.cookies?.lp_refresh;
+  if (refreshToken) {
     try {
-      const admin = getSupabaseAdmin();
-      await admin.auth.admin.signOut(token);
-    } catch { /* best-effort */ }
+      const { data } = await getSupabaseAnon().auth.refreshSession({ refresh_token: refreshToken });
+      if (data?.session?.access_token) {
+        await getSupabaseAdmin().auth.admin.signOut(data.session.access_token);
+      }
+    } catch { /* best-effort — proceed to cookie clear regardless */ }
   }
+
+  // Also revoke the Bearer access token if present (belt-and-suspenders).
+  const bearerToken = req.headers.authorization?.replace('Bearer ', '');
+  if (bearerToken) {
+    try { await getSupabaseAdmin().auth.admin.signOut(bearerToken); } catch { /* best-effort */ }
+  }
+
+  res.clearCookie('lp_refresh', { path: '/api/refresh' });
+  return res.json({ ok: true });
+});
+
+router.post('/refresh', refreshLimiter, async (req, res) => {
+  const refreshToken = req.cookies?.lp_refresh;
+  if (!refreshToken) return res.status(401).json({ error: 'No refresh token' });
+
+  const { data, error } = await getSupabaseAnon().auth.refreshSession({ refresh_token: refreshToken });
+  if (error || !data.session) {
+    res.clearCookie('lp_refresh', { path: '/api/refresh' });
+    return res.status(401).json({ error: 'Session expired' });
+  }
+
+  res.cookie('lp_refresh', data.session.refresh_token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'strict',
+    path: '/api/refresh',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+
+  return res.json({ access_token: data.session.access_token, expires_in: data.session.expires_in });
+});
+
+router.post('/resend-verification', authLimiter, async (req, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  if (!email || !isValidEmail(email)) return res.status(400).json({ error: 'Valid email is required' });
+
+  const { error } = await getSupabaseAnon().auth.resend({
+    type: 'signup',
+    email,
+    options: { emailRedirectTo: `${process.env.FRONTEND_URL || ''}/auth/confirmed` },
+  });
+
+  if (error) {
+    logger.warn({ err: error.message }, 'auth: resend verification failed');
+    return res.status(400).json({ error: 'Unable to resend verification email' });
+  }
+
   return res.json({ ok: true });
 });
 
@@ -255,7 +320,7 @@ router.post('/password-reset/request', authLimiter, async (req, res) => {
     await getSupabaseAnon().auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
     return res.json({ ok: true });
   } catch (error) {
-    console.error('[Auth] Password reset request error:', error);
+    logger.warn({ err: error }, 'auth: password reset request failed');
     return res.json({ ok: true }); // never reveal errors externally
   }
 });
@@ -274,12 +339,14 @@ router.post('/password-reset/confirm', authLimiter, async (req, res) => {
   const pwErr = validatePassword(password);
   if (pwErr) return res.status(400).json({ error: pwErr });
 
-  try {
-    const admin = getSupabaseAdmin();
+  // Sanitize the raw token input before passing it to Supabase.
+  const tokenHash = String(token).trim().slice(0, 512);
 
-    // Only accept tokens that originated from a password-recovery flow.
-    const { data: otpData, error: otpError } = await (admin.auth as any).verifyOtp({
-      token_hash: token,
+  try {
+    // verifyOtp belongs on the anon (user-facing) client, NOT the admin client.
+    // Using admin.auth.admin.signOut with as-any cast would silently break on SDK updates.
+    const { data: otpData, error: otpError } = await getSupabaseAnon().auth.verifyOtp({
+      token_hash: tokenHash,
       type: 'recovery',
     });
     if (otpError || !otpData?.user) {
@@ -287,14 +354,15 @@ router.post('/password-reset/confirm', authLimiter, async (req, res) => {
     }
 
     // Update the password via admin SDK
-    const { error: updateError } = await admin.auth.admin.updateUserById(otpData.user.id, { password });
+    const { error: updateError } = await getSupabaseAdmin().auth.admin.updateUserById(otpData.user.id, { password });
     if (updateError) {
-      return res.status(400).json({ error: updateError.message || 'Password update failed' });
+      logger.warn({ err: updateError.message }, 'auth: password update rejected');
+      return res.status(400).json({ error: 'Password update failed. Please choose a different password.' });
     }
 
     return res.json({ ok: true });
   } catch (error: any) {
-    console.error('[Auth] Password reset confirm error:', error);
+    logger.error({ err: error?.message }, 'auth: password reset confirm failed');
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -83,16 +83,35 @@ export function lockCount(): number {
  * Key: Supabase project URL.  Value: { keys, fetchedAt }.
  */
 const jwksCache: Map<string, { keys: any[]; fetchedAt: number }> = new Map();
-const JWKS_TTL_MS = 60 * 60 * 1000; // re-fetch after 1 hour
+// 10-minute TTL: short enough to pick up key rotations within a reasonable window
+// without hammering the JWKS endpoint on every request.
+const JWKS_TTL_MS = 10 * 60 * 1000;
+
+// Single-flight map: deduplicates concurrent JWKS fetches so N simultaneous
+// cache misses produce exactly 1 outbound HTTP request instead of N.
+const jwksFetchInFlight: Map<string, Promise<any[]>> = new Map();
 
 async function getJwksKeys(supabaseUrl: string): Promise<any[]> {
   const cached = jwksCache.get(supabaseUrl);
   if (cached && Date.now() - cached.fetchedAt < JWKS_TTL_MS) return cached.keys;
-  const res = await fetch(`${supabaseUrl}/auth/v1/.well-known/jwks.json`);
-  if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
-  const { keys } = await res.json() as { keys: any[] };
-  jwksCache.set(supabaseUrl, { keys, fetchedAt: Date.now() });
-  return keys;
+
+  // If a fetch is already in-flight for this URL, await it instead of starting another.
+  const inflight = jwksFetchInFlight.get(supabaseUrl);
+  if (inflight) return inflight;
+
+  const fetchPromise = fetch(`${supabaseUrl}/auth/v1/.well-known/jwks.json`)
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`JWKS fetch failed: ${res.status}`);
+      const { keys } = await res.json() as { keys: any[] };
+      jwksCache.set(supabaseUrl, { keys, fetchedAt: Date.now() });
+      return keys;
+    })
+    .finally(() => {
+      jwksFetchInFlight.delete(supabaseUrl);
+    });
+
+  jwksFetchInFlight.set(supabaseUrl, fetchPromise);
+  return fetchPromise;
 }
 
 // Synchronous JWK → PEM via Node crypto (available in Node 15+).
@@ -218,7 +237,8 @@ export function requireAuth(
         if (!result.ok) {
           const failReason = (result as any).reason ?? 'unknown';
           logger.warn({ route, alg, tokenExp, reason: failReason }, 'auth: 401 token verification failed');
-          res.status(401).json({ error: 'Invalid or expired token', reason: failReason });
+          // Do NOT forward the internal failure reason to the client — log it only.
+          res.status(401).json({ error: 'Invalid or expired token' });
           return;
         }
 
@@ -243,11 +263,23 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function isValidEmail(email: string): boolean {
   return typeof email === 'string' && EMAIL_RE.test(email) && email.length <= 254;
 }
+// A small blocklist of the most commonly used passwords that pass the basic
+// letter+digit rule but should still be rejected for obvious guessability.
+const COMMON_PASSWORDS = new Set([
+  'password1', 'Password1', 'password12', 'Password12',
+  'qwerty123', 'Qwerty123', '12345678a', '123456789a',
+  'abc12345', 'Abc12345', 'letmein1', 'welcome1',
+  'monkey123', 'dragon12', 'master12', 'passw0rd',
+]);
+
 export function validatePassword(password: string): string | null {
   if (typeof password !== 'string') return 'Password is required';
-  if (password.length < 8) return 'Password must be at least 8 characters';
+  if (password.length < 10) return 'Password must be at least 10 characters';
   if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
     return 'Password must contain at least one letter and one number';
+  }
+  if (COMMON_PASSWORDS.has(password)) {
+    return 'Password is too common — please choose a less predictable one';
   }
   return null;
 }
@@ -316,6 +348,20 @@ export function createLoginLimiter(store?: any): ReturnType<typeof rateLimit> {
   });
 }
 
+/**
+ * Factory for the token-refresh limiter — higher ceiling than login since
+ * legitimate clients (multiple browser tabs) refresh frequently.
+ * Pass a Redis store to share counters across instances; omit for in-memory.
+ */
+export function createRefreshLimiter(store?: any): ReturnType<typeof rateLimit> {
+  return createLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 1000 : 30,
+    message: { error: 'Too many token refresh attempts. Please try again later.' },
+    store,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Auth limiters — eagerly created at module load with in-memory store.
 // server.ts bootstrap() calls setAuthLimiters(redisStore) before app.listen
@@ -326,14 +372,20 @@ export function createLoginLimiter(store?: any): ReturnType<typeof rateLimit> {
 // request arrives, so the wrapper never creates a limiter mid-request.
 let _authLimiterInstance: ReturnType<typeof rateLimit> = createAuthLimiter();
 let _loginLimiterInstance: ReturnType<typeof rateLimit> = createLoginLimiter();
+let _refreshLimiterInstance: ReturnType<typeof rateLimit> = createRefreshLimiter();
 
 /**
- * Replace the active auth/login limiter instances with Redis-backed ones.
+ * Replace the active auth/login/refresh limiter instances with Redis-backed ones.
  * Must be called before app.listen() — i.e. during bootstrap, not per-request.
+ *
+ * Each limiter MUST receive its own store instance — express-rate-limit v8
+ * throws ERR_ERL_STORE_REUSE if the same object is shared across limiters.
+ * Use RedisStore.withPrefix() to create three isolated stores from one connection.
  */
-export function setAuthLimiters(store: any): void {
-  _authLimiterInstance = createAuthLimiter(store);
-  _loginLimiterInstance = createLoginLimiter(store);
+export function setAuthLimiters(stores: { auth: any; login: any; refresh: any }): void {
+  _authLimiterInstance = createAuthLimiter(stores.auth);
+  _loginLimiterInstance = createLoginLimiter(stores.login);
+  _refreshLimiterInstance = createRefreshLimiter(stores.refresh);
 }
 
 /**
@@ -345,3 +397,6 @@ export const authLimiter: express.RequestHandler = (req, res, next) =>
 
 export const loginLimiter: express.RequestHandler = (req, res, next) =>
   _loginLimiterInstance(req, res, next);
+
+export const refreshLimiter: express.RequestHandler = (req, res, next) =>
+  _refreshLimiterInstance(req, res, next);

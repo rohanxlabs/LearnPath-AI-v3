@@ -63,6 +63,8 @@ export function AuthScreen({
   // Local UI-only state — not lifted to App.
   const [showPassword, setShowPassword] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState('');
 
   const cardClass = "w-full max-w-sm rounded-[24px] bg-[#111111] border border-white/10 p-6 shadow-2xl space-y-6 relative overflow-hidden";
   const inputClass = "w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500";
@@ -112,6 +114,26 @@ export function AuthScreen({
       ? 'Please enter a valid email address (e.g. you@example.com).'
       : '';
 
+  const handleResendVerification = async () => {
+    const email = authEmail.trim().toLowerCase();
+    if (!email) return;
+    setIsResendingVerification(true);
+    setVerificationNotice('');
+    try {
+      const res = await fetch('/api/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setVerificationNotice(res.ok ? 'Verification email sent. Please check your inbox.' : (data.error || 'Unable to resend verification email.'));
+    } catch {
+      setVerificationNotice('Unable to resend verification email.');
+    } finally {
+      setIsResendingVerification(false);
+    }
+  };
+
   // ── Password reset confirm form ──
   if (resetToken) {
     return (
@@ -134,10 +156,10 @@ export function AuthScreen({
                     type={showPassword ? 'text' : 'password'}
                     value={resetPassword}
                     onChange={e => setResetPassword(e.target.value)}
-                    placeholder="At least 8 characters with a number"
+                    placeholder="At least 10 characters with a number"
                     className={`${inputClass} pr-10`}
                     required
-                    minLength={8}
+                    minLength={10}
                     autoComplete="new-password"
                   />
                   <button
@@ -219,6 +241,16 @@ export function AuthScreen({
             {authError}
           </div>
         )}
+        {verificationNotice && (
+          <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-300">
+            {verificationNotice}
+          </div>
+        )}
+        {authError?.includes('confirm your email') && (
+          <button type="button" onClick={handleResendVerification} disabled={isResendingVerification} className="w-full py-2.5 font-bold text-xs text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl transition-all shadow-[0_0_12px_rgba(168,85,247,0.3)] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+            {isResendingVerification ? 'Sending…' : 'Resend verification email'}
+          </button>
+        )}
 
         <form onSubmit={handleAuthenticate} className="space-y-4" noValidate>
           {authMode === 'signup' && (
@@ -274,9 +306,10 @@ export function AuthScreen({
                 type={showPassword ? 'text' : 'password'}
                 value={authPassword}
                 onChange={(e) => setAuthPassword(e.target.value)}
-                placeholder={authMode === 'signup' ? 'At least 8 characters with a number' : 'Your password'}
+                placeholder={authMode === 'signup' ? 'At least 10 characters with a number' : 'Your password'}
                 className={`${inputClass} pr-10`}
                 required
+                minLength={authMode === 'signup' ? 10 : undefined}
                 autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
               />
               <button
