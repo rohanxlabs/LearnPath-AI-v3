@@ -56,15 +56,22 @@ Rules:
 // AI Mentor Chat
 router.post('/mentor-chat', aiLimiter, requireAuth, async (req, res) => {
   const { message, history } = req.body;
-  if (!message) return res.status(400).json({ error: 'Message payload is required' });
+  if (typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: 'Message payload is required' });
+  }
 
   try {
     if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
 
     const messages: Array<{ role: string; content: string }> = [];
-    if (history && Array.isArray(history)) {
-      history.forEach((h: any) => {
-        messages.push({ role: h.sender === 'user' ? 'user' : 'assistant', content: sanitizeForPrompt(h.text || '', 500) });
+    if (Array.isArray(history)) {
+      // Bound history so a client cannot turn one request into an unbounded
+      // model prompt (or exceed provider context limits).
+      history.slice(-20).forEach((h: any) => {
+        const text = typeof h?.text === 'string' ? h.text : '';
+        if (text.trim()) {
+          messages.push({ role: h.sender === 'user' ? 'user' : 'assistant', content: sanitizeForPrompt(text, 500) });
+        }
       });
     }
     messages.push({ role: 'user', content: sanitizeForPrompt(message, 500) });
@@ -259,9 +266,11 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 });
 
 // Dynamic Topic Overview
-router.post('/generate-topic-overview', requireAuth, async (req, res) => {
+router.post('/generate-topic-overview', aiLimiter, requireAuth, async (req, res) => {
   const { topicName, roadmapContext } = req.body;
-  if (!topicName) return res.status(400).json({ error: 'Topic name is required' });
+  if (typeof topicName !== 'string' || !topicName.trim()) {
+    return res.status(400).json({ error: 'Topic name is required' });
+  }
 
   const prompt = `Generate a structured, engaging learner overview for the topic "${sanitizeForPrompt(topicName, 500)}" within the learning domain of "${sanitizeForPrompt(roadmapContext || 'AI and Programming', 500)}".
 Please provide:

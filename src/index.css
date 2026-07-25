@@ -854,14 +854,14 @@ body {
 .lp-dark p  { color: inherit !important; }
 
 /* Backgrounds — ensure dark cards stay dark */
-.lp-dark .bg-\[#0d1425\]   { background-color: #0d1425 !important; }
-.lp-dark .bg-\[#0b1324\]   { background-color: #0b1324 !important; }
-.lp-dark .bg-\[#0c152b\]   { background-color: #0c152b !important; }
-.lp-dark .bg-\[#080e1e\]   { background-color: #080e1e !important; }
-.lp-dark .bg-\[#0f1630\]   { background-color: #0f1630 !important; }
-.lp-dark .bg-\[#050816\]   { background-color: #050816 !important; }
-.lp-dark .bg-\[#090d1f\]   { background-color: #090d1f !important; }
-.lp-dark .bg-\[#080e20\]   { background-color: #080e20 !important; }
+.lp-dark .bg-\[\#0d1425\] { background-color: #0d1425 !important; }
+.lp-dark .bg-\[\#0b1324\] { background-color: #0b1324 !important; }
+.lp-dark .bg-\[\#0c152b\] { background-color: #0c152b !important; }
+.lp-dark .bg-\[\#080e1e\] { background-color: #080e1e !important; }
+.lp-dark .bg-\[\#0f1630\] { background-color: #0f1630 !important; }
+.lp-dark .bg-\[\#050816\] { background-color: #050816 !important; }
+.lp-dark .bg-\[\#090d1f\] { background-color: #090d1f !important; }
+.lp-dark .bg-\[\#080e20\] { background-color: #080e20 !important; }
 
 /* Borders — keep white-alpha borders visible */
 .lp-dark [class*="border-white\/"] { border-color: revert !important; }

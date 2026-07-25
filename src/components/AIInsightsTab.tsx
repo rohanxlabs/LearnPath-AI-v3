@@ -23,9 +23,10 @@ interface AIInsightsTabProps {
   roadmap: Roadmap;
   profile: UserProfile; // We'll receive the real profile object here
   activityLog: ActivityLog;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
-export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabProps) {
+export function AIInsightsTab({ roadmap, profile, activityLog, getAuthHeaders }: AIInsightsTabProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -61,7 +62,7 @@ export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabPr
 
         const res = await fetch('/api/ai-summary', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             roadmapGoal: roadmap.goal,
             progressPercent: totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0,
@@ -83,7 +84,7 @@ export function AIInsightsTab({ roadmap, profile, activityLog }: AIInsightsTabPr
     };
     fetchSummary();
     return () => { cancelled = true; };
-  }, [roadmap.id]);
+  }, [roadmap.id, getAuthHeaders]);
 
   const StatCard = ({ icon, title, value, change }: { icon: React.ReactNode, title: string, value: string, change?: string }) => (
     <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col justify-between">

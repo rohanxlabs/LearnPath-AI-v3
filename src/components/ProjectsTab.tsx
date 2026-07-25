@@ -12,9 +12,10 @@ interface ProjectsTabProps {
   roadmap: Roadmap;
   onAddXp: (amount: number) => void;
   onRoadmapUpdated?: () => void;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
-export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabProps) {
+export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated, getAuthHeaders }: ProjectsTabProps) {
   const [projects, setProjects] = useState<ProjectTrack[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isUsingFallback, setIsUsingFallback] = useState(false);
@@ -65,7 +66,7 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
         };
         const res = await fetch('/api/generate-projects', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
           body: JSON.stringify(body)
         });
         if (res.ok) {
@@ -86,7 +87,7 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
       setLoading(false);
     }
     loadProjects();
-  }, [roadmap.id, roadmap]);
+  }, [roadmap.id, roadmap, getAuthHeaders]);
 
   const handleUpdateProgress = async (id: string, newProgress: number) => {
     const prevProj = projects.find(p => p.id === id);
@@ -99,7 +100,7 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated }: ProjectsTabP
     try {
       await fetch('/api/update-roadmap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           roadmapId: roadmap.id,
           updates: { projects: updatedProjects }

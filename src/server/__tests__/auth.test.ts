@@ -308,8 +308,13 @@ describe('auth guard — 401 without Bearer token', () => {
     { method: 'GET',  path: '/api/user-stats' },
     { method: 'GET',  path: '/api/user-profile' },
     { method: 'GET',  path: '/api/bootstrap' },
+    { method: 'GET',  path: '/api/topic-wise-quizzes' },
+    { method: 'GET',  path: '/api/user-resource-states' },
     { method: 'POST', path: '/api/complete-lesson' },
     { method: 'POST', path: '/api/generate-roadmap' },
+    { method: 'POST', path: '/api/topic-wise-quizzes' },
+    { method: 'POST', path: '/api/user-resource-states' },
+    { method: 'POST', path: '/api/feedback' },
   ];
 
   for (const { method, path } of protectedRoutes) {
@@ -444,6 +449,15 @@ describe('ai route validation', () => {
       .post('/api/mentor-chat')
       .set(authHeader(token))
       .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /api/mentor-chat → 400 for a non-string message (authenticated)', async () => {
+    const token = await setupUser('chat-invalid@test.com');
+    const res = await request(app)
+      .post('/api/mentor-chat')
+      .set(authHeader(token))
+      .send({ message: { text: 'not a string' } });
     expect(res.status).toBe(400);
   });
 

@@ -17,6 +17,7 @@ interface QuizTabProps {
   onAddXp: (amount: number) => void;
   onRoadmapUpdated?: () => void;
   onAchievementUnlocked?: (achievement: { id: string; name: string; icon: string; xpReward: number }) => void;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
 interface Question {
@@ -27,7 +28,7 @@ interface Question {
    misconceptionNotes?: string[];
 }
 
-export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnlocked }: QuizTabProps) {
+export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnlocked, getAuthHeaders }: QuizTabProps) {
   const [quizzes, setQuizzes] = useState<TopicQuizAttempt[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -46,7 +47,9 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
 
       let seedAttempts: TopicQuizAttempt[] = [];
       try {
-        const response = await fetch('/api/topic-wise-quizzes');
+        const response = await fetch('/api/topic-wise-quizzes', {
+          headers: getAuthHeaders ? await getAuthHeaders() : undefined,
+        });
         if (!cancelled) {
           if (response.ok) {
             seedAttempts = await response.json();
@@ -114,7 +117,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
     try {
       const res = await fetch('/api/generate-quiz', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topicName })
       });
       if (res.ok) {
@@ -124,7 +127,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
         try {
           await fetch('/api/update-roadmap', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               roadmapId: roadmap.id,
               updates: {
@@ -197,7 +200,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
 
     const saveRes = await fetch('/api/topic-wise-quizzes', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...updatedAttempt, quizId })
     });
     if (saveRes.ok) {
@@ -207,7 +210,9 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
       }
     }
 
-    const response = await fetch('/api/topic-wise-quizzes');
+    const response = await fetch('/api/topic-wise-quizzes', {
+      headers: getAuthHeaders ? await getAuthHeaders() : undefined,
+    });
     if (response.ok) {
       const data = await response.json();
       if (data) setQuizzes(data as TopicQuizAttempt[]);

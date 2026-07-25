@@ -29,6 +29,7 @@ interface PhaseDetailPageProps {
   onLessonClick: (phaseId: string, levelId: string, lessonId: string) => void;
   onAddXp: (amount: number) => void;
   onRoadmapUpdated?: () => void;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
 type DetailTab = 'modules' | 'resources' | 'quiz' | 'project';
@@ -55,6 +56,7 @@ export function PhaseDetailPage({
   onLessonClick,
   onAddXp,
   onRoadmapUpdated,
+  getAuthHeaders,
 }: PhaseDetailPageProps) {
   const [activeTab, setActiveTab] = useState<DetailTab>('modules');
   // Lifted quiz score so GateStat can reflect the last attempt (H-04 fix)
@@ -306,6 +308,7 @@ export function PhaseDetailPage({
               onAddXp={onAddXp}
               onRoadmapUpdated={onRoadmapUpdated}
               onQuizComplete={(score) => setPhaseQuizScore(score)}
+              getAuthHeaders={getAuthHeaders}
             />
           )}
           {activeTab === 'project' && (
@@ -314,6 +317,7 @@ export function PhaseDetailPage({
               roadmap={roadmap}
               phase={phase}
               onRoadmapUpdated={onRoadmapUpdated}
+              getAuthHeaders={getAuthHeaders}
             />
           )}
         </motion.div>
@@ -450,7 +454,7 @@ function ResourcesSection({ resources }: { resources: any[] }) {
 // QuizSection
 // ---------------------------------------------------------------------------
 
-function QuizSection({ phase, roadmap, savedQuiz, onAddXp, onRoadmapUpdated, onQuizComplete }: any) {
+function QuizSection({ phase, roadmap, savedQuiz, onAddXp, onRoadmapUpdated, onQuizComplete, getAuthHeaders }: any) {
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>(
     savedQuiz?.questions || [],
   );
@@ -468,7 +472,7 @@ function QuizSection({ phase, roadmap, savedQuiz, onAddXp, onRoadmapUpdated, onQ
         : phase.name;
       const res = await fetch('/api/generate-quiz', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topicName }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -479,7 +483,7 @@ function QuizSection({ phase, roadmap, savedQuiz, onAddXp, onRoadmapUpdated, onQ
       try {
         await fetch('/api/update-roadmap', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             roadmapId: roadmap.id,
             updates: {
@@ -721,7 +725,7 @@ function InlineQuiz({ questions, onComplete, onExit }: {
 // ProjectSection
 // ---------------------------------------------------------------------------
 
-function ProjectSection({ projects, roadmap, phase, onRoadmapUpdated }: any) {
+function ProjectSection({ projects, roadmap, phase, onRoadmapUpdated, getAuthHeaders }: any) {
   if (!projects || projects.length === 0) {
     return (
       <div className="text-center py-12 px-6 rounded-2xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/10">
@@ -742,6 +746,7 @@ function ProjectSection({ projects, roadmap, phase, onRoadmapUpdated }: any) {
           roadmap={roadmap}
           phase={phase}
           onRoadmapUpdated={onRoadmapUpdated}
+          getAuthHeaders={getAuthHeaders}
         />
       ))}
     </div>
@@ -752,7 +757,7 @@ function ProjectSection({ projects, roadmap, phase, onRoadmapUpdated }: any) {
 // ProjectItem — individual project card with its own progress/github state
 // ---------------------------------------------------------------------------
 
-function ProjectItem({ project, projectIndex, totalProjects, roadmap, phase, onRoadmapUpdated }: any) {
+function ProjectItem({ project, projectIndex, totalProjects, roadmap, phase, onRoadmapUpdated, getAuthHeaders }: any) {
   const [progress, setProgress] = useState(project?.progress ?? 0);
   const [githubUrl, setGithubUrl] = useState(project?.githubUrl ?? '');
   const [saving, setSaving] = useState(false);
@@ -778,7 +783,7 @@ function ProjectItem({ project, projectIndex, totalProjects, roadmap, phase, onR
       ];
       await fetch('/api/update-roadmap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roadmapId: roadmap.id, updates: { projects: mergedProjects } }),
       });
       onRoadmapUpdated?.();

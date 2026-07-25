@@ -182,10 +182,10 @@ export function AppRouter({
 
     case 'roadmaps': {
       const selectedRm = roadmaps.find(r => r.id === selectedRoadmapId) ?? null;
-      if (selectedRm && roadmapDetailTab === 'resources') return <ResourcesTab roadmap={selectedRm} />;
-      if (selectedRm && roadmapDetailTab === 'quiz') return <QuizTab roadmap={selectedRm} onAddXp={onHandleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} onAchievementUnlocked={onAchievementUnlocked} />;
-      if (selectedRm && roadmapDetailTab === 'projects') return <ProjectsTab roadmap={selectedRm} onAddXp={onHandleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} />;
-      if (selectedRm && roadmapDetailTab === 'insights') return <AIInsightsTab roadmap={selectedRm} profile={profile} activityLog={activityLog} />;
+      if (selectedRm && roadmapDetailTab === 'resources') return <ResourcesTab roadmap={selectedRm} getAuthHeaders={mutatingHeaders} />;
+      if (selectedRm && roadmapDetailTab === 'quiz') return <QuizTab roadmap={selectedRm} onAddXp={onHandleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} onAchievementUnlocked={onAchievementUnlocked} getAuthHeaders={mutatingHeaders} />;
+      if (selectedRm && roadmapDetailTab === 'projects') return <ProjectsTab roadmap={selectedRm} onAddXp={onHandleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} getAuthHeaders={mutatingHeaders} />;
+      if (selectedRm && roadmapDetailTab === 'insights') return <AIInsightsTab roadmap={selectedRm} profile={profile} activityLog={activityLog} getAuthHeaders={mutatingHeaders} />;
       if (selectedRm && selectedPhaseId) {
         const phaseIndex = selectedRm.phases.findIndex(p => p.id === selectedPhaseId);
         const phase = selectedRm.phases[phaseIndex];
@@ -195,7 +195,7 @@ export function AppRouter({
             <PhaseDetailPage roadmap={selectedRm} phase={phase} phaseIndex={phaseIndex} unlockStatus={unlockStatus}
               onBack={() => setSelectedPhaseId(null)}
               onLessonClick={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
-              onAddXp={onHandleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase}
+              onAddXp={onHandleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} getAuthHeaders={mutatingHeaders}
             />
           );
         }

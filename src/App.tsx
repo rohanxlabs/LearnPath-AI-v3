@@ -516,7 +516,7 @@ function AppShell() {
           />
         )}
 
-        <FeedbackWidget context={activeTab} />
+        <FeedbackWidget context={activeTab} getAuthHeaders={mutatingHeaders} />
 
         {legalPage === 'terms' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-[#0A0A0A]"><TermsPage onBack={() => setLegalPage(null)} /></div>}
         {legalPage === 'privacy' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-[#0A0A0A]"><PrivacyPage onBack={() => setLegalPage(null)} /></div>}

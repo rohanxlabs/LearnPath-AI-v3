@@ -7,6 +7,7 @@ type Sentiment = 'positive' | 'neutral' | 'negative';
 interface FeedbackWidgetProps {
   /** Optional context tag (e.g. current page/feature name) */
   context?: string;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
 const SENTIMENT_OPTIONS: Array<{ value: Sentiment; icon: React.ElementType; label: string; color: string }> = [
@@ -15,7 +16,7 @@ const SENTIMENT_OPTIONS: Array<{ value: Sentiment; icon: React.ElementType; labe
   { value: 'negative', icon: Frown,  label: 'Not great',  color: 'text-red-600    dark:text-red-400    hover:bg-red-50    dark:hover:bg-red-500/15'    },
 ];
 
-export function FeedbackWidget({ context }: FeedbackWidgetProps) {
+export function FeedbackWidget({ context, getAuthHeaders }: FeedbackWidgetProps) {
   const [open, setOpen] = useState(false);
   const [sentiment, setSentiment] = useState<Sentiment | null>(null);
   const [message, setMessage] = useState('');
@@ -40,7 +41,7 @@ export function FeedbackWidget({ context }: FeedbackWidgetProps) {
     try {
       await fetch('/api/feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sentiment, message: message.trim(), context: context || window.location.pathname }),
       });
     } catch {

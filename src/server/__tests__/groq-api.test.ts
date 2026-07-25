@@ -9,7 +9,8 @@
  * Run with:
  *   npx vitest run src/server/__tests__/groq-api.test.ts
  *
- * The test is skipped automatically when GROQ_API_KEY is not set (e.g. in CI).
+ * The live request is opt-in so unit-test runs and CI remain deterministic.
+ * Run it explicitly with RUN_LIVE_GROQ_TESTS=true.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -29,7 +30,9 @@ describe('Groq API Key', () => {
     expect(key!.trim().length, 'GROQ_API_KEY is empty').toBeGreaterThan(10);
   });
 
-  it(
+  const liveIt = process.env.RUN_LIVE_GROQ_TESTS === 'true' ? it : it.skip;
+
+  liveIt(
     'Groq API responds successfully to a chat completion request',
     async () => {
       const key = process.env.GROQ_API_KEY;

@@ -10,12 +10,13 @@ import { EmptyState } from './EmptyState';
 
 interface ResourcesTabProps {
   roadmap: Roadmap;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
 type FilterType = 'all' | CuratedResource['type'];
 type FilterStatus = 'all' | 'completed' | 'unread' | 'saved';
 
-export function ResourcesTab({ roadmap }: ResourcesTabProps) {
+export function ResourcesTab({ roadmap, getAuthHeaders }: ResourcesTabProps) {
   const [resources, setResources] = useState<CuratedResource[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isUsingFallback, setIsUsingFallback] = useState(false);
@@ -59,7 +60,9 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
   useEffect(() => {
     async function loadStates() {
       try {
-        const res = await fetch('/api/user-resource-states');
+        const res = await fetch('/api/user-resource-states', {
+          headers: getAuthHeaders ? await getAuthHeaders() : undefined,
+        });
         if (res.ok) {
           const data = await res.json();
           setCompletedIds(data.completedIds || []);
@@ -70,13 +73,13 @@ export function ResourcesTab({ roadmap }: ResourcesTabProps) {
       }
     }
     loadStates();
-  }, []);
+  }, [getAuthHeaders]);
 
   const persistStates = async (newCompletedIds: string[], newSavedIds: string[]) => {
     try {
       await fetch('/api/user-resource-states', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completedIds: newCompletedIds, savedIds: newSavedIds })
       });
     } catch (err) {
