@@ -13,6 +13,8 @@ export interface AuthScreenProps {
   setAuthPassword: (v: string) => void;
   authName: string;
   setAuthName: (v: string) => void;
+  authStep: 'credentials' | 'otp-pending';
+  pendingSignupEmail: string;
 
   // Error & loading
   authError: string;
@@ -36,6 +38,7 @@ export interface AuthScreenProps {
 
   // Handlers
   handleAuthenticate: (e: React.FormEvent) => void;
+  verifySignupOtp: (email: string, token: string) => Promise<void>;
   handleForgotPassword: (e: React.FormEvent) => void;
   handleResetPassword: (e: React.FormEvent) => void;
 }
@@ -50,6 +53,7 @@ export function AuthScreen({
   authEmail, setAuthEmail,
   authPassword, setAuthPassword,
   authName, setAuthName,
+  authStep, pendingSignupEmail,
   authError, setAuthError,
   isAuthenticating,
   forgotPasswordMode, setForgotPasswordMode,
@@ -58,13 +62,15 @@ export function AuthScreen({
   resetToken,
   resetPassword, setResetPassword,
   resetStatus, setResetStatus,
-  handleAuthenticate, handleForgotPassword, handleResetPassword,
+  handleAuthenticate, verifySignupOtp, handleForgotPassword, handleResetPassword,
 }: AuthScreenProps) {
   // Local UI-only state — not lifted to App.
   const [showPassword, setShowPassword] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [verificationNotice, setVerificationNotice] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
 
   const cardClass = "w-full max-w-sm rounded-[24px] bg-[#111111] border border-white/10 p-6 shadow-2xl space-y-6 relative overflow-hidden";
   const inputClass = "w-full px-3.5 py-2.5 bg-[#0A0A0A] border border-white/5 rounded-xl text-xs text-white focus:outline-hidden focus:border-purple-500";
@@ -115,7 +121,7 @@ export function AuthScreen({
       : '';
 
   const handleResendVerification = async () => {
-    const email = authEmail.trim().toLowerCase();
+    const email = (pendingSignupEmail || authEmail).trim().toLowerCase();
     if (!email) return;
     setIsResendingVerification(true);
     setVerificationNotice('');
@@ -131,6 +137,25 @@ export function AuthScreen({
       setVerificationNotice('Unable to resend verification email.');
     } finally {
       setIsResendingVerification(false);
+    }
+  };
+
+  const handleVerifyOtp = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthError('');
+    setVerificationNotice('');
+    const code = otpCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setAuthError('Enter the 6-digit verification code from your email.');
+      return;
+    }
+    setIsVerifyingOtp(true);
+    try {
+      await verifySignupOtp(pendingSignupEmail, code);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Invalid or expired code.');
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
@@ -216,6 +241,50 @@ export function AuthScreen({
           <div className="text-center pt-2 border-t border-white/10">
             <button onClick={() => { setForgotPasswordMode(false); setForgotStatus('idle'); setForgotEmail(''); }} className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">
               ← Back to Sign In
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Signup email OTP ──
+  if (authStep === 'otp-pending') {
+    return (
+      <div role="dialog" aria-modal="true" aria-label="Verify your email address" className="min-h-screen bg-[#0A0A0A] text-white flex items-center justify-center p-4" onKeyDown={handleFocusTrap}>
+        <div className={cardClass}>
+          <div className="absolute top-0 right-0 w-28 h-28 bg-gradient-to-bl from-purple-500/10 to-transparent rounded-full blur-xl pointer-events-none" />
+          {header}
+          <div className="text-center text-xs text-zinc-400 leading-relaxed">
+            We sent a 6-digit verification code to <strong className="text-zinc-200">{pendingSignupEmail}</strong>.
+          </div>
+          {authError && <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-300">{authError}</div>}
+          {verificationNotice && <div role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-semibold text-emerald-300">{verificationNotice}</div>}
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="signup-otp" className="block text-xs uppercase font-bold text-zinc-400">Verification Code</label>
+              <input
+                id="signup-otp"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={otpCode}
+                onChange={event => setOtpCode(event.target.value.replace(/\D/g, ''))}
+                placeholder="123456"
+                className={`${inputClass} text-center tracking-[0.45em] font-semibold`}
+                autoComplete="one-time-code"
+                required
+                autoFocus
+              />
+            </div>
+            <button type="submit" disabled={isVerifyingOtp || otpCode.length !== 6} className={btnClass}>
+              {isVerifyingOtp ? 'Verifying…' : 'Verify'}
+            </button>
+          </form>
+          <div className="text-center pt-2 border-t border-white/10">
+            <button type="button" onClick={handleResendVerification} disabled={isResendingVerification} className="text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50">
+              {isResendingVerification ? 'Sending…' : 'Resend verification email'}
             </button>
           </div>
         </div>

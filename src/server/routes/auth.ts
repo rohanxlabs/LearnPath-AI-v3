@@ -111,6 +111,56 @@ router.post('/register', authLimiter, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/register/verify-otp
+// Confirms a new signup and returns the resulting live Supabase session.
+// ---------------------------------------------------------------------------
+router.post('/register/verify-otp', authLimiter, async (req, res) => {
+  const { email, token } = req.body;
+  if (!email || !isValidEmail(email)) return res.status(400).json({ error: 'Valid email is required' });
+  if (!token || typeof token !== 'string' || !token.trim()) {
+    return res.status(400).json({ error: 'Verification code is required' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    // Verifying a signup OTP confirms the email and returns a live session in
+    // one call, so the client does not need to make a separate login request.
+    const { data, error } = await getSupabaseAnon().auth.verifyOtp({
+      email: normalizedEmail,
+      token: token.trim(),
+      type: 'signup',
+    });
+
+    if (error || !data.session) {
+      logger.warn({ err: error?.message }, 'auth: signup OTP verification failed');
+      return res.status(400).json({ error: 'Invalid or expired code. Please try again or request a new one.' });
+    }
+
+    const dbUser = await loadUserDB(normalizedEmail, { createIfMissing: false });
+    const storedName = dbUser?.progress?.profile?.name || data.user?.user_metadata?.name || null;
+
+    res.cookie('lp_refresh', data.session.refresh_token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'strict',
+      path: '/api/refresh',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      ok: true,
+      name: storedName,
+      access_token: data.session.access_token,
+      expires_in: data.session.expires_in,
+    });
+  } catch (error: any) {
+    logger.error({ err: error?.message }, 'auth: signup OTP verification error');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/login
 // Validates credentials via Supabase Auth and returns the access_token so the
 // client can persist it and pass it as Bearer on all subsequent calls.

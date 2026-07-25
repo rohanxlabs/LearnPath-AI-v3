@@ -84,6 +84,8 @@ interface AuthContextValue {
   setAuthName: React.Dispatch<React.SetStateAction<string>>;
   authMode: 'login' | 'signup';
   setAuthMode: React.Dispatch<React.SetStateAction<'login' | 'signup'>>;
+  authStep: 'credentials' | 'otp-pending';
+  pendingSignupEmail: string;
   authError: string;
   setAuthError: React.Dispatch<React.SetStateAction<string>>;
   isAuthenticating: boolean;
@@ -110,6 +112,7 @@ interface AuthContextValue {
 
   // Handlers
   handleAuthenticate: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  verifySignupOtp: (email: string, token: string) => Promise<void>;
   handleForgotPassword: (e: React.FormEvent) => Promise<void>;
   handleResetPassword: (e: React.FormEvent) => Promise<void>;
   handleLogout: () => Promise<void>;
@@ -176,6 +179,8 @@ export function AuthProvider({
   const [authPassword, setAuthPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [authStep, setAuthStep] = useState<'credentials' | 'otp-pending'>('credentials');
+  const [pendingSignupEmail, setPendingSignupEmail] = useState('');
   const [authError, setAuthError] = useState('');
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -303,6 +308,8 @@ export function AuthProvider({
       setAuthEmail('');
       setAuthPassword('');
       setAuthName('');
+      setAuthStep('credentials');
+      setPendingSignupEmail('');
       onAuthenticated({
         email,
         profile: merged,
@@ -505,9 +512,9 @@ export function AuthProvider({
         if (data.requiresVerification) {
           identify(email, { name: authName.trim() });
           track('user_signed_up');
-          setAuthMode('login');
           setAuthPassword('');
-          setAuthError(`Almost there — we sent a verification link to ${email}. Click it, then sign in.`);
+          setPendingSignupEmail(email);
+          setAuthStep('otp-pending');
           return;
         }
 
@@ -573,6 +580,25 @@ export function AuthProvider({
     }
   };
 
+  const verifySignupOtp = useCallback(async (email: string, token: string) => {
+    const response = await fetch('/api/register/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, token }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.access_token) {
+      throw new Error(data?.error || 'Invalid or expired code.');
+    }
+    // Establish the browser-side session so the existing auth-state listener
+    // bootstraps the user and transitions into the app.
+    const { error: setSessionErr } = await supabase.auth.setSession({
+      access_token: data.access_token,
+      refresh_token: '',
+    });
+    if (setSessionErr) throw setSessionErr;
+  }, []);
+
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail.trim()) return;
@@ -637,7 +663,7 @@ export function AuthProvider({
     // Clear all React state.
     setIsAuthenticated(false);
     setAuthEmail(''); setAuthPassword(''); setAuthName('');
-    setAuthMode('login'); setAuthError(''); setIsAuthenticating(false);
+    setAuthMode('login'); setAuthStep('credentials'); setPendingSignupEmail(''); setAuthError(''); setIsAuthenticating(false);
     setProfile(createEmptyProfile()); setSettings(DEFAULT_SETTINGS);
     setAchievements([]); setNotifications([]); setChats([]); setActivityLog({});
     setShowAuthModal(false);
@@ -650,6 +676,7 @@ export function AuthProvider({
     chats, setChats, activityLog, setActivityLog,
     authEmail, setAuthEmail, authPassword, setAuthPassword,
     authName, setAuthName, authMode, setAuthMode,
+    authStep, pendingSignupEmail,
     authError, setAuthError, isAuthenticating,
     showAuthModal, setShowAuthModal,
     redirectAfterLogin, setRedirectAfterLogin,
@@ -658,7 +685,7 @@ export function AuthProvider({
     forgotEmail, setForgotEmail, forgotStatus, setForgotStatus,
     resetToken, setResetToken, resetPassword, setResetPassword,
     resetStatus, setResetStatus,
-    handleAuthenticate, handleForgotPassword, handleResetPassword, handleLogout,
+    handleAuthenticate, verifySignupOtp, handleForgotPassword, handleResetPassword, handleLogout,
     mutatingHeaders, getStoredUserEmail,
   };
 

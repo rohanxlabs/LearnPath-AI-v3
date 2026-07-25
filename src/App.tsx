@@ -84,12 +84,12 @@ function AppShell() {
     achievements, setAchievements, notifications, setNotifications,
     chats, setChats, activityLog, setActivityLog,
     authEmail, setAuthEmail, authPassword, setAuthPassword, authName, setAuthName,
-    authMode, setAuthMode, authError, setAuthError, isAuthenticating,
+    authMode, setAuthMode, authStep, pendingSignupEmail, authError, setAuthError, isAuthenticating,
     showAuthModal, setShowAuthModal, showOnboarding, setShowOnboarding,
     forgotPasswordMode, setForgotPasswordMode, forgotEmail, setForgotEmail,
     forgotStatus, setForgotStatus, resetToken, setResetToken,
     resetPassword, setResetPassword, resetStatus, setResetStatus,
-    handleAuthenticate, handleForgotPassword, handleResetPassword, handleLogout,
+    handleAuthenticate, verifySignupOtp, handleForgotPassword, handleResetPassword, handleLogout,
     mutatingHeaders, getStoredUserEmail,
   } = useAuth();
 
@@ -357,6 +357,7 @@ function AppShell() {
           authEmail={authEmail} setAuthEmail={setAuthEmail}
           authPassword={authPassword} setAuthPassword={setAuthPassword}
           authName={authName} setAuthName={setAuthName}
+          authStep={authStep} pendingSignupEmail={pendingSignupEmail} verifySignupOtp={verifySignupOtp}
           authError={authError} setAuthError={setAuthError}
           isAuthenticating={isAuthenticating}
           forgotPasswordMode={forgotPasswordMode} setForgotPasswordMode={setForgotPasswordMode}
