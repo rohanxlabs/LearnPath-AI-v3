@@ -34,7 +34,10 @@ router.get('/bootstrap', requireAuth, async (req, res) => {
       await sql`UPDATE users SET progress_backfilled_at = NOW() WHERE email = ${userEmail.toLowerCase()}`
         .catch((error: unknown) => logger.warn({ error }, 'bootstrap: unable to stamp progress backfill'));
     }
-    const roadmaps = await getUserRoadmapsReconstructed(userEmail);
+    // Bootstrap fetches up to 50 roadmaps — enough for the initial load without
+    // reconstructing an unbounded set.  The client can call GET /api/roadmaps with
+    // ?offset=50 to page through the rest if needed.
+    const { roadmaps } = await getUserRoadmapsReconstructed(userEmail, { limit: 50, offset: 0 });
     res.json({
       authenticated: true,
       email: userEmail,

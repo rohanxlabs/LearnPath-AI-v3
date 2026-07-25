@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { requireAuth, aiLimiter, lessonLimiter, HttpError, withUserLock } from '../lib/middleware';
-import { loadUserDB, saveUserDB, updateStreak, unlockAchievement } from '../lib/db';
+import { loadUserDB, saveUserDB, updateStreak, unlockAchievement, addUserXp } from '../lib/db';
+import { logger } from '../lib/logger';
 import {
   findLessonContext,
   completeLessonForUser,
   getLessonProgress,
   upsertUserLessonProgress,
-  getLessonById,
   getResourcesForLessonContext,
   getProjectForPhase,
   getRoadmapById
@@ -42,34 +42,34 @@ router.get('/lessons/:lessonId/content', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   try {
     const ctx = await findLessonContext(lessonId);
-    if (!ctx) return res.status(404).json({ error: 'Lesson not found' });
-    if (!await userOwnsLesson(userEmail, ctx.roadmap_id)) return res.status(404).json({ error: 'Lesson not found' });
+    if (!ctx) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
+    if (!await userOwnsLesson(userEmail, ctx.roadmap_id)) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
     const result = await getOrGenerateLessonContent(lessonId);
-    if (!result) return res.status(404).json({ error: 'Lesson not found' });
+    if (!result) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
     const payload = await assembleLessonResponse(userEmail, result);
     return res.json(payload);
   } catch (error: any) {
-    console.error('[Lesson-Gen] content retrieval error:', error?.message || error);
-    return res.status(500).json({ error: 'Failed to load lesson content' });
+    logger.error({ err: error?.message || error }, '[Lesson-Gen] content retrieval error');
+    return res.status(500).json({ error: 'Failed to load lesson content', code: 'LESSON_CONTENT_FAILED' });
   }
 });
 
 // Force-regenerate lesson content
-router.post('/lessons/:lessonId/generate', aiLimiter, requireAuth, async (req, res) => {
+router.post('/lessons/:lessonId/generate', requireAuth, aiLimiter, async (req, res) => {
   const { lessonId } = req.params;
   const userEmail = req.supabaseUser!.email;
   const regenerate = req.body?.regenerate === true || req.query?.regenerate === 'true';
   try {
     const ctx = await findLessonContext(lessonId);
-    if (!ctx) return res.status(404).json({ error: 'Lesson not found' });
-    if (!await userOwnsLesson(userEmail, ctx.roadmap_id)) return res.status(404).json({ error: 'Lesson not found' });
+    if (!ctx) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
+    if (!await userOwnsLesson(userEmail, ctx.roadmap_id)) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
     const result = await getOrGenerateLessonContent(lessonId, { regenerate });
-    if (!result) return res.status(404).json({ error: 'Lesson not found' });
+    if (!result) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
     const payload = await assembleLessonResponse(userEmail, result);
     return res.json({ ...payload, regenerated: regenerate && !result.cached });
   } catch (error: any) {
-    console.error('[Lesson-Gen] generation error:', error?.message || error);
-    return res.status(500).json({ error: 'Failed to generate lesson content' });
+    logger.error({ err: error?.message || error }, '[Lesson-Gen] generation error');
+    return res.status(500).json({ error: 'Failed to generate lesson content', code: 'LESSON_GEN_FAILED' });
   }
 });
 
@@ -80,8 +80,8 @@ router.get('/lessons/:lessonId/meta', requireAuth, async (req, res) => {
   try {
     // Use findLessonContext instead of getLessonById so we get roadmap_id for ownership check.
     const lesson = await findLessonContext(lessonId);
-    if (!lesson) return res.status(404).json({ error: 'Lesson not found' });
-    if (!await userOwnsLesson(userEmail, lesson.roadmap_id)) return res.status(404).json({ error: 'Lesson not found' });
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
+    if (!await userOwnsLesson(userEmail, lesson.roadmap_id)) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
     const prerequisiteNames = await resolveLessonNames(Array.isArray(lesson.prerequisites) ? lesson.prerequisites : []);
     const generatedAt = lesson.generated_at ? new Date(lesson.generated_at).toISOString() : null;
     const hasContent = !!(lesson.markdown_content && String(lesson.markdown_content).trim().length > 0);
@@ -96,8 +96,8 @@ router.get('/lessons/:lessonId/meta', requireAuth, async (req, res) => {
 
     return res.json({ lessonId, name: lesson.title, hasContent, metadata, progress });
   } catch (error: any) {
-    console.error('[Lesson-Gen] meta retrieval error:', error?.message || error);
-    return res.status(500).json({ error: 'Failed to load lesson metadata' });
+    logger.error({ err: error?.message || error }, '[Lesson-Gen] meta retrieval error');
+    return res.status(500).json({ error: 'Failed to load lesson metadata', code: 'LESSON_META_FAILED' });
   }
 });
 
@@ -107,8 +107,8 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   try {
     const lesson = await findLessonContext(topicId);
-    if (!lesson) return res.status(404).json({ error: 'Topic not found' });
-    if (!await userOwnsLesson(userEmail, lesson.roadmap_id)) return res.status(404).json({ error: 'Topic not found' });
+    if (!lesson) return res.status(404).json({ error: 'Topic not found', code: 'TOPIC_NOT_FOUND' });
+    if (!await userOwnsLesson(userEmail, lesson.roadmap_id)) return res.status(404).json({ error: 'Topic not found', code: 'TOPIC_NOT_FOUND' });
 
     let markdownContent = '', summary: string | null = null, generatedAt: string | null = null;
     let contentStatus: string = lesson.contentStatus || 'pending';
@@ -126,7 +126,7 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
     } else {
       // Fire-and-forget: start generation in the background so the next poll hits cache.
       getOrGenerateLessonContent(topicId).catch((genErr: any) => {
-        console.warn('[Lesson-Gen] background generation failed:', genErr?.message || genErr);
+        logger.warn({ err: genErr?.message || genErr }, '[Lesson-Gen] background generation failed');
       });
       contentStatus = 'generating';
     }
@@ -152,7 +152,7 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
     // doesn't block the initial topic load. The client polls every 5 s; by the
     // second poll the quiz will be cached in the DB and served instantly.
     getOrGenerateQuizForLesson(lesson).catch((err: any) => {
-      console.warn('[Quiz-Gen] background quiz generation failed:', err?.message || err);
+      logger.warn({ err: err?.message || err }, '[Quiz-Gen] background quiz generation failed');
     });
 
     const [resources, project, existingQuiz, video] = await Promise.all([
@@ -180,8 +180,8 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
 
     return res.json({ topic });
   } catch (error) {
-    console.error('Get topic error:', error);
-    return res.status(500).json({ error: 'Failed to load topic' });
+    logger.error({ err: error }, 'Get topic error');
+    return res.status(500).json({ error: 'Failed to load topic', code: 'TOPIC_FAILED' });
   }
 });
 
@@ -191,7 +191,7 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
 router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => {
   const { lessonId, roadmapId } = req.body;
   const userEmail = req.supabaseUser!.email;
-  if (!lessonId) return res.status(400).json({ error: 'lessonId is required' });
+  if (!lessonId) return res.status(400).json({ error: 'lessonId is required', code: 'MISSING_LESSON_ID' });
 
   try {
     const result = await withUserLock(userEmail, async () => {
@@ -241,11 +241,14 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
       const counters = await completeLessonForUser(userEmail, lessonId, lessonCtx.module_id, lessonCtx.phase_id, lessonCtx.roadmap_id, null, studyMinutes);
       clearLessonContentCacheEntry(lessonId);
 
+      // Atomically increment XP — avoids the read-modify-write race where two
+      // concurrent completions both read the same XP value and one award is lost.
+      const newXP = await addUserXp(userEmail, xpValue);
+
+      // Persist activityLog and profile fields (XP is excluded — handled above atomically).
       const dbData = await loadUserDB(userEmail, { createIfMissing: false });
       if (!dbData) throw new HttpError(404, 'User data not found');
 
-      const newXP = (dbData.xp || 0) + xpValue;
-      dbData.xp = newXP;
       if (!dbData.profile) dbData.profile = {};
       dbData.profile.xp = newXP;
       if (!dbData.activityLog) dbData.activityLog = {};
@@ -270,15 +273,28 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
     return res.json(result);
   } catch (error) {
     if (error instanceof HttpError) return res.status(error.status).json({ error: error.message });
-    console.error('Complete lesson error:', error);
-    return res.status(500).json({ error: 'Failed to complete lesson. Database unavailable.' });
+    logger.error({ err: error }, 'Complete lesson error');
+    return res.status(500).json({ error: 'Failed to complete lesson. Database unavailable.', code: 'COMPLETE_LESSON_FAILED' });
   }
 });
 
-// Generate quiz
-router.post('/generate-quiz', aiLimiter, requireAuth, async (req, res) => {
-  const { topicName } = req.body;
-  if (!topicName) return res.status(400).json({ error: 'Topic name is required for quiz' });
+// Generate quiz — requires a lessonId so we can verify the lesson belongs to
+// the requesting user before spending an AI call.
+router.post('/generate-quiz', requireAuth, aiLimiter, async (req, res) => {
+  const { topicName, lessonId } = req.body;
+  if (!topicName) return res.status(400).json({ error: 'Topic name is required for quiz', code: 'MISSING_TOPIC_NAME' });
+  const userEmail = req.supabaseUser!.email;
+
+  // Ownership check: if a lessonId is provided, verify the lesson belongs to
+  // a roadmap owned by this user. This prevents using the endpoint as a free
+  // AI quiz generator for arbitrary topics.
+  if (lessonId) {
+    const ctx = await findLessonContext(lessonId);
+    if (!ctx || !await userOwnsLesson(userEmail, ctx.roadmap_id)) {
+      return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
+    }
+  }
+
   const questions = await generateQuizQuestions(topicName);
   return res.json(questions);
 });

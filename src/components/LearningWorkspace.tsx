@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import {
   ChevronRight, CheckCircle2, Play, Code2, Brain, Trophy,
   Target, BookOpen, Zap, Youtube, Library, Rocket, ExternalLink, Github,
@@ -480,7 +481,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                     <SectionLabel>Content</SectionLabel>
                     {topicData.content && topicData.content !== 'Content is being generated for this topic...' ? (
                       <div className="prose max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, defaultSchema]]} components={markdownComponents}>
                           {topicData.content}
                         </ReactMarkdown>
                       </div>
@@ -519,7 +520,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                           <span className="text-xs font-semibold text-violet-700">Key Takeaways</span>
                         </div>
                         <div className="prose max-w-none">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[[rehypeSanitize, defaultSchema]]} components={markdownComponents}>
                             {topicData.summary}
                           </ReactMarkdown>
                         </div>

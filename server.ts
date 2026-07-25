@@ -12,8 +12,10 @@ import { createServer as createViteServer } from 'vite';
 import pinoHttp from 'pino-http';
 import * as Sentry from '@sentry/node';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 
 import { logger } from './src/server/lib/logger';
+import { pool } from './src/server/db/drizzle';
 import { ensureRoadmapTables } from './src/server/db/queries';
 
 // ---------------------------------------------------------------------------
@@ -108,10 +110,18 @@ app.use(cors({
 
 app.use(pinoHttp({
   logger,
+  // Attach a stable request ID to every log line so a single request's
+  // full lifecycle can be traced across middleware and route handlers.
+  genReqId: (req, res) => {
+    const existing = req.headers['x-request-id'];
+    const id = (typeof existing === 'string' && existing) ? existing : randomUUID();
+    res.setHeader('x-request-id', id);
+    return id;
+  },
   autoLogging: { ignore: (req) => req.url === '/api/health' },
 }));
 
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '4mb', type: 'application/json' }));
 // No endpoint accepts large form-encoded bodies; 100 kb is generous.
 app.use(express.urlencoded({ limit: '100kb', extended: true }));
 app.use(cookieParser());
@@ -134,8 +144,23 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), aiActive: !!process.env.GROQ_API_KEY });
+app.get('/api/health', async (_req, res) => {
+  // Shallow DB liveness check — cheap single-row query, no table scan.
+  let dbOk = false;
+  try {
+    await pool.query('SELECT 1');
+    dbOk = true;
+  } catch {
+    // DB unreachable — surface as degraded, not 500, so load balancers keep
+    // the instance in rotation (the process itself is healthy).
+  }
+  const status = dbOk ? 'ok' : 'degraded';
+  res.status(dbOk ? 200 : 503).json({
+    status,
+    timestamp: new Date().toISOString(),
+    aiActive: !!process.env.GROQ_API_KEY,
+    db: dbOk,
+  });
 });
 
 app.use('/api', authRouter);
@@ -260,6 +285,13 @@ async function bootstrap() {
   // Must be the final middleware — after Vite/static so it catches their errors too.
   app.use(errorHandler);
 
+  // Surface pool errors — these indicate a saturated or misconfigured connection
+  // pool.  Log at fatal so on-call is paged immediately.
+  pool.on('error', (err: Error) => {
+    if (process.env.SENTRY_DSN) Sentry.captureException(err);
+    logger.fatal({ err: err.message }, '[Pool] Idle client error — connection pool problem');
+  });
+
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`Server running on http://0.0.0.0:${PORT}`);
     logger.info(`Open in browser at http://localhost:${PORT}`);
@@ -274,6 +306,35 @@ async function bootstrap() {
   // large parallel DB writes can legitimately take 30–60 s on first connect).
   server.requestTimeout = 120_000;
   server.keepAliveTimeout = 65_000; // slightly above typical LB 60 s idle timeout
+
+  // ---------------------------------------------------------------------------
+  // Graceful shutdown — drain in-flight requests before the process exits.
+  // Render / Kubernetes send SIGTERM before force-killing with SIGKILL.
+  // Without this, in-flight DB writes and lesson completions are silently lost.
+  // ---------------------------------------------------------------------------
+  const shutdown = (signal: string) => {
+    logger.info({ signal }, 'Shutdown signal received — draining connections');
+    server.close(async () => {
+      logger.info('HTTP server closed. Draining DB pool...');
+      try {
+        await pool.end();
+        logger.info('DB pool drained. Exiting.');
+      } catch (err: any) {
+        logger.error({ err: err?.message }, 'Error draining DB pool during shutdown');
+      }
+      process.exit(0);
+    });
+
+    // Force-exit after 15 s if drain hangs (e.g. a stalled long-poll connection).
+    setTimeout(() => {
+      logger.error('Graceful shutdown timed out after 15 s — forcing exit');
+      process.exit(1);
+    }, 15_000).unref();
+  };
+
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT',  () => shutdown('SIGINT'));
+
   return server;
 }
 

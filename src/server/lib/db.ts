@@ -1,25 +1,12 @@
-import { Pool } from 'pg';
 import { withUserLock } from './middleware';
 import { logger } from './logger';
 import {
   getRoadmapsByOwner,
   migrateRoadmapJsonToTables
 } from '../db/queries';
-
-// Use the standard node-postgres driver — works with Supabase, Neon, and any
-// standard PostgreSQL host (unlike the neon() serverless HTTP driver which only
-// works with Neon's HTTP proxy endpoint).
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Supabase/pg present valid public CAs — verify them in production.
-  // Set DATABASE_INSECURE_SSL=true only for a local self-signed dev database.
-  ssl: process.env.DATABASE_INSECURE_SSL === 'true'
-    ? { rejectUnauthorized: false }
-    : { rejectUnauthorized: true },
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-});
+// Reuse the single shared pg Pool from the Drizzle client module so the
+// process only ever holds one pool (max: 10) instead of two (max: 20).
+import { pool } from '../db/drizzle';
 
 // Provide a tagged-template `sql` interface compatible with the existing call
 // sites (sql`SELECT ...` returns rows as an array).
@@ -32,9 +19,34 @@ export async function sql<T = Record<string, any>>(strings: TemplateStringsArray
   return rows;
 }
 
+/**
+ * Atomically increment a user's XP by `amount` and return the new total.
+ * Using an atomic UPDATE prevents the read-modify-write race where two
+ * concurrent lesson completions both read the same XP value and one award
+ * is silently lost.
+ */
+export async function addUserXp(userEmail: string, amount: number): Promise<number> {
+  const rows = await sql<{ xp: number }>`
+    UPDATE users SET xp = xp + ${amount}, updated_at = NOW()
+    WHERE email = ${userEmail.toLowerCase()}
+    RETURNING xp
+  `;
+  return rows[0]?.xp ?? 0;
+}
+
 // ---------------------------------------------------------------------------
 // In-memory caches
 // ---------------------------------------------------------------------------
+const CACHE_MAX_SIZE = 200;
+
+/** Evict the oldest entry when the cache exceeds CACHE_MAX_SIZE. */
+export function cacheSet<V>(map: Map<string, V>, key: string, value: V): void {
+  if (map.size >= CACHE_MAX_SIZE && !map.has(key)) {
+    map.delete(map.keys().next().value as string);
+  }
+  map.set(key, value);
+}
+
 type RecCacheEntry = { data: any; timestamp: number };
 export const recCache: Map<string, RecCacheEntry> = new Map();
 export const REC_CACHE_TTL = 5 * 60 * 1000;
@@ -144,14 +156,16 @@ export async function loadUserDB(userEmail: string, options: { createIfMissing?:
 
       // BACKWARD COMPATIBILITY: Migrate old single roadmap to roadmaps array.
       if (dbData.roadmap && !Array.isArray(dbData.roadmaps)) {
-        console.log('[Migration] Converting single roadmap to roadmaps array for user:', userEmail);
+        logger.info({ userEmail }, '[Migration] Converting single roadmap to roadmaps array');
         dbData.roadmaps = [{
           ...dbData.roadmap,
           id: dbData.roadmap.id || `roadmap-${Date.now()}`,
           createdAt: dbData.roadmap.createdAt || new Date().toISOString()
         }];
         delete dbData.roadmap;
-        await saveUserDB(userEmail, dbData);
+        // Defer the write to avoid re-entering withUserLock from inside loadUserDB
+        // (which can be called while already inside a lock via unlockAchievement etc.).
+        setImmediate(() => saveUserDB(userEmail, dbData).catch((err: any) => logger.warn({ err: err?.message }, '[Migration] roadmap-array save failed')));
       }
 
       // MIGRATION: Backfill profile.name for accounts created before the name field existed.
@@ -161,9 +175,10 @@ export async function loadUserDB(userEmail: string, options: { createIfMissing?:
           .split('@')[0]
           .replace(/[._-]+/g, ' ')
           .replace(/\b\w/g, (c: string) => c.toUpperCase());
-        console.log('[Migration] Backfilling profile.name for user:', userEmail);
+        logger.info('[Migration] Backfilling profile.name');
         dbData.profile.name = derivedName;
-        await saveUserDB(userEmail, dbData);
+        // Same deferral: avoid synchronous lock re-entry.
+        setImmediate(() => saveUserDB(userEmail, dbData).catch((err: any) => logger.warn({ err: err?.message }, '[Migration] profile-name save failed')));
       }
 
       if (!dbData.roadmaps) dbData.roadmaps = [];
@@ -173,7 +188,7 @@ export async function loadUserDB(userEmail: string, options: { createIfMissing?:
         const alreadyMigrated = (await getRoadmapsByOwner(userEmail)).length > 0;
         if (!alreadyMigrated) {
           migrateRoadmapJsonToTables(userEmail, dbData.roadmaps).catch((err: any) => {
-            console.error('[Migration] Normalized table backfill failed for', userEmail, err?.message || err);
+            logger.error({ err: err?.message || err }, '[Migration] Normalized table backfill failed');
           });
         }
       }
@@ -187,7 +202,7 @@ export async function loadUserDB(userEmail: string, options: { createIfMissing?:
     await saveUserDB(userEmail, defaultDB);
     return defaultDB;
   } catch (error) {
-    console.error('[Database Error] Failed to load user data:', error);
+    logger.error({ err: error }, '[DB] Failed to load user data');
     if (options.createIfMissing !== false) return getDefaultUserDB();
     return null;
   }
@@ -212,14 +227,40 @@ export async function saveUserDB(userEmail: string, dbData: UserDB): Promise<voi
         topic_wise_quizzes: topic_wise_quizzes || currentRoadmap.topic_wise_quizzes || []
       };
 
+      // -----------------------------------------------------------------------
+      // Blob-size guards — prevent unbounded JSONB growth that causes row-level
+      // timeouts and eventually locks a user out of their account.
+      // chats:       keep only the most recent 100 messages
+      // notifications: keep only the most recent 50
+      // activityLog:   keep only the last 90 calendar days
+      // -----------------------------------------------------------------------
+      const rawChats: any[] = Array.isArray(chats)
+        ? chats
+        : Array.isArray(currentProgress.chats) ? currentProgress.chats : [];
+      const cappedChats = rawChats.slice(-100);
+
+      const rawNotifications: any[] = Array.isArray(notifications)
+        ? notifications
+        : Array.isArray(currentProgress.notifications) ? currentProgress.notifications : [];
+      const cappedNotifications = rawNotifications.slice(-50);
+
+      const rawActivityLog: Record<string, any> = activityLog || currentProgress.activityLog || {};
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - 90);
+      const cutoffKey = cutoffDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const prunedActivityLog: Record<string, any> = {};
+      for (const [day, value] of Object.entries(rawActivityLog)) {
+        if (day >= cutoffKey) prunedActivityLog[day] = value;
+      }
+
       const newProgressData = {
         profile: profile || currentProgress.profile || {},
         settings: settings || currentProgress.settings || {},
         achievements: achievements || currentProgress.achievements || [],
-        notifications: notifications || currentProgress.notifications || [],
-        chats: chats || currentProgress.chats || [],
+        notifications: cappedNotifications,
+        chats: cappedChats,
         resource_states: resource_states || currentProgress.resource_states || { completedIds: [], savedIds: [] },
-        activityLog: activityLog || currentProgress.activityLog || {}
+        activityLog: prunedActivityLog
       };
 
       const xp = dbData.xp ?? (profile as any)?.xp ?? (currentProgress.profile as any)?.xp ?? 0;
@@ -237,7 +278,7 @@ export async function saveUserDB(userEmail: string, dbData: UserDB): Promise<voi
           updated_at = NOW()
       `;
     } catch (error) {
-      console.error('[Database Error] Failed to save user data:', error);
+      logger.error({ err: error }, '[DB] Failed to save user data');
       throw error;
     }
   });
@@ -250,7 +291,7 @@ export async function getUserRoadmaps(userEmail: string): Promise<any[]> {
 
   const dbData = await loadUserDB(userEmail, { createIfMissing: false });
   const roadmaps = dbData?.roadmaps || [];
-  roadmapCache.set(key, { data: roadmaps, timestamp: Date.now() });
+  cacheSet(roadmapCache, key, { data: roadmaps, timestamp: Date.now() });
   return roadmaps;
 }
 
@@ -299,7 +340,7 @@ export async function updateStreak(userEmail: string): Promise<number> {
     `;
     return currentStreak;
   } catch (error) {
-    console.error('[Database Error] Failed to update streak:', error);
+    logger.error({ err: error }, '[DB] Failed to update streak');
     return 0;
   }
 }
@@ -313,41 +354,48 @@ export async function unlockAchievement(
   userEmail: string,
   achievementId: string
 ): Promise<{ id: string; name: string; icon: string; xpReward: number } | null> {
-  try {
-    const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    if (!dbData) return null;
+  // Serialise all achievement unlocks for the same user so two concurrent
+  // completions (e.g. two browser tabs) cannot both read unlocked=false,
+  // award XP independently, and write back conflicting states.
+  return withUserLock(userEmail, async () => {
+    try {
+      const dbData = await loadUserDB(userEmail, { createIfMissing: false });
+      if (!dbData) return null;
 
-    const achievements: any[] = Array.isArray(dbData.progress?.achievements)
-      ? dbData.progress.achievements
-      : Array.isArray(dbData.achievements)
-        ? dbData.achievements
-        : [];
+      const achievements: any[] = Array.isArray(dbData.progress?.achievements)
+        ? dbData.progress.achievements
+        : Array.isArray(dbData.achievements)
+          ? dbData.achievements
+          : [];
 
-    const ach = achievements.find((a: any) => a.id === achievementId);
-    if (!ach || ach.unlocked) return null; // already unlocked or not found
+      const ach = achievements.find((a: any) => a.id === achievementId);
+      if (!ach || ach.unlocked) return null; // already unlocked or not found
 
-    ach.unlocked = true;
-    ach.unlockedAt = new Date().toISOString();
+      ach.unlocked = true;
+      ach.unlockedAt = new Date().toISOString();
 
-    // Award XP
-    const xpReward = Number(ach.xpReward) || 0;
-    dbData.xp = (dbData.xp || 0) + xpReward;
-    if (!dbData.profile) dbData.profile = {};
-    dbData.profile.xp = dbData.xp;
+      // Award XP atomically so the DB value is authoritative even if the
+      // in-memory dbData.xp is stale from a concurrent read.
+      const xpReward = Number(ach.xpReward) || 0;
+      const newXp = xpReward > 0 ? await addUserXp(userEmail, xpReward) : (dbData.xp || 0);
+      dbData.xp = newXp;
+      if (!dbData.profile) dbData.profile = {};
+      dbData.profile.xp = newXp;
 
-    // Persist achievements in the right location
-    if (Array.isArray(dbData.progress?.achievements)) {
-      dbData.progress.achievements = achievements;
-    } else {
-      if (!dbData.progress) dbData.progress = {};
-      dbData.progress.achievements = achievements;
+      // Persist achievements in the right location
+      if (Array.isArray(dbData.progress?.achievements)) {
+        dbData.progress.achievements = achievements;
+      } else {
+        if (!dbData.progress) dbData.progress = {};
+        dbData.progress.achievements = achievements;
+      }
+
+      await saveUserDB(userEmail, dbData);
+      return { id: ach.id, name: ach.name, icon: ach.icon, xpReward };
+    } catch (err: any) {
+      logger.error({ err: err?.message || err }, '[Achievement] Failed to unlock achievement');
+      return null;
     }
-
-    await saveUserDB(userEmail, dbData);
-    return { id: ach.id, name: ach.name, icon: ach.icon, xpReward };
-  } catch (err: any) {
-    console.error('[Achievement] Failed to unlock achievement:', err?.message || err);
-    return null;
-  }
+  });
 }
 

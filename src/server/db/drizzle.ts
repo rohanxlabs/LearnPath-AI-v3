@@ -3,12 +3,16 @@
 // Uses the node-postgres (pg) driver which works with any standard PostgreSQL
 // host including Supabase. The neon-http driver only works with Neon's
 // serverless HTTP proxy and cannot be used with Supabase.
+//
+// `pool` is exported so src/server/lib/db.ts can reuse the same connection
+// pool for its raw `sql` tagged-template helper.  This guarantees a single
+// Pool in the process (max: 10) rather than two pools totalling 20 connections.
 
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '../../../drizzle/schema';
 
-const pool = new Pool({
+export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   // Verify TLS certificates in production. Set DATABASE_INSECURE_SSL=true only
   // for a local self-signed dev database (same env gate as db.ts).

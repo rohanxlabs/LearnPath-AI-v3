@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { Send, Sparkles, MessageSquare, Bot, HelpCircle, Code2, BookOpen, Lightbulb, Mic, MicOff, Paperclip, CheckCircle, Search, Terminal, AlertTriangle } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { XPBadge } from './Badges';
@@ -33,6 +34,7 @@ const ChatMessageItem = memo(({ ch, isGenerating }: { ch: ChatMessage; isGenerat
           {isAI ? (
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
+              rehypePlugins={[[rehypeSanitize, defaultSchema]]}
               components={{
                 pre({ children }) {
                   const codeElement = React.Children.toArray(children).find(React.isValidElement) as React.ReactElement<{ className?: string }> | null;

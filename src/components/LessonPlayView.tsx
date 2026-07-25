@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { ArrowLeft, CheckCircle2, AlertTriangle, Lightbulb, Code2, PlayCircle, RefreshCw, Swords, ChevronRight } from 'lucide-react';
 import { Lesson } from '../types';
 import { XPBadge } from './Badges';
@@ -8,6 +9,7 @@ import { BookOpeningAnimation } from './BookOpeningAnimation';
 import { ConfettiParticles } from './ConfettiParticles';
 import { AnimatePresence, motion } from 'motion/react';
 import { easeInOut } from 'motion';
+import { getAuthHeaders } from '../auth/authMiddleware';
 
 interface LessonPlayViewProps {
   lesson: Lesson;
@@ -69,7 +71,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
     try {
       const response = await fetch('/api/analyze-code', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({
           code: userCode,
           instructions: lesson.codingExercise?.instructions,
@@ -115,6 +117,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
             <div className="prose prose-invert max-w-none text-zinc-300 text-sm leading-relaxed select-text selection:bg-purple-500/20">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={[[rehypeSanitize, defaultSchema]]}
                 components={{
                   h1: ({ children }) => <h1 className="text-xl font-bold text-white mt-6 mb-3">{children}</h1>,
                   h2: ({ children }) => <h2 className="text-lg font-bold text-white mt-5 mb-2">{children}</h2>,
@@ -469,7 +472,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                           try {
                             const res = await fetch('/api/analyze-code', {
                               method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
+                              headers: await getAuthHeaders(),
                               body: JSON.stringify({
                                 code: challengeAnswer,
                                 instructions: `Challenge: ${lesson.quizQuestions?.[0]?.question || lesson.name}. Student must demonstrate understanding.`,

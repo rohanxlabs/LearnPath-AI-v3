@@ -8,6 +8,11 @@
 
 import { eq, and, gt, asc, sql as drizzleSql } from 'drizzle-orm';
 import { db } from './drizzle';
+import { logger } from '../lib/logger';
+
+// Drizzle transaction type — used to pass a transaction client through the
+// upsert helpers so migrateRoadmapJsonToTables can run atomically.
+type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 import {
   roadmaps,
   phases,
@@ -136,8 +141,8 @@ export async function upsertRoadmap(roadmap: {
 // Returns true if a new row was inserted, false if the ID was already present.
 // ---------------------------------------------------------------------------
 
-export async function insertRoadmapIfNew(roadmap: Parameters<typeof upsertRoadmap>[0]): Promise<boolean> {
-  const result = await db.insert(roadmaps).values({
+export async function insertRoadmapIfNew(roadmap: Parameters<typeof upsertRoadmap>[0], tx: DbOrTx = db): Promise<boolean> {
+  const result = await tx.insert(roadmaps).values({
     id: roadmap.id,
     ownerEmail: roadmap.ownerEmail.toLowerCase(),
     title: roadmap.title,
@@ -188,8 +193,8 @@ export async function upsertPhase(phase: {
   xpEarned?: number;
   status?: string;
   orderIndex?: number;
-}): Promise<void> {
-  await db.insert(phases).values({
+}, tx: DbOrTx = db): Promise<void> {
+  await tx.insert(phases).values({
     id: phase.id,
     roadmapId: phase.roadmapId,
     name: phase.name,
@@ -229,8 +234,8 @@ export async function upsertModule(module: {
   description?: string | null;
   status?: string;
   orderIndex?: number;
-}): Promise<void> {
-  await db.insert(modules).values({
+}, tx: DbOrTx = db): Promise<void> {
+  await tx.insert(modules).values({
     id: module.id,
     phaseId: module.phaseId,
     roadmapId: module.roadmapId,
@@ -274,8 +279,8 @@ export async function upsertLesson(lesson: {
   skillTags?: string[];
   contentStatus?: string;
   orderIndex?: number;
-}): Promise<void> {
-  await db.insert(lessons).values({
+}, tx: DbOrTx = db): Promise<void> {
+  await tx.insert(lessons).values({
     id: lesson.id,
     moduleId: lesson.moduleId,
     phaseId: lesson.phaseId,
@@ -338,9 +343,9 @@ export async function upsertLessonContent(content: {
   summary?: string | null;
   modelUsed?: string | null;
   generatedAt?: string | null;
-}): Promise<void> {
+}, tx: DbOrTx = db): Promise<void> {
   const generatedAt = content.generatedAt ? new Date(content.generatedAt) : new Date();
-  await db.insert(lessonContent).values({
+  await tx.insert(lessonContent).values({
     lessonId: content.lessonId,
     markdownContent: content.markdownContent ?? null,
     workedExamples: content.workedExamples ?? [],
@@ -376,8 +381,8 @@ export async function upsertQuiz(quiz: {
   title: string;
   questions: any[];
   orderIndex?: number;
-}): Promise<void> {
-  await db.insert(quizzes).values({
+}, tx: DbOrTx = db): Promise<void> {
+  await tx.insert(quizzes).values({
     id: quiz.id,
     lessonId: quiz.lessonId,
     moduleId: quiz.moduleId,
@@ -419,8 +424,8 @@ export async function upsertAssignment(assignment: {
   validationSnippet?: string | null;
   hint?: string | null;
   orderIndex?: number;
-}): Promise<void> {
-  await db.insert(assignments).values({
+}, tx: DbOrTx = db): Promise<void> {
+  await tx.insert(assignments).values({
     id: assignment.id,
     lessonId: assignment.lessonId,
     moduleId: assignment.moduleId,
@@ -469,8 +474,8 @@ export async function upsertResource(resource: {
   description?: string | null;
   duration?: string | null;
   orderIndex?: number;
-}): Promise<void> {
-  await db.insert(resources).values({
+}, tx: DbOrTx = db): Promise<void> {
+  await tx.insert(resources).values({
     id: resource.id,
     roadmapId: resource.roadmapId,
     phaseId: resource.phaseId ?? null,
@@ -516,8 +521,8 @@ export async function upsertPhaseProject(project: {
   githubUrl?: string | null;
   progress?: number;
   orderIndex?: number;
-}): Promise<void> {
-  await db.insert(phaseProjects).values({
+}, tx: DbOrTx = db): Promise<void> {
+  await tx.insert(phaseProjects).values({
     id: project.id,
     roadmapId: project.roadmapId,
     phaseId: project.phaseId ?? null,
@@ -865,38 +870,26 @@ export async function migrateRoadmapJsonToTables(
 
   const roadmapId = jsonRoadmap.id;
 
-  // 1. Insert the roadmap row first (everything else FKs to it).
-  // Use insertRoadmapIfNew so a network retry or duplicate submission never
-  // overwrites an existing roadmap owned by this user.
-  const isNew = await insertRoadmapIfNew({
-    id: roadmapId,
-    ownerEmail,
-    title: jsonRoadmap.title || jsonRoadmap.goal || 'Untitled Roadmap',
-    goal: jsonRoadmap.goal || jsonRoadmap.title || 'Untitled Goal',
-    experienceLevel: jsonRoadmap.experienceLevel ?? null,
-    weeklyHours: typeof jsonRoadmap.weeklyHours === 'number' ? jsonRoadmap.weeklyHours : null,
-    preferredStyle: jsonRoadmap.preferredStyle ?? null,
-    college: jsonRoadmap.college ?? null,
-    branch: jsonRoadmap.branch ?? null,
-    year: jsonRoadmap.year ?? null,
-    progressPercent: jsonRoadmap.progressPercent ?? 0,
-    totalXp: jsonRoadmap.totalXp ?? 0,
-    lessonsCompleted: jsonRoadmap.lessonsCompleted ?? 0,
-    hoursRemaining: typeof jsonRoadmap.hoursRemaining === 'number' ? jsonRoadmap.hoursRemaining : null,
-    status: jsonRoadmap.status ?? 'current',
-  });
-  // If the roadmap already exists (duplicate submission / retry), skip re-inserting
-  // all child rows — the data is already correct in the database.
-  if (!isNew) {
-    console.log('[Roadmap] Skipping child-row inserts — roadmap', roadmapId, 'already exists (idempotent)');
-    return;
-  }
-
   // Build flat arrays of everything we need to insert so we can fire them in
   // parallel batches instead of one sequential await per row.
   // FK order: roadmap → phases → modules → lessons/resources/projects.
 
   const phasesArr = asArray(jsonRoadmap.phases);
+
+  // Collect lesson progress backfill data (written outside the transaction —
+  // user_lesson_progress has no FK constraint that requires the transaction).
+  const completedLessonBackfills: Array<{ lessonId: string; moduleId: string; phaseId: string }> = [];
+  for (const phase of phasesArr) {
+    for (const level of asArray(phase.levels)) {
+      for (const lesson of asArray(level.lessons)) {
+        if (lesson.status === 'completed') {
+          const moduleId = level.id || `mod-${phase.id}-0`;
+          const lessonId = lesson.id || `les-${moduleId}-0`;
+          completedLessonBackfills.push({ lessonId, moduleId, phaseId: phase.id });
+        }
+      }
+    }
+  }
 
   // --- collect structured data ---
   type PhaseRec  = Parameters<typeof upsertPhase>[0];
@@ -1047,105 +1040,129 @@ export async function migrateRoadmapJsonToTables(
     }
   }
 
-  // Pool has max:10 connections. Cap in-flight queries to 8 so 2 slots remain
-  // for background queries (reconstructRoadmapJson, getRoadmapsByOwner, etc.).
-  const POOL_CONCURRENCY = 8;
+  // Wrap all roadmap-structure inserts in a single transaction so a partial
+  // failure (network blip, pool timeout) does not leave orphaned rows.
+  // The concurrency limit is reduced inside the transaction because all
+  // queries share a single connection from the pool.
+  const TX_CONCURRENCY = 4;
 
-  // 2. Write phases first (modules FK → phases).
-  console.log('[Roadmap] Writing', phaseRecs.length, 'phases for', roadmapId);
-  await runConcurrent(phaseRecs.map(r => () => upsertPhase(r)), POOL_CONCURRENCY);
+  await db.transaction(async (tx) => {
+    // 1. Insert the roadmap row first (everything else FKs to it).
+    // Use insertRoadmapIfNew so a network retry never overwrites an existing roadmap.
+    const isNew = await insertRoadmapIfNew({
+      id: roadmapId,
+      ownerEmail,
+      title: jsonRoadmap.title || jsonRoadmap.goal || 'Untitled Roadmap',
+      goal: jsonRoadmap.goal || jsonRoadmap.title || 'Untitled Goal',
+      experienceLevel: jsonRoadmap.experienceLevel ?? null,
+      weeklyHours: typeof jsonRoadmap.weeklyHours === 'number' ? jsonRoadmap.weeklyHours : null,
+      preferredStyle: jsonRoadmap.preferredStyle ?? null,
+      college: jsonRoadmap.college ?? null,
+      branch: jsonRoadmap.branch ?? null,
+      year: jsonRoadmap.year ?? null,
+      progressPercent: jsonRoadmap.progressPercent ?? 0,
+      totalXp: jsonRoadmap.totalXp ?? 0,
+      lessonsCompleted: jsonRoadmap.lessonsCompleted ?? 0,
+      hoursRemaining: typeof jsonRoadmap.hoursRemaining === 'number' ? jsonRoadmap.hoursRemaining : null,
+      status: jsonRoadmap.status ?? 'current',
+    }, tx);
 
-  // 3. Write modules in parallel (lessons FK → modules).
-  console.log('[Roadmap] Writing', modRecs.length, 'modules for', roadmapId);
-  await runConcurrent(modRecs.map(r => () => upsertModule(r)), POOL_CONCURRENCY);
-
-  // 4. Write lessons (lesson_content/quizzes/assignments FK → lessons, so lessons must land first).
-  console.log('[Roadmap] Writing', lesRecs.length, 'lessons for', roadmapId);
-  await runConcurrent(lesRecs.map(r => () => upsertLesson(r)), POOL_CONCURRENCY);
-
-  // 5. Write everything that depends on lessons, plus resources/projects (no mutual deps).
-  const step5Tasks: (() => Promise<void>)[] = [
-    ...lesContents.map(c => () => upsertLessonContent({ lessonId: c.lessonId, markdownContent: c.markdownContent, summary: c.summary, modelUsed: 'migration-legacy-json', generatedAt: nowIso() })),
-    ...quizRecs.map(r => () => upsertQuiz(r)),
-    ...asgRecs.map(r => () => upsertAssignment(r)),
-    ...resRecs.map(r => () => upsertResource(r)),
-    ...projRecs.map(r => () => upsertPhaseProject(r)),
-  ];
-  console.log('[Roadmap] Writing', step5Tasks.length, 'dependent records for', roadmapId);
-  await runConcurrent(step5Tasks, POOL_CONCURRENCY);
-
-  // Roadmap-level resources fallback (legacy shape).
-  const existingResourceIds = new Set<string>();
-  for (const phase of phasesArr) {
-    for (const lvl of asArray(phase.modules && phase.modules.length ? phase.modules : phase.levels)) {
-      for (const r of asArray((lvl as any).resources)) {
-        if (r.id) existingResourceIds.add(r.id);
-      }
+    // If the roadmap already exists (duplicate submission / retry), abort the
+    // transaction — child rows are already correct.
+    if (!isNew) {
+      logger.info({ roadmapId }, '[Roadmap] Skipping child-row inserts — already exists (idempotent)');
+      return;
     }
-  }
-  const topResources = asArray(jsonRoadmap.resources);
-  for (let rIdx = 0; rIdx < topResources.length; rIdx++) {
-    const resource = topResources[rIdx];
-    if (resource.id && existingResourceIds.has(resource.id)) continue;
-    const resPhaseId =
-      resource.phaseId && phasesArr.some((p: any) => p.id === resource.phaseId)
-        ? resource.phaseId
-        : null;
-    await upsertResource({
-      id: resource.id || `res-${roadmapId}-top-${rIdx + 1}`,
-      roadmapId,
-      phaseId: resPhaseId,
-      moduleId: null,
-      title: resource.title || 'Resource',
-      type: resource.type ?? 'article',
-      provider: resource.provider ?? null,
-      url: resource.url ?? null,
-      description: resource.description ?? null,
-      duration: resource.duration ?? null,
-    });
-  }
 
-  if (!phasesArr.some((p: any) => (p.projects || []).length > 0)) {
-    const topProjects = asArray(jsonRoadmap.projects);
-    for (let pIdx = 0; pIdx < topProjects.length; pIdx++) {
-      const project = topProjects[pIdx];
-      await upsertPhaseProject({
-        id: project.id || `proj-${roadmapId}-top-${pIdx + 1}`,
-        roadmapId,
-        phaseId: null,
-        title: project.title || 'Project',
-        difficulty: project.difficulty ?? 'beginner',
-        description: project.description ?? null,
-        techStack: asTextArray(project.techStack),
-        features: asTextArray(project.features),
-        githubUrl: project.githubUrl ?? null,
-        progress: typeof project.progress === 'number' ? project.progress : 0,
-      });
-    }
-  }
+    // 2. Write phases first (modules FK → phases).
+    logger.debug({ roadmapId, count: phaseRecs.length }, '[Roadmap] Writing phases');
+    await runConcurrent(phaseRecs.map(r => () => upsertPhase(r, tx)), TX_CONCURRENCY);
 
-  // Migrate completed lesson progress from JSONB statuses.
-  for (const phase of phasesArr) {
-    for (const level of asArray(phase.levels)) {
-      for (const lesson of asArray(level.lessons)) {
-        if (lesson.status === 'completed') {
-          const moduleId = level.id || `mod-${phase.id}-0`;
-          const lessonId = lesson.id || `les-${moduleId}-0`;
-          await upsertUserLessonProgress({
-            ownerEmail,
-            roadmapId,
-            lessonId,
-            moduleId,
-            phaseId: phase.id,
-            completed: true,
-            completedAt: nowIso(),
-            attempts: 1,
-          });
+    // 3. Write modules in parallel (lessons FK → modules).
+    logger.debug({ roadmapId, count: modRecs.length }, '[Roadmap] Writing modules');
+    await runConcurrent(modRecs.map(r => () => upsertModule(r, tx)), TX_CONCURRENCY);
+
+    // 4. Write lessons (lesson_content/quizzes/assignments FK → lessons).
+    logger.debug({ roadmapId, count: lesRecs.length }, '[Roadmap] Writing lessons');
+    await runConcurrent(lesRecs.map(r => () => upsertLesson(r, tx)), TX_CONCURRENCY);
+
+    // 5. Write everything that depends on lessons, plus resources/projects.
+    const step5Tasks: (() => Promise<void>)[] = [
+      ...lesContents.map(c => () => upsertLessonContent({ lessonId: c.lessonId, markdownContent: c.markdownContent, summary: c.summary, modelUsed: 'migration-legacy-json', generatedAt: nowIso() }, tx)),
+      ...quizRecs.map(r => () => upsertQuiz(r, tx)),
+      ...asgRecs.map(r => () => upsertAssignment(r, tx)),
+      ...resRecs.map(r => () => upsertResource(r, tx)),
+      ...projRecs.map(r => () => upsertPhaseProject(r, tx)),
+    ];
+    logger.debug({ roadmapId, count: step5Tasks.length }, '[Roadmap] Writing dependent records');
+    await runConcurrent(step5Tasks, TX_CONCURRENCY);
+
+    // Roadmap-level resources fallback (legacy shape).
+    const existingResourceIds = new Set<string>();
+    for (const phase of phasesArr) {
+      for (const lvl of asArray(phase.modules && phase.modules.length ? phase.modules : phase.levels)) {
+        for (const r of asArray((lvl as any).resources)) {
+          if (r.id) existingResourceIds.add(r.id);
         }
       }
     }
-  }
+    const topResources = asArray(jsonRoadmap.resources);
+    for (let rIdx = 0; rIdx < topResources.length; rIdx++) {
+      const resource = topResources[rIdx];
+      if (resource.id && existingResourceIds.has(resource.id)) continue;
+      const resPhaseId =
+        resource.phaseId && phasesArr.some((p: any) => p.id === resource.phaseId)
+          ? resource.phaseId
+          : null;
+      await upsertResource({
+        id: resource.id || `res-${roadmapId}-top-${rIdx + 1}`,
+        roadmapId,
+        phaseId: resPhaseId,
+        moduleId: null,
+        title: resource.title || 'Resource',
+        type: resource.type ?? 'article',
+        provider: resource.provider ?? null,
+        url: resource.url ?? null,
+        description: resource.description ?? null,
+        duration: resource.duration ?? null,
+      }, tx);
+    }
 
+    if (!phasesArr.some((p: any) => (p.projects || []).length > 0)) {
+      const topProjects = asArray(jsonRoadmap.projects);
+      for (let pIdx = 0; pIdx < topProjects.length; pIdx++) {
+        const project = topProjects[pIdx];
+        await upsertPhaseProject({
+          id: project.id || `proj-${roadmapId}-top-${pIdx + 1}`,
+          roadmapId,
+          phaseId: null,
+          title: project.title || 'Project',
+          difficulty: project.difficulty ?? 'beginner',
+          description: project.description ?? null,
+          techStack: asTextArray(project.techStack),
+          features: asTextArray(project.features),
+          githubUrl: project.githubUrl ?? null,
+          progress: typeof project.progress === 'number' ? project.progress : 0,
+        }, tx);
+      }
+    }
+  });
+
+  // Backfill user_lesson_progress for lessons already marked completed in the
+  // source JSON. Runs outside the transaction — user_lesson_progress uses its
+  // own composite unique key and does not need to be atomic with the roadmap rows.
+  for (const { lessonId, moduleId, phaseId } of completedLessonBackfills) {
+    await upsertUserLessonProgress({
+      ownerEmail,
+      roadmapId,
+      lessonId,
+      moduleId,
+      phaseId,
+      completed: true,
+      completedAt: nowIso(),
+      attempts: 1,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1325,17 +1342,21 @@ function reconstructProject(project: any): any {
 // List all roadmaps for a user, reconstructed into the nested frontend shape.
 // ---------------------------------------------------------------------------
 
-export async function getUserRoadmapsReconstructed(ownerEmail: string): Promise<any[]> {
+export async function getUserRoadmapsReconstructed(
+  ownerEmail: string,
+  opts: { limit?: number; offset?: number } = {}
+): Promise<{ roadmaps: any[]; total: number }> {
   const normalizedEmail = ownerEmail.toLowerCase();
-  const roadmapRows = await getRoadmapsByOwner(normalizedEmail);
+  const allRows = await getRoadmapsByOwner(normalizedEmail);
+  const total = allRows.length;
+  const { limit = 20, offset = 0 } = opts;
+  const page = allRows.slice(offset, offset + limit);
   const result: any[] = [];
-  for (const r of roadmapRows) {
+  for (const r of page) {
     const reconstructed = await reconstructRoadmapJson(r.id, normalizedEmail);
-    if (reconstructed) {
-      result.push(reconstructed);
-    }
+    if (reconstructed) result.push(reconstructed);
   }
-  return result;
+  return { roadmaps: result, total };
 }
 
 // ---------------------------------------------------------------------------

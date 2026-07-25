@@ -1,4 +1,5 @@
 import { cleanAndParseJSON, callGroqChatCompletion, sanitizeForPrompt, GROQ_MODELS } from './ai';
+import { logger } from './logger';
 
 // ---------------------------------------------------------------------------
 // Curriculum constants & types
@@ -197,6 +198,35 @@ export function validateCurriculumQuality(input: any): { ok: boolean; score: num
   if (duplicateModuleNames > 0) issues.push(`${duplicateModuleNames} duplicate module name(s).`);
   if (brokenPrereqs > 0) issues.push(`${brokenPrereqs} prerequisite reference(s) point to non-existent lessons.`);
   if (forwardPrereqs > 0) issues.push(`${forwardPrereqs} prerequisite(s) point forward instead of to earlier lessons.`);
+
+  // Cycle detection: build adjacency list and run DFS topological sort.
+  // A cycle in prerequisites means the curriculum can never be started.
+  const adjList = new Map<string, string[]>();
+  for (const [id] of lessonOrder) adjList.set(id, []);
+  for (const phase of phases) {
+    for (const mod of Array.isArray(phase?.modules) ? phase.modules : []) {
+      for (const les of Array.isArray(mod?.lessons) ? mod.lessons : []) {
+        const id = String(les?.id || '').trim();
+        if (!id) continue;
+        for (const pr of asStringArray(les?.prerequisites)) {
+          if (adjList.has(pr)) adjList.get(pr)!.push(id);
+        }
+      }
+    }
+  }
+  const visited = new Set<string>();
+  const inStack = new Set<string>();
+  let cycleDetected = false;
+  function dfsVisit(node: string): void {
+    if (cycleDetected || inStack.has(node)) { cycleDetected = true; return; }
+    if (visited.has(node)) return;
+    inStack.add(node);
+    for (const neighbour of adjList.get(node) ?? []) dfsVisit(neighbour);
+    inStack.delete(node);
+    visited.add(node);
+  }
+  for (const [id] of adjList) dfsVisit(id);
+  if (cycleDetected) issues.push('Prerequisite graph contains a cycle — the curriculum cannot be started.');
   if (genericLessonTitles > 0) issues.push(`${genericLessonTitles} lesson(s) have generic titles.`);
   if (unrealisticTime > 0) issues.push(`${unrealisticTime} lesson(s) have unrealistic estimatedMinutes (must be ${CURRICULUM_LIMITS.minLessonMinutes}-${CURRICULUM_LIMITS.maxLessonMinutes}).`);
   if (emptyObjectives > 0) issues.push(`${emptyObjectives} lesson(s) have empty learning objectives.`);
@@ -794,5 +824,5 @@ export function logCurriculumStats(tag: string, roadmap: any): void {
   const phases = Array.isArray(roadmap?.phases) ? roadmap.phases : [];
   const modules = phases.reduce((a: number, p: any) => a + (p.levels?.length || p.modules?.length || 0), 0);
   const lessons = phases.reduce((a: number, p: any) => a + (p.levels || p.modules || []).reduce((b: number, m: any) => b + (m.lessons?.length || 0), 0), 0);
-  console.log(`[${tag}] Phases: ${phases.length}, Modules: ${modules}, Lessons: ${lessons}, Resources: ${roadmap?.resources?.length || 0}, Projects: ${roadmap?.projects?.length || 0}`);
+  logger.info({ tag, phases: phases.length, modules, lessons, resources: roadmap?.resources?.length || 0, projects: roadmap?.projects?.length || 0 }, '[Curriculum] Stats');
 }

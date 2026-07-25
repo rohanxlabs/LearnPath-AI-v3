@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { requireAuth, aiLimiter } from '../lib/middleware';
+import { randomUUID } from 'node:crypto';
+import { requireAuth, aiLimiter, roadmapGenLimiter } from '../lib/middleware';
 import { unlockAchievement } from '../lib/db';
+import { logger } from '../lib/logger';
 import {
   reconstructRoadmapJson,
   getRoadmapsByOwner,
@@ -18,19 +20,19 @@ import {
   logCurriculumStats,
   CURRICULUM_LIMITS
 } from '../lib/curriculum';
-import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt, GROQ_MODELS } from '../lib/ai';
+import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt } from '../lib/ai';
 
 const router = Router();
 
 // Generate roadmap
-router.post('/generate-roadmap', aiLimiter, requireAuth, async (req, res) => {
+router.post('/generate-roadmap', requireAuth, roadmapGenLimiter, aiLimiter, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;
-  if (!goal) return res.status(400).json({ error: 'Goal is required' });
+  if (!goal) return res.status(400).json({ error: 'Goal is required', code: 'MISSING_GOAL' });
 
   // Generate a stable roadmapId before calling the AI so validateAndNormalizeCurriculum
   // can prefix all child IDs (ph-1, mod-1-1, les-1-1-1) with it, making them globally
   // unique across every roadmap the user creates.
-  const roadmapId = `roadmap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const roadmapId = `roadmap-${randomUUID()}`;
   const meta = { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year, roadmapId };
   const universityContext = college && branch && year
     ? `\nLearner is a ${sanitizeForPrompt(year)} student at ${sanitizeForPrompt(college)} studying ${sanitizeForPrompt(branch)}; align topics and ordering with their university syllabus (AKTU where applicable).`
@@ -57,7 +59,7 @@ MODULE FIELDS: id "mod-{phase}-{n}"; name; description; difficulty; estimatedHou
 PHASE FIELDS: id "ph-{n}"; name; description; estimatedHours 10-30; difficulty; skillsCovered (3-6 tags); projects (>=1). Projects reinforce that phase's concepts and get harder across phases using this ladder: mini-exercise -> mini-project -> real-application -> portfolio-project -> capstone. Each project: id, title, difficulty (one ladder value), description (2-3 sentences), techStack (real tools), features (3-6 concrete), progress 0.
 
 Return ONLY a JSON object of this exact shape (one example element shown per array; produce the full required counts):
-{"goal":"${sanitizeForPrompt(goal, 120)}","phases":[{"id":"ph-1","name":"...","description":"...","estimatedHours":18,"difficulty":"beginner","skillsCovered":["..."],"modules":[{"id":"mod-1-1","name":"...","description":"...","difficulty":"beginner","estimatedHours":5,"lessons":[{"id":"les-1-1-1","name":"...","description":"...","learningObjectives":["...","..."],"prerequisites":[],"skillTags":["...","..."],"difficulty":"beginner","estimatedMinutes":25,"type":"learn","status":"available","contentStatus":"pending"}],"resources":[{"id":"res-1-1-1","title":"...","type":"documentation","provider":"...","url":"https://...","description":"..."}]}],"projects":[{"id":"proj-1","title":"...","difficulty":"mini-exercise","description":"...","techStack":["..."],"features":["..."],"progress":0}]}]}`;
+{"goal":${JSON.stringify(sanitizeForPrompt(goal, 120))},"phases":[{"id":"ph-1","name":"...","description":"...","estimatedHours":18,"difficulty":"beginner","skillsCovered":["..."],"modules":[{"id":"mod-1-1","name":"...","description":"...","difficulty":"beginner","estimatedHours":5,"lessons":[{"id":"les-1-1-1","name":"...","description":"...","learningObjectives":["...","..."],"prerequisites":[],"skillTags":["...","..."],"difficulty":"beginner","estimatedMinutes":25,"type":"learn","status":"available","contentStatus":"pending"}],"resources":[{"id":"res-1-1-1","title":"...","type":"documentation","provider":"...","url":"https://...","description":"..."}]}],"projects":[{"id":"proj-1","title":"...","difficulty":"mini-exercise","description":"...","techStack":["..."],"features":["..."],"progress":0}]}]}`;
 
   const buildCorrectivePrompt = (issues: string[]) => `Your previous curriculum for "${sanitizeForPrompt(goal, 120)}" was REJECTED. Fix EVERY issue below and regenerate the COMPLETE curriculum:
 ${issues.slice(0, 12).map((i) => `- ${i}`).join('\n')}
@@ -75,17 +77,17 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
         const response = await callGroqChatCompletion(prompt, { temperature: attempt === 0 ? 0.5 : 0.35, asJSON: true, timeoutMs: 30000, maxTokens: 8000 });
         parsed = cleanAndParseJSON(response, '{}');
       } catch (genErr: any) {
-        console.warn(`[Roadmap] Generation attempt ${attempt + 1} failed:`, genErr.message);
+        logger.warn({ attempt: attempt + 1, err: genErr.message }, '[Roadmap] Generation attempt failed');
         continue;
       }
 
       if (!parsed?.phases || !Array.isArray(parsed.phases) || parsed.phases.length === 0) {
-        console.warn(`[Roadmap] Attempt ${attempt + 1} returned no usable phases.`);
+        logger.warn({ attempt: attempt + 1 }, '[Roadmap] Attempt returned no usable phases');
         continue;
       }
 
       const quality = validateCurriculumQuality(parsed);
-      console.log(`[Roadmap] Attempt ${attempt + 1} quality score ${quality.score}/100 (${quality.issues.length} issue(s)).`);
+      logger.debug({ attempt: attempt + 1, score: quality.score, issues: quality.issues.length }, '[Roadmap] Quality score');
       if (!bestCandidate || quality.score > bestCandidate.score) bestCandidate = { parsed, score: quality.score };
 
       if (quality.ok) {
@@ -93,11 +95,11 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
         logCurriculumStats('AI-Generated', normalized);
         return res.json(normalized);
       }
-      if (attempt < MAX_RETRIES) console.warn(`[Roadmap] Retrying with corrective prompt. Issues: ${quality.issues.slice(0, 5).join('; ')}`);
+      if (attempt < MAX_RETRIES) logger.warn({ issues: quality.issues.slice(0, 5) }, '[Roadmap] Retrying with corrective prompt');
     }
 
     if (bestCandidate && bestCandidate.score >= 60 && Array.isArray(bestCandidate.parsed.phases)) {
-      console.warn(`[Roadmap] All retries had issues; using best candidate (score ${bestCandidate.score}) after normalization.`);
+      logger.warn({ score: bestCandidate.score }, '[Roadmap] All retries had issues; using best candidate after normalization');
       const normalized = validateAndNormalizeCurriculum(bestCandidate.parsed, meta);
       logCurriculumStats('AI-Best-Candidate', normalized);
       return res.json(normalized);
@@ -107,7 +109,7 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
   } catch (error: any) {
     let readableError = error.message || String(error);
     try { const pe = JSON.parse(error.message); if (pe?.error?.message) readableError = pe.error.message; } catch (_) {}
-    console.error('[Roadmap] Generation failed, using offline fallback:', readableError);
+    logger.error({ err: readableError }, '[Roadmap] Generation failed, using offline fallback');
     // Pass meta (which includes roadmapId) so fallback IDs are also scoped.
     const fallbackRoadmap = buildFallbackCurriculum(meta);
     logCurriculumStats('AI-Fallback', fallbackRoadmap);
@@ -122,9 +124,9 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
 //                  data: {"type":"done","roadmap":{...}}\n\n
 //                  data: {"type":"error","message":"..."}\n\n  (on hard fail)
 // ---------------------------------------------------------------------------
-router.post('/generate-roadmap-stream', aiLimiter, requireAuth, async (req, res) => {
+router.post('/generate-roadmap-stream', requireAuth, roadmapGenLimiter, aiLimiter, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;
-  if (!goal) { res.status(400).json({ error: 'Goal is required' }); return; }
+  if (!goal) { res.status(400).json({ error: 'Goal is required', code: 'MISSING_GOAL' }); return; }
 
   // Set up SSE headers.
   res.writeHead(200, {
@@ -135,11 +137,21 @@ router.post('/generate-roadmap-stream', aiLimiter, requireAuth, async (req, res)
   });
 
   const send = (payload: object) => {
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    if (!res.writableEnded) res.write(`data: ${JSON.stringify(payload)}\n\n`);
   };
 
+  // Hard 90-second timeout — 3 Groq calls × 30s each at most.
+  // Without this, a stalled Groq connection can hold the SSE open indefinitely,
+  // exhausting Express workers and the DB connection pool.
+  const streamTimeout = setTimeout(() => {
+    logger.warn({ goal }, '[Roadmap-Stream] Hard timeout reached — sending fallback and closing');
+    const fallback = buildFallbackCurriculum({ goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year, roadmapId: `roadmap-${randomUUID()}` });
+    send({ type: 'done', roadmap: fallback, fallback: true, timedOut: true });
+    if (!res.writableEnded) res.end();
+  }, 90_000);
+
   // Pre-generate the roadmapId so validateAndNormalizeCurriculum scopes all child IDs to it.
-  const roadmapId = `roadmap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const roadmapId = `roadmap-${randomUUID()}`;
   const meta = { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year, roadmapId };
 
   // Emit the detected domain / phase plan upfront so the UI can show names
@@ -175,7 +187,7 @@ MODULE FIELDS: id "mod-{phase}-{n}"; name; description; difficulty; estimatedHou
 PHASE FIELDS: id "ph-{n}"; name; description; estimatedHours 10-30; difficulty; skillsCovered (3-6 tags); projects (>=1). Projects reinforce that phase's concepts and get harder across phases using this ladder: mini-exercise -> mini-project -> real-application -> portfolio-project -> capstone. Each project: id, title, difficulty (one ladder value), description (2-3 sentences), techStack (real tools), features (3-6 concrete), progress 0.
 
 Return ONLY a JSON object of this exact shape (one example element shown per array; produce the full required counts):
-{"goal":"${sanitized(goal, 120)}","phases":[{"id":"ph-1","name":"...","description":"...","estimatedHours":18,"difficulty":"beginner","skillsCovered":["..."],"modules":[{"id":"mod-1-1","name":"...","description":"...","difficulty":"beginner","estimatedHours":5,"lessons":[{"id":"les-1-1-1","name":"...","description":"...","learningObjectives":["...","..."],"prerequisites":[],"skillTags":["...","..."],"difficulty":"beginner","estimatedMinutes":25,"type":"learn","status":"available","contentStatus":"pending"}],"resources":[{"id":"res-1-1-1","title":"...","type":"documentation","provider":"...","url":"https://...","description":"..."}]}],"projects":[{"id":"proj-1","title":"...","difficulty":"mini-exercise","description":"...","techStack":["..."],"features":["..."],"progress":0}]}]}`;
+{"goal":${JSON.stringify(sanitized(goal, 120))},"phases":[{"id":"ph-1","name":"...","description":"...","estimatedHours":18,"difficulty":"beginner","skillsCovered":["..."],"modules":[{"id":"mod-1-1","name":"...","description":"...","difficulty":"beginner","estimatedHours":5,"lessons":[{"id":"les-1-1-1","name":"...","description":"...","learningObjectives":["...","..."],"prerequisites":[],"skillTags":["...","..."],"difficulty":"beginner","estimatedMinutes":25,"type":"learn","status":"available","contentStatus":"pending"}],"resources":[{"id":"res-1-1-1","title":"...","type":"documentation","provider":"...","url":"https://...","description":"..."}]}],"projects":[{"id":"proj-1","title":"...","difficulty":"mini-exercise","description":"...","techStack":["..."],"features":["..."],"progress":0}]}]}`;
 
   const MAX_RETRIES = 2;
   let bestCandidate: { parsed: any; score: number } | null = null;
@@ -191,7 +203,7 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
         const response = await callGroqChatCompletion(prompt, { temperature: attempt === 0 ? 0.5 : 0.35, asJSON: true, timeoutMs: 30000, maxTokens: 8000 });
         parsed = cleanAndParseJSON(response, '{}');
       } catch (genErr: any) {
-        console.warn(`[Roadmap-Stream] Generation attempt ${attempt + 1} failed:`, genErr.message);
+        logger.warn({ attempt: attempt + 1, err: genErr.message }, '[Roadmap-Stream] Generation attempt failed');
         continue;
       }
 
@@ -219,7 +231,7 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
       throw new Error('All generation attempts failed the quality gate');
     }
   } catch (error: any) {
-    console.error('[Roadmap-Stream] Falling back to local curriculum:', error.message);
+    logger.error({ err: error.message }, '[Roadmap-Stream] Falling back to local curriculum');
     const fallbackRoadmap = buildFallbackCurriculum(meta);
     // Emit fallback phase names so the UI still animates.
     for (const phase of fallbackRoadmap.phases || []) {
@@ -228,19 +240,24 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
     logCurriculumStats('AI-Stream-Fallback', fallbackRoadmap);
     send({ type: 'done', roadmap: fallbackRoadmap, fallback: true });
   } finally {
-    res.end();
+    clearTimeout(streamTimeout);
+    if (!res.writableEnded) res.end();
   }
 });
 
 // Get all roadmaps for a user
+// Supports optional pagination: ?limit=20&offset=0
+// Default limit is 20; max enforced at 100 to prevent large reconstructions.
 router.get('/roadmaps', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
   try {
-    const roadmaps = await getUserRoadmapsReconstructed(userEmail);
-    return res.json(roadmaps);
+    const { roadmaps, total } = await getUserRoadmapsReconstructed(userEmail, { limit, offset });
+    return res.json({ roadmaps, total, limit, offset });
   } catch (error) {
-    console.error('Get roadmaps error:', error);
-    return res.json([]);
+    logger.error({ err: error }, 'Get roadmaps error');
+    return res.status(503).json({ error: 'Could not load roadmaps. Please retry.', code: 'ROADMAPS_FAILED' });
   }
 });
 
@@ -250,10 +267,10 @@ router.get('/roadmaps/:roadmapId', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   try {
     const roadmap = await reconstructRoadmapJson(roadmapId, userEmail);
-    if (!roadmap) return res.status(404).json({ error: 'Roadmap not found' });
+    if (!roadmap) return res.status(404).json({ error: 'Roadmap not found', code: 'ROADMAP_NOT_FOUND' });
     // Ownership check — return 404 (not 403) to avoid roadmap ID enumeration.
     if (roadmap.ownerEmail?.toLowerCase() !== userEmail.toLowerCase()) {
-      return res.status(404).json({ error: 'Roadmap not found' });
+      return res.status(404).json({ error: 'Roadmap not found', code: 'ROADMAP_NOT_FOUND' });
     }
 
     const workspaceRoadmap = {
@@ -271,8 +288,8 @@ router.get('/roadmaps/:roadmapId', requireAuth, async (req, res) => {
     };
     return res.json({ roadmap: workspaceRoadmap });
   } catch (error) {
-    console.error('Get roadmap error:', error);
-    return res.status(500).json({ error: 'Failed to load roadmap' });
+    logger.error({ err: error }, 'Get roadmap error');
+    return res.status(500).json({ error: 'Failed to load roadmap', code: 'ROADMAP_LOAD_FAILED' });
   }
 });
 
@@ -282,13 +299,13 @@ router.delete('/roadmaps/:id', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   try {
     const owned = await getRoadmapsByOwner(userEmail);
-    if (!owned.some((r: any) => r.id === id)) return res.status(404).json({ error: 'Roadmap not found' });
+    if (!owned.some((r: any) => r.id === id)) return res.status(404).json({ error: 'Roadmap not found', code: 'ROADMAP_NOT_FOUND' });
     const deleted = await deleteRoadmap(id);
-    if (deleted === 0) return res.status(404).json({ error: 'Roadmap not found' });
+    if (deleted === 0) return res.status(404).json({ error: 'Roadmap not found', code: 'ROADMAP_NOT_FOUND' });
     return res.json({ success: true, deletedId: id });
   } catch (error) {
-    console.error('Delete roadmap error:', error);
-    return res.status(500).json({ error: 'Failed to delete roadmap. Database unavailable.' });
+    logger.error({ err: error }, 'Delete roadmap error');
+    return res.status(500).json({ error: 'Failed to delete roadmap. Database unavailable.', code: 'ROADMAP_DELETE_FAILED' });
   }
 });
 
@@ -296,13 +313,13 @@ router.delete('/roadmaps/:id', requireAuth, async (req, res) => {
 router.post('/roadmaps', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   const roadmap = req.body;
-  if (!roadmap || !roadmap.id || !roadmap.goal) return res.status(400).json({ error: 'Valid roadmap object with id and goal is required' });
+  if (!roadmap || !roadmap.id || !roadmap.goal) return res.status(400).json({ error: 'Valid roadmap object with id and goal is required', code: 'INVALID_ROADMAP' });
   try {
     // Check BEFORE inserting so we know if this is the user's first roadmap.
     const existingBefore = await getRoadmapsByOwner(userEmail);
 
     const phaseCount = Array.isArray(roadmap.phases) ? roadmap.phases.length : 0;
-    console.log('[Roadmap] Saving roadmap', roadmap.id, 'with', phaseCount, 'phases');
+    logger.info({ roadmapId: roadmap.id, phaseCount }, '[Roadmap] Saving roadmap');
     await createRoadmapFromJson(userEmail, roadmap);
 
     // Return the incoming roadmap data directly — no post-write re-read needed.
@@ -319,8 +336,8 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
 
     return res.json({ success: true, roadmap: saved, newAchievement });
   } catch (error) {
-    console.error('Create roadmap error:', error);
-    return res.status(500).json({ error: 'Failed to create roadmap' });
+    logger.error({ err: error }, 'Create roadmap error');
+    return res.status(500).json({ error: 'Failed to create roadmap', code: 'ROADMAP_CREATE_FAILED' });
   }
 });
 
@@ -328,15 +345,17 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
 router.post('/update-roadmap', requireAuth, async (req, res) => {
   const { roadmapId, updates } = req.body;
   const userEmail = req.supabaseUser!.email;
-  if (!roadmapId || !updates || typeof updates !== 'object') return res.status(400).json({ error: 'roadmapId and updates object are required' });
+  if (!roadmapId || !updates || typeof updates !== 'object') return res.status(400).json({ error: 'roadmapId and updates object are required', code: 'INVALID_UPDATE' });
 
-  const ROADMAP_MUTABLE_FIELDS = new Set(['title', 'goal', 'progressPercent', 'totalXp', 'lessonsCompleted', 'hoursRemaining', 'phases', 'resources', 'projects', 'quizzes']);
+  // progressPercent, totalXp, and lessonsCompleted are computed server-side only —
+  // removing them from the mutable set prevents clients from spoofing progress.
+  const ROADMAP_MUTABLE_FIELDS = new Set(['title', 'goal', 'hoursRemaining', 'phases', 'resources', 'projects', 'quizzes']);
   const forbidden = Object.keys(updates).filter((k) => !ROADMAP_MUTABLE_FIELDS.has(k));
-  if (forbidden.length > 0) return res.status(400).json({ error: `Cannot update field(s): ${forbidden.join(', ')}` });
+  if (forbidden.length > 0) return res.status(400).json({ error: `Cannot update field(s): ${forbidden.join(', ')}`, code: 'FORBIDDEN_FIELDS' });
 
   try {
     const existing = await getRoadmapsByOwner(userEmail);
-    if (!existing.some((r: any) => r.id === roadmapId)) return res.status(404).json({ error: 'Roadmap not found' });
+    if (!existing.some((r: any) => r.id === roadmapId)) return res.status(404).json({ error: 'Roadmap not found', code: 'ROADMAP_NOT_FOUND' });
 
     const roadmapPatch: any = {};
     for (const key of Object.keys(updates)) {
@@ -344,9 +363,6 @@ router.post('/update-roadmap', requireAuth, async (req, res) => {
       switch (key) {
         case 'title': roadmapPatch.title = uVal; break;
         case 'goal': roadmapPatch.goal = uVal; break;
-        case 'progressPercent': roadmapPatch.progressPercent = uVal; break;
-        case 'totalXp': roadmapPatch.totalXp = uVal; break;
-        case 'lessonsCompleted': roadmapPatch.lessonsCompleted = uVal; break;
         case 'hoursRemaining': roadmapPatch.hoursRemaining = uVal; break;
         case 'status': roadmapPatch.status = uVal; break;
         case 'resources':
@@ -370,15 +386,27 @@ router.post('/update-roadmap', requireAuth, async (req, res) => {
     const updated = await reconstructRoadmapJson(roadmapId, userEmail);
     return res.json({ success: true, roadmap: updated });
   } catch (error) {
-    console.error('Update roadmap error:', error);
-    return res.status(500).json({ error: 'Failed to update roadmap' });
+    logger.error({ err: error }, 'Update roadmap error');
+    return res.status(500).json({ error: 'Failed to update roadmap', code: 'ROADMAP_UPDATE_FAILED' });
   }
 });
 
 // Validate progression
 router.post('/validate-progression', requireAuth, async (req, res) => {
   const { roadmap } = req.body;
-  if (!roadmap) return res.status(400).json({ error: 'Roadmap data is required' });
+  if (!roadmap) return res.status(400).json({ error: 'Roadmap data is required', code: 'MISSING_ROADMAP' });
+
+  // Guard against crafted payloads with thousands of lessons causing O(N²) CPU spikes.
+  const phaseCount = Array.isArray(roadmap.phases) ? roadmap.phases.length : 0;
+  let totalLessonCount = 0;
+  for (const ph of roadmap.phases || []) {
+    for (const lv of ph.levels || []) {
+      totalLessonCount += Array.isArray(lv.lessons) ? lv.lessons.length : 0;
+    }
+  }
+  if (phaseCount > 20 || totalLessonCount > 2000) {
+    return res.status(400).json({ error: 'Roadmap exceeds maximum size for validation', code: 'ROADMAP_TOO_LARGE' });
+  }
 
   const validation = { hasGaps: false, gaps: [], prerequisitesMet: true, missingPrerequisites: [], quizMatchesContent: true, mismatchedQuizzes: [] };
 

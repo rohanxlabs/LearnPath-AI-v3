@@ -3,7 +3,8 @@ import { requireAuth, createLimiter } from '../lib/middleware';
 import { loadUserDB, saveUserDB, updateStreak, unlockAchievement, sql } from '../lib/db';
 import {
   getUserLessonCompletionStats,
-  getRoadmapProgressSnapshot
+  getRoadmapProgressSnapshot,
+  getQuizForLesson,
 } from '../db/queries';
 import { logger } from '../lib/logger';
 
@@ -91,8 +92,8 @@ router.post('/user-resource-states', requireAuth, async (req, res) => {
     await saveUserDB(userEmail, dbData);
     return res.json({ success: true });
   } catch (error) {
-    console.error('Save resource states error:', error);
-    return res.status(500).json({ error: 'Failed to save resource states' });
+    logger.error({ err: error }, 'Save resource states error');
+    return res.status(500).json({ error: 'Failed to save resource states', code: 'RESOURCE_SAVE_FAILED' });
   }
 });
 
@@ -117,13 +118,23 @@ router.put('/user-profile', requireAuth, async (req, res) => {
   const { profile, settings, notifications, chats } = req.body;
 
   const PROFILE_BLOCKLIST = ['xp', 'level', 'streak', 'isPro', 'email', 'createdAt', 'id', 'tier'];
+  // Maximum length for any single string value in the profile object.
+  // Prevents a user from submitting a multi-MB bio and bloating the JSONB column.
+  const PROFILE_STRING_MAX = 500;
   function sanitizeProfile(input: any): Record<string, any> | null {
     if (input === undefined || input === null) return null;
     if (typeof input !== 'object' || Array.isArray(input)) return {};
     const clean: Record<string, any> = {};
     for (const key of Object.keys(input)) {
       if (PROFILE_BLOCKLIST.includes(key)) continue;
-      clean[key] = input[key];
+      const val = input[key];
+      // Truncate strings; pass through other scalar types; drop nested objects/arrays.
+      if (typeof val === 'string') {
+        clean[key] = val.slice(0, PROFILE_STRING_MAX);
+      } else if (typeof val === 'number' || typeof val === 'boolean') {
+        clean[key] = val;
+      }
+      // Silently drop objects / arrays — they are not valid profile fields.
     }
     return clean;
   }
@@ -143,8 +154,8 @@ router.put('/user-profile', requireAuth, async (req, res) => {
     await saveUserDB(userEmail, dbData);
     return res.json({ success: true });
   } catch (error) {
-    console.error('Update user profile error:', error);
-    return res.status(500).json({ error: 'Failed to update profile' });
+    logger.error({ err: error }, 'Update user profile error');
+    return res.status(500).json({ error: 'Failed to update profile', code: 'PROFILE_UPDATE_FAILED' });
   }
 });
 
@@ -163,31 +174,51 @@ router.get('/topic-wise-quizzes', requireAuth, async (req, res) => {
 router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   const attempt = req.body;
-  if (!attempt || !attempt.quizId) return res.status(400).json({ error: 'quizId is required' });
+  if (!attempt || !attempt.quizId) return res.status(400).json({ error: 'quizId is required', code: 'MISSING_QUIZ_ID' });
 
   try {
+    // Determine the authoritative question count from the database.
+    // If the quiz exists in the DB, cap score against its actual length.
+    // For seed/topic quizzes not in the DB, use the client-supplied totalQuestions
+    // but still enforce score <= total so a crafted request cannot inflate counts.
+    const dbQuiz = await getQuizForLesson(attempt.quizId).catch(() => null);
+    const authoritativeTotal: number = dbQuiz && Array.isArray(dbQuiz.questions) && dbQuiz.questions.length > 0
+      ? dbQuiz.questions.length
+      : Math.max(0, Number(attempt.totalQuestions) || 0);
+    const sanitizedScore = Math.min(Math.max(0, Number(attempt.score) || 0), authoritativeTotal);
+
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
-    if (!dbData) return res.status(404).json({ error: 'User data not found' });
+    if (!dbData) return res.status(404).json({ error: 'User data not found', code: 'USER_NOT_FOUND' });
     const quizzes = dbData.topic_wise_quizzes || [];
     const idx = quizzes.findIndex((q: any) => q.quizId === attempt.quizId);
+    const sanitizedAttempt = {
+      id: attempt.id || `quiz-${Date.now()}`,
+      quizId: attempt.quizId,
+      quizName: attempt.quizName || 'Untitled Quiz',
+      score: sanitizedScore,
+      totalQuestions: authoritativeTotal,
+      attemptsCount: attempt.attemptsCount || 0,
+      lastAttemptedAt: attempt.lastAttemptedAt || new Date().toISOString(),
+    };
     if (idx >= 0) {
-      quizzes[idx] = { ...quizzes[idx], ...attempt };
+      quizzes[idx] = { ...quizzes[idx], ...sanitizedAttempt };
     } else {
-      quizzes.push({ ...attempt, id: attempt.id || `quiz-${Date.now()}`, quizId: attempt.quizId, quizName: attempt.quizName || 'Untitled Quiz', score: attempt.score || 0, totalQuestions: attempt.totalQuestions || 0, attemptsCount: attempt.attemptsCount || 0, lastAttemptedAt: attempt.lastAttemptedAt || new Date().toISOString() });
+      quizzes.push(sanitizedAttempt);
     }
     dbData.topic_wise_quizzes = quizzes;
     await saveUserDB(userEmail, dbData);
 
     // Unlock "Quiz Master" achievement when user scores 100% on any quiz.
+    // Uses sanitizedScore and authoritativeTotal so the check cannot be spoofed.
     let newAchievement: { id: string; name: string; icon: string; xpReward: number } | null = null;
-    if (attempt.totalQuestions > 0 && attempt.score === attempt.totalQuestions) {
+    if (authoritativeTotal > 0 && sanitizedScore === authoritativeTotal) {
       newAchievement = await unlockAchievement(userEmail, 'ach-2');
     }
 
     return res.json({ success: true, attempt: quizzes[idx >= 0 ? idx : quizzes.length - 1], newAchievement });
   } catch (error) {
-    console.error('Upsert topic wise quiz error:', error);
-    return res.status(500).json({ error: 'Failed to save quiz attempt' });
+    logger.error({ err: error }, 'Upsert topic wise quiz error');
+    return res.status(500).json({ error: 'Failed to save quiz attempt', code: 'QUIZ_SAVE_FAILED' });
   }
 });
 
@@ -195,18 +226,18 @@ router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
 router.post('/progress', requireAuth, async (req, res) => {
   const { roadmapId, lessonId, action } = req.body;
   const userEmail = req.supabaseUser!.email;
-  if (!roadmapId || !lessonId) return res.status(400).json({ error: 'roadmapId and lessonId are required' });
+  if (!roadmapId || !lessonId) return res.status(400).json({ error: 'roadmapId and lessonId are required', code: 'MISSING_IDS' });
 
   // dynamic import to avoid circular deps
   const { findLessonContext, completeLessonForUser, getRoadmapState, upsertRoadmapState, getRoadmapById } = await import('../db/queries');
 
   try {
     const lessonCtx = await findLessonContext(lessonId);
-    if (!lessonCtx || lessonCtx.roadmap_id !== roadmapId) return res.status(404).json({ error: 'Lesson or roadmap not found' });
+    if (!lessonCtx || lessonCtx.roadmap_id !== roadmapId) return res.status(404).json({ error: 'Lesson or roadmap not found', code: 'LESSON_OR_ROADMAP_NOT_FOUND' });
     // Do not let a valid lesson/roadmap pair from another account mutate this
     // user's progress rows or the roadmap's aggregate counters.
     if (!await getRoadmapById(roadmapId, userEmail)) {
-      return res.status(404).json({ error: 'Lesson or roadmap not found' });
+      return res.status(404).json({ error: 'Lesson or roadmap not found', code: 'LESSON_OR_ROADMAP_NOT_FOUND' });
     }
 
     if (action === 'complete') {
@@ -223,8 +254,8 @@ router.post('/progress', requireAuth, async (req, res) => {
     const progress = await getRoadmapProgressSnapshot(userEmail, roadmapId);
     return res.json({ success: true, progress });
   } catch (error: any) {
-    console.error('Progress tracking error:', error);
-    return res.status(500).json({ error: 'Failed to update progress' });
+    logger.error({ err: error }, 'Progress tracking error');
+    return res.status(500).json({ error: 'Failed to update progress', code: 'PROGRESS_UPDATE_FAILED' });
   }
 });
 
@@ -238,7 +269,7 @@ function sanitizeFeedbackText(raw: unknown, maxLen: number): string {
 router.post('/feedback', requireAuth, feedbackLimiter, async (req, res) => {
   const { sentiment, message, context } = req.body;
   if (!sentiment || !['positive', 'neutral', 'negative'].includes(sentiment)) {
-    return res.status(400).json({ error: 'Valid sentiment is required' });
+    return res.status(400).json({ error: 'Valid sentiment is required', code: 'INVALID_SENTIMENT' });
   }
   try {
     const userEmail = req.supabaseUser!.email;
@@ -256,10 +287,16 @@ router.get('/progress/:roadmapId', requireAuth, async (req, res) => {
   const { roadmapId } = req.params;
   const userEmail = req.supabaseUser!.email;
   try {
+    // Ownership check — getRoadmapProgressSnapshot is keyed by ownerEmail so it
+    // already scopes to the requesting user; no cross-user data can leak here.
+    // Confirm roadmap exists and belongs to this user before any DB query.
+    const { getRoadmapById } = await import('../db/queries');
+    const owned = await getRoadmapById(roadmapId, userEmail);
+    if (!owned) return res.status(404).json({ error: 'Roadmap not found', code: 'ROADMAP_NOT_FOUND' });
     const progress = await getRoadmapProgressSnapshot(userEmail, roadmapId);
     return res.json({ progress });
   } catch (error: any) {
-    console.error('Get progress error:', error);
+    logger.error({ err: error }, 'Get progress error');
     return res.json({ progress: null });
   }
 });
@@ -279,17 +316,18 @@ router.get('/user-analytics', requireAuth, async (req, res) => {
 
     const rows = await sql`
       SELECT
-        DATE(completed_at) AS day,
+        DATE(completed_at AT TIME ZONE 'UTC') AS day,
         COALESCE(SUM(study_minutes), 0) AS total_minutes
       FROM user_lesson_progress
       WHERE owner_email = ${userEmail.toLowerCase()}
         AND completed_at >= NOW() - INTERVAL '7 days'
         AND completed = TRUE
-      GROUP BY DATE(completed_at)
+      GROUP BY DATE(completed_at AT TIME ZONE 'UTC')
     `.catch(() => [] as any[]);
 
     const minutesByDay: Record<string, number> = {};
     for (const row of rows) {
+      // `DATE(... AT TIME ZONE 'UTC')` returns a date string in YYYY-MM-DD format.
       const dayStr = typeof row.day === 'string' ? row.day : new Date(row.day).toISOString().split('T')[0];
       minutesByDay[dayStr] = Number(row.total_minutes) || 0;
     }
@@ -306,7 +344,7 @@ router.get('/user-analytics', requireAuth, async (req, res) => {
 
     return res.json({ weeklyHoursPerDay, overallMasteryPercent });
   } catch (error) {
-    console.error('User analytics error:', error);
+    logger.error({ err: error }, 'User analytics error');
     return res.json({ weeklyHoursPerDay: [0, 0, 0, 0, 0, 0, 0], overallMasteryPercent: 0 });
   }
 });

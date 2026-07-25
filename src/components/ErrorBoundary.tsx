@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 import { RefreshCw, AlertTriangle, Send, Check } from 'lucide-react';
 import { buttonStyles, glassCardClass } from '../styles/theme';
 
@@ -35,7 +36,10 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleReportIssue = () => {
-    console.info('[ErrorBoundary] Issue reported by user:', this.state.error?.message);
+    if (this.state.error) {
+      // Send to Sentry when configured; falls back silently when DSN is absent.
+      Sentry.captureException(this.state.error, { tags: { source: 'ErrorBoundary' } });
+    }
     this.setState({ reported: true });
   };
 
@@ -69,7 +73,8 @@ export class ErrorBoundary extends Component<Props, State> {
               {this.state.reported ? <><Check className="w-4 h-4" /> Reported</> : <><Send className="w-4 h-4" /> Report Issue</>}
             </button>
           </div>
-          {this.state.error && (
+          {/* Stack trace is only shown in development — never in production builds. */}
+          {import.meta.env.DEV && this.state.error && (
             <details className="mt-6 max-w-lg w-full">
               <summary className="text-xs text-zinc-500 cursor-pointer">Technical details</summary>
               <pre className="mt-2 text-xs text-red-400 text-left max-w-lg overflow-auto bg-white/5 p-3 rounded-lg border border-white/10">

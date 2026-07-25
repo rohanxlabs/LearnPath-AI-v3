@@ -8,6 +8,7 @@ import {
 } from '../db/queries';
 import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt, GROQ_MODELS } from './ai';
 import { sql } from './db';
+import { logger } from './logger';
 
 // ---------------------------------------------------------------------------
 // Subject detection
@@ -246,21 +247,21 @@ export async function generateLessonContent(ctx: {
       if (sectionsFound > bestSections) { bestSections = sectionsFound; bestMarkdown = md; }
       if (ok) {
         const summary = extractLessonSummary(md);
-        console.log(`[Lesson-Gen] ${ctx.lessonId} generated (${subject}, ${sectionsFound}/11 sections, attempt ${attempt + 1}).`);
+        logger.info({ lessonId: ctx.lessonId, subject, sectionsFound, attempt: attempt + 1 }, '[Lesson-Gen] Generated');
         return { markdown: md, summary, modelUsed: GROQ_MODELS[0] };
       }
-      console.warn(`[Lesson-Gen] ${ctx.lessonId} attempt ${attempt + 1} incomplete (${sectionsFound}/11 sections).`);
+      logger.warn({ lessonId: ctx.lessonId, sectionsFound, attempt: attempt + 1 }, '[Lesson-Gen] Attempt incomplete');
     } catch (err: any) {
-      console.warn(`[Lesson-Gen] ${ctx.lessonId} attempt ${attempt + 1} failed:`, err.message);
+      logger.warn({ lessonId: ctx.lessonId, attempt: attempt + 1, err: err.message }, '[Lesson-Gen] Attempt failed');
     }
   }
 
   if (bestSections >= 6 && bestMarkdown) {
-    console.warn(`[Lesson-Gen] ${ctx.lessonId} using best partial content (${bestSections}/11 sections).`);
+    logger.warn({ lessonId: ctx.lessonId, bestSections }, '[Lesson-Gen] Using best partial content');
     return { markdown: bestMarkdown, summary: extractLessonSummary(bestMarkdown), modelUsed: GROQ_MODELS[0] };
   }
 
-  console.warn(`[Lesson-Gen] ${ctx.lessonId} falling back to offline lesson template.`);
+  logger.warn({ lessonId: ctx.lessonId }, '[Lesson-Gen] Falling back to offline template');
   const fallback = buildFallbackLessonMarkdown(ctx);
   return { markdown: fallback, summary: extractLessonSummary(fallback), modelUsed: 'offline-fallback' };
 }
@@ -352,14 +353,21 @@ type LessonContentCacheEntry = {
 };
 
 const LESSON_CONTENT_CACHE_TTL = 30 * 60 * 1000; // 30 min — survives short redeploys and browser tab switches
-const LESSON_CONTENT_CACHE_MAX = 500;
+// Lowered from 500 to 100: each entry stores ~5 KB of markdown.
+// 100 entries ≈ 500 KB max, safe on Render's 512 MB free-tier instances.
+const LESSON_CONTENT_CACHE_MAX = 100;
 const lessonContentCache = new Map<string, LessonContentCacheEntry>();
 
-function evictLessonContentCacheIfNeeded(): void {
-  if (lessonContentCache.size <= LESSON_CONTENT_CACHE_MAX) return;
-  const entries = [...lessonContentCache.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed);
-  const overflow = lessonContentCache.size - LESSON_CONTENT_CACHE_MAX;
-  for (let i = 0; i < overflow; i++) lessonContentCache.delete(entries[i][0]);
+// Evict the single LRU entry whenever the cache is at or above the ceiling.
+// Called on every set so the map never exceeds LESSON_CONTENT_CACHE_MAX.
+function evictLessonContentCacheLRU(): void {
+  if (lessonContentCache.size < LESSON_CONTENT_CACHE_MAX) return;
+  let oldestKey = '';
+  let oldestUsed = Infinity;
+  for (const [key, entry] of lessonContentCache) {
+    if (entry.lastUsed < oldestUsed) { oldestUsed = entry.lastUsed; oldestKey = key; }
+  }
+  if (oldestKey) lessonContentCache.delete(oldestKey);
 }
 
 function getCachedLessonContent(lessonId: string): LessonContentCacheEntry | null {
@@ -372,8 +380,9 @@ function getCachedLessonContent(lessonId: string): LessonContentCacheEntry | nul
 
 function setCachedLessonContent(lessonId: string, entry: Omit<LessonContentCacheEntry, 'timestamp' | 'lastUsed'>): void {
   const now = Date.now();
+  // Evict before inserting so the map size never exceeds the ceiling.
+  if (!lessonContentCache.has(lessonId)) evictLessonContentCacheLRU();
   lessonContentCache.set(lessonId, { ...entry, timestamp: now, lastUsed: now });
-  evictLessonContentCacheIfNeeded();
 }
 
 export function clearLessonContentCacheEntry(lessonId: string): void {
@@ -393,7 +402,7 @@ export async function recordLessonOpened(ownerEmail: string, ctx: { lessonId: st
     await incrementLessonAttempts(ownerEmail, ctx.lessonId, ctx.moduleId, ctx.phaseId, ctx.roadmapId);
     return new Date().toISOString();
   } catch (err: any) {
-    console.warn('[Lesson-Progress] failed to record open:', err?.message || err);
+    logger.warn({ err: err?.message || err }, '[Lesson-Progress] failed to record open');
     return null;
   }
 }
@@ -553,7 +562,7 @@ Output must be a JSON array of questions:
     }
     return [];
   } catch (error: any) {
-    console.error('OpenRouter Dynamic Quiz error fallback:', error.message);
+    logger.error({ err: error.message }, '[Quiz-Gen] Dynamic quiz error fallback');
     return [
       { id: 'q-dyn-1', question: `In modern ${topicName} development, what is the best strategy to prevent overfitting on local batches?`, options: ['Add a customized L2 parameter regularization / Dropout layers', 'Repeatedly double the training epochs without validation evaluation', 'Set learning rates to 1.0 to quicken gradient steps', 'Strictly remove all activation transformations'], correctIndex: 0, explanation: 'Dropout randomly deactivates neural paths to prevent multi-node correlation dependencies, while L2 regularization penalizes heavy weights, forcing lower weights and safer boundaries.' },
       { id: 'q-dyn-2', question: `What metric is most typically measured to analyze operational performance in a high-concurrency environment?`, options: ['Average token-generation latency (Time-to-First-Token)', 'The storage volume of raw log exports inside system margins', 'Absolute color hex contrast saturation percentages', 'The count of text lines written in config packages'], correctIndex: 0, explanation: 'Time-to-First-Token (TTFT) and token-generation throughput rate characterize model reactivity speed for client requests.' },
@@ -571,7 +580,7 @@ export async function getOrGenerateQuizForLesson(lesson: any): Promise<{ id: str
     await upsertQuiz({ id: quizId, lessonId: lesson.id, moduleId: lesson.module_id, phaseId: lesson.phase_id, roadmapId: lesson.roadmap_id, title: `${lesson.title} Quiz`, questions });
     return { id: quizId, title: `${lesson.title} Quiz`, questions };
   } catch (err: any) {
-    console.warn('[Quiz-Gen] failed to get/generate quiz for lesson:', err?.message || err);
+    logger.warn({ err: err?.message || err }, '[Quiz-Gen] Failed to get/generate quiz');
     return null;
   }
 }
@@ -602,7 +611,7 @@ export async function findYouTubeVideoForTopic(topicName: string): Promise<{ vid
     youtubeVideoCache.set(cacheKey, { videoId, title, fetchedAt: Date.now() });
     return { videoId, title, searchUrl };
   } catch (err: any) {
-    console.warn('[YouTube] lookup failed, falling back to search link:', err?.message || err);
+    logger.warn({ err: err?.message || err }, '[YouTube] Lookup failed, falling back to search link');
     return { videoId: null, title: null, searchUrl };
   }
 }

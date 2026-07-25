@@ -174,7 +174,7 @@ export async function callGroqChatCompletion(
     } catch (error: any) {
       lastError = error;
       const reason = error.name === 'AbortError' ? `timed out after ${Math.round(timeoutMs / 1000)}s` : error.message;
-      console.warn(`[Model Fallback] Groq model ${model} failed:`, reason);
+      logger.warn({ model, reason }, '[Model Fallback] Groq model failed');
     }
   }
 

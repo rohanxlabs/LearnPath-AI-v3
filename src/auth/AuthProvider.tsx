@@ -32,21 +32,53 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
   const clear = useCallback(() => { setIsAuthenticated(false); setProfile(createEmptyProfile()); setSettings(DEFAULT_SETTINGS); setAchievements([]); setNotifications([]); setChats([]); setActivityLog({}); }, []);
   const bootstrap = useCallback(async (email: string) => {
     if (booting.current) return; booting.current = true;
-    try {
-      const response = await fetch('/api/bootstrap', { headers: await getAuthHeaders() });
-      if (!response.ok) throw new Error('bootstrap failed');
-      const data = await response.json(); const user = (await supabase.auth.getUser()).data.user;
-      const resolved = { ...createEmptyProfile(email, user?.user_metadata?.full_name || user?.user_metadata?.name || ''), ...(data.profile || {}) };
-      // Bootstrap creates the database row idempotently. Persist the resolved
-      // profile now so the registered name is available immediately.
-      void fetch('/api/user-profile', {
-        method: 'PUT', headers: await getAuthHeaders(),
-        body: JSON.stringify({ profile: resolved, settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) } }),
-      }).catch(() => undefined);
-      setProfile(resolved); setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) }); setAchievements(data.achievements || []);
-      setNotifications(data.notifications || []); setChats(data.chats || []); setActivityLog(data.activityLog || {}); setIsAuthenticated(true);
-      identify(email, { name: resolved.name }); onAuthenticated({ ...data, email, profile: resolved });
-    } catch { clear(); } finally { booting.current = false; setIsLoadingAuth(false); }
+
+    // Retry /api/bootstrap up to 3 times on transient server errors (503/502/504).
+    // Only call clear() on a definitive auth failure (401/403) — a transient DB
+    // hiccup must not log the user out and destroy in-memory state.
+    const MAX_ATTEMPTS = 3;
+    let lastStatus = 0;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const response = await fetch('/api/bootstrap', { headers: await getAuthHeaders() });
+        lastStatus = response.status;
+
+        if (response.ok) {
+          const data = await response.json();
+          const user = (await supabase.auth.getUser()).data.user;
+          const resolved = { ...createEmptyProfile(email, user?.user_metadata?.full_name || user?.user_metadata?.name || ''), ...(data.profile || {}) };
+          // Bootstrap creates the database row idempotently. Persist the resolved
+          // profile now so the registered name is available immediately.
+          void fetch('/api/user-profile', {
+            method: 'PUT', headers: await getAuthHeaders(),
+            body: JSON.stringify({ profile: resolved, settings: { ...DEFAULT_SETTINGS, ...(data.settings || {}) } }),
+          }).catch(() => undefined);
+          setProfile(resolved); setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) }); setAchievements(data.achievements || []);
+          setNotifications(data.notifications || []); setChats(data.chats || []); setActivityLog(data.activityLog || {}); setIsAuthenticated(true);
+          identify(email, { name: resolved.name }); onAuthenticated({ ...data, email, profile: resolved });
+          booting.current = false; setIsLoadingAuth(false);
+          return;
+        }
+
+        // 401/403 = definitively not authenticated — stop retrying.
+        if (response.status === 401 || response.status === 403) break;
+
+        // 5xx = transient — wait then retry (except on last attempt).
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
+      } catch {
+        // Network error — retry unless last attempt.
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
+      }
+    }
+
+    // All attempts exhausted or auth error — only clear if definitively unauthorised.
+    if (lastStatus === 401 || lastStatus === 403) clear();
+    // Otherwise leave any existing state intact so a refresh can recover.
+    booting.current = false; setIsLoadingAuth(false);
   }, [clear, identify, onAuthenticated]);
 
   useEffect(() => {
@@ -61,12 +93,22 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
     return () => subscription.unsubscribe();
   }, [bootstrap, clear]);
 
+  // Auto-save profile, settings, activityLog, and notifications on a generous
+  // debounce.  Chats are intentionally excluded here — they are persisted on
+  // logout via handleLogout → fullSave() so the full payload is preserved,
+  // but they should not trigger a PUT on every AI mentor message.
   const save = useCallback(async () => {
+    if (!isAuthenticated) return;
+    await fetch('/api/user-profile', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ profile, settings, achievements, notifications, activityLog }) });
+  }, [isAuthenticated, profile, settings, achievements, notifications, activityLog]);
+  useEffect(() => { const timer = setTimeout(() => void save().catch(() => undefined), 8000); return () => clearTimeout(timer); }, [save]);
+
+  // Full save (including chats) used on explicit logout only.
+  const fullSave = useCallback(async () => {
     if (!isAuthenticated) return;
     await fetch('/api/user-profile', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ profile, settings, achievements, notifications, activityLog, chats }) });
   }, [isAuthenticated, profile, settings, achievements, notifications, activityLog, chats]);
-  useEffect(() => { const timer = setTimeout(() => void save().catch(() => undefined), 1000); return () => clearTimeout(timer); }, [save]);
 
-  const handleLogout = useCallback(async () => { await save().catch(() => undefined); await authService.signOut(); clear(); onLoggedOut(); }, [clear, onLoggedOut, save]);
+  const handleLogout = useCallback(async () => { await fullSave().catch(() => undefined); await authService.signOut(); clear(); onLoggedOut(); }, [clear, onLoggedOut, fullSave]);
   return <AuthContext.Provider value={{ isAuthenticated, isLoadingAuth, profile, setProfile, settings, setSettings, achievements, setAchievements, notifications, setNotifications, chats, setChats, activityLog, setActivityLog, handleLogout, mutatingHeaders: getAuthHeaders, getStoredUserEmail: () => profile.email }}>{children}</AuthContext.Provider>;
 }

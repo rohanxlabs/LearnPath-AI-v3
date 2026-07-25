@@ -1,14 +1,28 @@
 import { Router } from 'express';
-import { requireAuth, aiLimiter } from '../lib/middleware';
+import { ipKeyGenerator } from 'express-rate-limit';
+import { requireAuth, aiLimiter, createLimiter } from '../lib/middleware';
 import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt } from '../lib/ai';
-import { recCache, REC_CACHE_TTL } from '../lib/db';
+import { recCache, REC_CACHE_TTL, cacheSet } from '../lib/db';
+import { logger } from '../lib/logger';
 
 const router = Router();
 
+// Global IP-keyed guard applied to every route in this router, before auth.
+// Prevents a bad actor with many accounts from exhausting the Groq budget:
+// per-user limit is 10 req/min, but without an IP cap N accounts = N×10 req/min
+// from one IP. 60 req/min per IP covers up to 6 simultaneous legitimate users.
+const globalAiIpLimiter = createLimiter({
+  windowMs: 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 10000 : 60,
+  message: { error: 'Too many AI requests from this IP. Please slow down.' },
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ''),
+});
+router.use(globalAiIpLimiter);
+
 // Generate projects
-router.post('/generate-projects', aiLimiter, requireAuth, async (req, res) => {
+router.post('/generate-projects', requireAuth, aiLimiter, async (req, res) => {
   const { goal, phases } = req.body;
-  if (!goal) return res.status(400).json({ error: 'Goal is required for project generation' });
+  if (!goal) return res.status(400).json({ error: 'Goal is required for project generation', code: 'MISSING_GOAL' });
 
   const prompt = `
 Generate 3-5 hands-on project ideas for this learning goal: "${sanitizeForPrompt(goal)}".
@@ -46,7 +60,7 @@ Rules:
     );
     return res.json({ projects });
   } catch (error: any) {
-    console.error('[AI-Fallback] /api/generate-projects fallback:', error.message);
+    logger.error({ err: error.message }, '[AI] generate-projects fallback');
     // Return empty array — the roadmap already has embedded phase projects.
     // Better to show nothing than random unrelated project ideas.
     return res.json({ projects: [] });
@@ -54,10 +68,10 @@ Rules:
 });
 
 // AI Mentor Chat
-router.post('/mentor-chat', aiLimiter, requireAuth, async (req, res) => {
+router.post('/mentor-chat', requireAuth, aiLimiter, async (req, res) => {
   const { message, history } = req.body;
   if (typeof message !== 'string' || !message.trim()) {
-    return res.status(400).json({ error: 'Message payload is required' });
+    return res.status(400).json({ error: 'Message payload is required', code: 'MISSING_MESSAGE' });
   }
 
   try {
@@ -101,7 +115,7 @@ Use clean formatting without markdown symbols like ** or ##.`;
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' });
     res.end(responseText);
   } catch (error: any) {
-    console.error('OpenRouter Chat Error:', error.message);
+    logger.error({ err: error.message }, '[AI] mentor-chat error');
     const q = sanitizeForPrompt(message, 200);
     const lc = message.toLowerCase();
 
@@ -167,9 +181,9 @@ function detectLanguage(instructions: string): string {
 }
 
 // Analyze code
-router.post('/analyze-code', aiLimiter, requireAuth, async (req, res) => {
+router.post('/analyze-code', requireAuth, aiLimiter, async (req, res) => {
   const { code, instructions, solution } = req.body;
-  if (!code) return res.status(400).json({ error: 'Code parameter is required' });
+  if (!code) return res.status(400).json({ error: 'Code parameter is required', code: 'MISSING_CODE' });
 
   const language = detectLanguage(instructions || '');
   const prompt = `Analyze the user's ${language} code submitted for the following exercise:
@@ -192,13 +206,13 @@ Concoct your response as a valid JSON object matching this structure:
     const response = await callGroqChatCompletion(prompt, { temperature: 0.3, asJSON: true });
     return res.json(cleanAndParseJSON(response, '{}'));
   } catch (error: any) {
-    console.error('OpenRouter Code Analysis fallback activation:', error.message);
+    logger.error({ err: error.message }, '[AI] analyze-code fallback');
     return res.json({ passed: false, systemError: true, suggestions: '', explanation: 'Verification service unavailable. Please retry.' });
   }
 });
 
 // AI Recommendations
-router.post('/ai-recommendations', aiLimiter, requireAuth, async (req, res) => {
+router.post('/ai-recommendations', requireAuth, aiLimiter, async (req, res) => {
   const { currentXp, level, streak, activeGoal } = req.body;
   const userEmail = req.supabaseUser!.email;
 
@@ -227,10 +241,10 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
   try {
     const response = await callGroqChatCompletion(prompt, { temperature: 0.8, asJSON: true });
     const parsed = cleanAndParseJSON(response, '[]');
-    recCache.set(cacheKey, { data: parsed, timestamp: Date.now() });
+    cacheSet(recCache, cacheKey, { data: parsed, timestamp: Date.now() });
     return res.json(parsed);
   } catch (error: any) {
-    console.error('OpenRouter recommendations fallback:', error.message);
+    logger.error({ err: error.message }, '[AI] recommendations fallback');
     // Goal-aware fallback recs: derive action titles from the activeGoal string
     const goal = sanitizeForPrompt(activeGoal || '', 120);
     const goalLabel = goal || 'your learning goal';
@@ -260,16 +274,16 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
         difficulty: 'Easy',
       },
     ];
-    recCache.set(cacheKey, { data: fallback, timestamp: Date.now() });
+    cacheSet(recCache, cacheKey, { data: fallback, timestamp: Date.now() });
     return res.json(fallback);
   }
 });
 
 // Dynamic Topic Overview
-router.post('/generate-topic-overview', aiLimiter, requireAuth, async (req, res) => {
+router.post('/generate-topic-overview', requireAuth, aiLimiter, async (req, res) => {
   const { topicName, roadmapContext } = req.body;
   if (typeof topicName !== 'string' || !topicName.trim()) {
-    return res.status(400).json({ error: 'Topic name is required' });
+    return res.status(400).json({ error: 'Topic name is required', code: 'MISSING_TOPIC' });
   }
 
   const prompt = `Generate a structured, engaging learner overview for the topic "${sanitizeForPrompt(topicName, 500)}" within the learning domain of "${sanitizeForPrompt(roadmapContext || 'AI and Programming', 500)}".
@@ -289,7 +303,7 @@ Output MUST be a valid JSON object matching this schema:
     const response = await callGroqChatCompletion(prompt, { temperature: 0.6, asJSON: true });
     return res.json(cleanAndParseJSON(response, '{}'));
   } catch (error: any) {
-    console.warn('OpenRouter Topic Overview generator fallback:', error.message);
+    logger.warn({ err: error.message }, '[AI] topic-overview fallback');
     return res.json({
       what: `This module delivers the core logical paradigms and mathematical definitions behind ${topicName}.`,
       why: `Completing this section establishes the fundamental framework necessary to debug and scale complex code in ${roadmapContext || 'this domain'}.`,
@@ -299,9 +313,9 @@ Output MUST be a valid JSON object matching this schema:
 });
 
 // Progressive Hints
-router.post('/generate-hints', aiLimiter, requireAuth, async (req, res) => {
+router.post('/generate-hints', requireAuth, aiLimiter, async (req, res) => {
   const { lessonContent, attemptNumber } = req.body;
-  if (!lessonContent) return res.status(400).json({ error: 'Lesson content is required' });
+  if (!lessonContent) return res.status(400).json({ error: 'Lesson content is required', code: 'MISSING_CONTENT' });
 
   const prompt = `Generate scaffolded hints for this learning exercise: "${sanitizeForPrompt(lessonContent, 1000)}".
 
@@ -331,13 +345,13 @@ Level ${attemptNumber || 1} is requested. Keep hints educational, not giving awa
     }
     return res.json(parsed);
   } catch (error: any) {
-    console.error('Hints generation fallback:', error.message);
+    logger.error({ err: error.message }, '[AI] hints fallback');
     return res.json({ hints: [{ level: 1, type: 'conceptual', text: 'Focus on the core concept being taught.' }, { level: 2, type: 'syntax', text: 'Think about the key syntax patterns.' }], hintCostXp: 10 });
   }
 });
 
 // AI Progress Summary — used by AIInsightsTab for the narrative summary card
-router.post('/ai-summary', aiLimiter, requireAuth, async (req, res) => {
+router.post('/ai-summary', requireAuth, aiLimiter, async (req, res) => {
   const { roadmapGoal, progressPercent, completedLessons, totalLessons, activePhase, topSkills } = req.body;
   const userEmail = req.supabaseUser!.email;
 
@@ -358,10 +372,10 @@ Return ONLY the summary text (no JSON, no preamble).`;
   try {
     const text = await callGroqChatCompletion(prompt, { temperature: 0.65, asJSON: false, maxTokens: 150 });
     const data = { summary: text.trim() };
-    recCache.set(cacheKey, { data, timestamp: Date.now() });
+    cacheSet(recCache, cacheKey, { data, timestamp: Date.now() });
     return res.json(data);
   } catch (error: any) {
-    console.warn('[AI Summary] fallback:', error.message);
+    logger.warn({ err: error.message }, '[AI] ai-summary fallback');
     const pct = progressPercent || 0;
     const summary = pct < 30
       ? `You're building the foundations for ${sanitizeForPrompt(roadmapGoal || 'your goal', 60)}. Keep momentum by completing one lesson today.`

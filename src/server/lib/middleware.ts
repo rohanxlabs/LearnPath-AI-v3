@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createPublicKey } from 'node:crypto';
 import express from 'express';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import { logger } from './logger';
 
@@ -263,20 +263,50 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function isValidEmail(email: string): boolean {
   return typeof email === 'string' && EMAIL_RE.test(email) && email.length <= 254;
 }
-// A small blocklist of the most commonly used passwords that pass the basic
-// letter+digit rule but should still be rejected for obvious guessability.
+// A small blocklist of the most commonly used passwords that pass character-class
+// rules but should be rejected for obvious guessability.
 const COMMON_PASSWORDS = new Set([
   'password1', 'Password1', 'password12', 'Password12',
   'qwerty123', 'Qwerty123', '12345678a', '123456789a',
   'abc12345', 'Abc12345', 'letmein1', 'welcome1',
   'monkey123', 'dragon12', 'master12', 'passw0rd',
+  'Passw0rd!', 'P@ssword1', 'P@ssw0rd', 'Welcome1!',
+  'Admin123!', 'admin123!', 'Football1', 'Baseball1',
 ]);
+
+/**
+ * Measures how many distinct character classes a password uses.
+ * Returns a number 0–4: lowercase, uppercase, digit, special.
+ */
+function passwordCharsetScore(password: string): number {
+  let score = 0;
+  if (/[a-z]/.test(password)) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^a-zA-Z0-9]/.test(password)) score++;
+  return score;
+}
 
 export function validatePassword(password: string): string | null {
   if (typeof password !== 'string') return 'Password is required';
   if (password.length < 10) return 'Password must be at least 10 characters';
   if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
     return 'Password must contain at least one letter and one number';
+  }
+  // Require at least one special character so purely alphanumeric passwords
+  // with a predictable structure (e.g. "Password1") cannot pass.
+  if (!/[^a-zA-Z0-9]/.test(password)) {
+    return 'Password must contain at least one special character (e.g. !, @, #, $)';
+  }
+  // Reject passwords that are mostly repeated characters (e.g. "aaaaaaaaaa!1").
+  const uniqueChars = new Set(password).size;
+  if (uniqueChars < 5) {
+    return 'Password is too repetitive — use a greater variety of characters';
+  }
+  // Charset diversity: lowercase + uppercase + digit + special = 4 classes.
+  // Require at least 3 distinct classes for adequate entropy.
+  if (passwordCharsetScore(password) < 3) {
+    return 'Password must use at least 3 character types (lowercase, uppercase, digit, or special)';
   }
   if (COMMON_PASSWORDS.has(password)) {
     return 'Password is too common — please choose a less predictable one';
@@ -291,12 +321,15 @@ export function validatePassword(password: string): string | null {
 /**
  * Create an express-rate-limit instance.
  * Pass a `store` to use a shared (e.g. Redis) store; omit for in-memory.
+ * Pass a `keyGenerator` to override the default IP-based key — use this to
+ * key by authenticated user ID so each user has their own independent bucket.
  */
 export function createLimiter(opts: {
   windowMs: number;
   max: number;
   message: { error: string };
   store?: any;
+  keyGenerator?: (req: express.Request) => string;
 }): ReturnType<typeof rateLimit> {
   return rateLimit({
     windowMs: opts.windowMs,
@@ -304,22 +337,46 @@ export function createLimiter(opts: {
     standardHeaders: true,
     legacyHeaders: false,
     message: opts.message,
-    ...(opts.store ? { store: opts.store } : {})
+    ...(opts.store ? { store: opts.store } : {}),
+    ...(opts.keyGenerator ? { keyGenerator: opts.keyGenerator } : {}),
   });
 }
 
-// AI and lesson limiters are per-process / per-IP and don't need Redis upgrade.
+// AI limiter — keyed by authenticated user ID so each user has their own
+// independent 10-req/min bucket.  Falls back to IP for unauthenticated requests
+// (shouldn't reach here since requireAuth runs first on all AI routes).
 export const aiLimiter = createLimiter({
   windowMs: 60 * 1000,
   max: 10,
-  message: { error: 'Too many requests, please slow down.' }
+  message: { error: 'Too many requests, please slow down.' },
+  // Key by authenticated user ID — each user has their own independent bucket.
+  // Falls back to ipKeyGenerator(req.ip) which normalises IPv6 addresses
+  // correctly (required by express-rate-limit v8 when using a custom keyGenerator).
+  keyGenerator: (req: express.Request) =>
+    req.supabaseUser?.id ?? ipKeyGenerator(req.ip ?? ''),
 });
 
-// 30 lesson completions per minute per IP — prevents XP farming via rapid-fire requests.
+// Roadmap generation limiter — keyed by user ID, max 3 generations per hour.
+// Roadmap creation is the most expensive AI call: up to 3 LLM retries, each
+// producing a large JSON payload, followed by hundreds of DB inserts.
+// 3/hour per user keeps costs predictable while not blocking normal usage.
+export const roadmapGenLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: process.env.NODE_ENV === 'test' ? 1000 : 3,
+  message: { error: 'Roadmap generation limit reached. You can generate up to 3 roadmaps per hour.' },
+  keyGenerator: (req: express.Request) =>
+    req.supabaseUser?.id ?? ipKeyGenerator(req.ip ?? ''),
+});
+
+// 30 lesson completions per minute per user — prevents XP farming via rapid-fire requests.
+// Keyed by authenticated user ID (same as aiLimiter) so the bucket is per-user,
+// not per-IP — shared IPs (NAT, VPN) cannot be used to bypass the limit.
 export const lessonLimiter = createLimiter({
   windowMs: 60 * 1000,
   max: process.env.NODE_ENV === 'test' ? 1000 : 30,
-  message: { error: 'Too many lesson completions. Please slow down.' }
+  message: { error: 'Too many lesson completions. Please slow down.' },
+  keyGenerator: (req: express.Request) =>
+    req.supabaseUser?.id ?? ipKeyGenerator(req.ip ?? ''),
 });
 
 /**
