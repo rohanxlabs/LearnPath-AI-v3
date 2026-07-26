@@ -1,8 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Trophy, Zap, ChevronRight, X } from 'lucide-react';
 import { Phase } from '../types';
 import { ConfettiParticles } from './ConfettiParticles';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface PhaseCompletionModalProps {
   phase: Phase;
@@ -13,6 +14,9 @@ interface PhaseCompletionModalProps {
 }
 
 export function PhaseCompletionModal({ phase, nextPhase, xpEarned, onContinue, onDismiss }: PhaseCompletionModalProps) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(modalRef, true);
+
   // Close on ESC
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onDismiss(); };
@@ -40,12 +44,18 @@ export function PhaseCompletionModal({ phase, nextPhase, xpEarned, onContinue, o
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 10 }}
           transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-          className="relative z-10 w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl p-8 text-center shadow-2xl border border-zinc-200 dark:border-white/10"
+          ref={modalRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="phase-completion-title"
+          tabIndex={-1}
+          className="relative z-10 w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl p-8 text-center shadow-2xl border border-zinc-200 dark:border-white/10 outline-none"
           onClick={e => e.stopPropagation()}
         >
           {/* Close */}
           <button
             onClick={onDismiss}
+            aria-label="Close phase completion"
             className="absolute top-4 right-4 w-8 h-8 rounded-full bg-zinc-100 dark:bg-white/10 flex items-center justify-center text-zinc-500 hover:text-zinc-800 dark:hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
@@ -64,7 +74,7 @@ export function PhaseCompletionModal({ phase, nextPhase, xpEarned, onContinue, o
           {/* Heading */}
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <p className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-1">Phase Complete!</p>
-            <h2 className="text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight leading-tight">
+            <h2 id="phase-completion-title" className="text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight leading-tight">
               {phase.name}
             </h2>
           </motion.div>

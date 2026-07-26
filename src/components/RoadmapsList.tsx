@@ -2,15 +2,18 @@ import React from 'react';
 import { Trash2, Calendar, TrendingUp, Clock, ChevronRight } from 'lucide-react';
 import { Roadmap } from '../types';
 import { Skeleton } from './Skeleton';
+import { NoRoadmapEmptyState } from './EmptyState';
 
 interface RoadmapsListProps {
   roadmaps: Roadmap[];
   onSelectRoadmap: (id: string) => void;
   onDeleteRoadmap: (id: string) => void;
   isLoading?: boolean;
+  /** Optional: called when the user clicks the CTA inside the no-roadmaps empty state. */
+  onCreateRoadmap?: () => void;
 }
 
-export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoading }: RoadmapsListProps) {
+export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoading, onCreateRoadmap }: RoadmapsListProps) {
   const getStatusStyle = (progress: number) => {
     if (progress === 0) return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20';
     if (progress === 100) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25';
@@ -33,19 +36,21 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
   };
 
   if (roadmaps.length === 0 && !isLoading) {
-    return (
-      <div className="text-center py-12 px-6">
-        <div className="max-w-md mx-auto">
-          <div className="w-16 h-16 glass-card rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <TrendingUp className="w-7 h-7 text-purple-400" />
+    return onCreateRoadmap
+      ? <NoRoadmapEmptyState onCreateRoadmap={onCreateRoadmap} />
+      : (
+        <div className="text-center py-12 px-6">
+          <div className="max-w-md mx-auto">
+            <div className="w-16 h-16 glass-card rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <TrendingUp className="w-7 h-7 text-purple-400" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">No Roadmaps Yet</h3>
+            <p className="text-sm text-zinc-400">
+              Create your first learning roadmap to get started on your journey!
+            </p>
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">No Roadmaps Yet</h3>
-          <p className="text-sm text-zinc-400">
-            Create your first learning roadmap to get started on your journey!
-          </p>
         </div>
-      </div>
-    );
+      );
   }
 
   if (isLoading) {

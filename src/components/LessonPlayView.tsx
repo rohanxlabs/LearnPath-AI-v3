@@ -40,6 +40,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
   const [submittedQuiz, setSubmittedQuiz] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
 
+  // TODO: Replace this textarea with CodeMirror 6 for syntax highlighting, line numbers,
+  // and tab-key indentation. See ux-sprint-plan.md § TODO Comments for Future Work.
   // States for Writing Code
   const [userCode, setUserCode] = useState(lesson.codingExercise?.templateCode || `def compute_operations():\n    # Type code here\n    return True`);
   const [codeIsVerifying, setCodeIsVerifying] = useState(false);

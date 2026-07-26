@@ -1,3 +1,5 @@
+// TODO: Consolidate mobile hamburger sidebar + bottom tab bar into a single unified
+// nav paradigm. Currently both exist in parallel. See ux-sprint-plan.md § TODO Comments.
 import React, { useState, useEffect } from 'react';
 import { Home, Compass, MessageSquare, BarChart3, User, Menu, X, Bell, Flame, Crown, LogOut, Settings, Award, ShieldAlert, Sparkles, BookOpen } from 'lucide-react';
 import { UserProfile, SystemNotification } from '../types';
@@ -62,6 +64,7 @@ export function MobileHeader({
 
         <button
           onClick={() => onTabChange('profile')}
+          aria-label="Go to profile"
           className="w-8 h-8 rounded-full overflow-hidden border border-zinc-200 dark:border-white/10 hover:border-purple-600 dark:hover:border-purple-500 transition-all duration-200 flex-shrink-0 cursor-pointer"
         >
           <img
@@ -101,6 +104,8 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
+              aria-label={`Go to ${tab.label}`}
+              aria-current={isActive ? 'page' : undefined}
               className={`relative flex flex-col items-center justify-center flex-1 min-w-0 py-1 px-1 sm:px-3.5 rounded-xl transition-all duration-300 cursor-pointer ${
                 isActive
                   ? 'text-zinc-900 dark:text-white font-bold scale-102'

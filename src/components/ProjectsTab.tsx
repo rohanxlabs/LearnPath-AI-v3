@@ -78,7 +78,7 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated, getAuthHeaders
           }
         }
       } catch (e) {
-        console.warn('[ProjectsTab] /api/generate-projects failed, falling back to seed data:', e);
+        if (import.meta.env.DEV) { console.warn('[ProjectsTab] /api/generate-projects failed, falling back to seed data:', e); }
       }
 
       setIsUsingFallback(true);
@@ -108,7 +108,7 @@ export function ProjectsTab({ roadmap, onAddXp, onRoadmapUpdated, getAuthHeaders
       });
       onRoadmapUpdated?.();
     } catch (e) {
-      console.warn('[ProjectsTab] Could not persist project progress:', e);
+      if (import.meta.env.DEV) { console.warn('[ProjectsTab] Could not persist project progress:', e); }
     }
   };
 

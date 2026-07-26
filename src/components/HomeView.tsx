@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   Play,
   Sparkles,
@@ -6,6 +6,8 @@ import {
   Flame,
   BookOpen,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Target,
   TrendingUp,
   Award,
@@ -23,7 +25,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile, Roadmap, Phase, Achievement } from '../types';
 import { AIRecommendationCard } from './Cards';
 import { StreakBadge } from './Badges';
@@ -167,6 +169,24 @@ export function HomeView({
   // Fetch live stats for welcome-back banner (daysSinceLastVisit)
   const [liveStats, setLiveStats] = useState<UserStatsWithVisit | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Secondary sections (AI Insights, Tasks, Activity, Achievements, Quick Actions)
+  // are collapsed by default for new users. Expanding once is remembered forever.
+  const [showSecondary, setShowSecondary] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('lp_home_secondary_expanded') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSecondary = useCallback(() => {
+    setShowSecondary(prev => {
+      const next = !prev;
+      try { localStorage.setItem('lp_home_secondary_expanded', String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
   useEffect(() => {
     (async () => {
       // Skip fetch if no token source is available — avoids a guaranteed 401
@@ -655,6 +675,36 @@ export function HomeView({
         )}
       </motion.section>
 
+      {/* ── Show more / Show less toggle ── */}
+      <div className="flex justify-center pt-1 pb-1">
+        <button
+          type="button"
+          onClick={toggleSecondary}
+          aria-expanded={showSecondary}
+          aria-controls="home-secondary-content"
+          className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 rounded-xl transition-colors cursor-pointer select-none"
+        >
+          {showSecondary ? (
+            <>Show less <ChevronUp className="w-3.5 h-3.5" /></>
+          ) : (
+            <>Show more <ChevronDown className="w-3.5 h-3.5" /></>
+          )}
+        </button>
+      </div>
+
+      {/* ── Secondary sections (collapsible) ── */}
+      <AnimatePresence initial={false}>
+        {showSecondary && (
+          <motion.div
+            id="home-secondary-content"
+            key="secondary"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="overflow-hidden space-y-8"
+          >
+
       {/* SECTION 4 — AI Insights */}
       <motion.section {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.12 }}>
         <SectionHeader
@@ -737,10 +787,10 @@ export function HomeView({
                   </p>
                   <p className="text-xs text-zinc-400 mt-0.5">{task.description}</p>
                 </div>
-{!task.completed && task.lessonId && task.levelId && task.phaseId && (
+              {!task.completed && task.lessonId && task.levelId && task.phaseId && (
                   <button
                     onClick={() => onStartLesson(task.phaseId!, task.levelId!, task.lessonId!)}
-                    className="shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-2 py-1"
+                    className="shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
                   >
                     Start
                   </button>
@@ -748,7 +798,7 @@ export function HomeView({
                 {!task.completed && !task.lessonId && task.id === 'task-create-roadmap' && (
                   <button
                     onClick={onGenerateRoadmap}
-                    className="shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-2 py-1"
+                    className="shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
                   >
                     Start
                   </button>
@@ -886,7 +936,7 @@ export function HomeView({
                 key={action.id}
                 onClick={action.onClick}
                 disabled={action.disabled}
-                className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-3xl p-4 text-left transition-all duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0`}
+                className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-3xl p-4 text-left transition-all duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[80px]`}
               >
                 <div className="p-2 rounded-xl border text-purple-400 bg-purple-500/10 border-purple-500/20 w-fit mb-2.5">
                   <Icon className="w-4 h-4" />
@@ -897,6 +947,10 @@ export function HomeView({
           })}
         </div>
       </motion.section>
+
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

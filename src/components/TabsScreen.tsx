@@ -38,7 +38,7 @@ export function AnalyticsView({ profile, activityLog = {}, onNavigate, getAuthHe
         const data = await res.json();
         if (!cancelled) setStats(data);
       } catch (err) {
-        console.error('Failed to fetch user stats:', err);
+        if (import.meta.env.DEV) { console.error('Failed to fetch user stats:', err); }
         if (!cancelled) setStats({ xp: 0, streak: 0, hoursStudied: 0, lessonsCompleted: 0, overallMastery: 0 });
       } finally {
         if (!cancelled) setIsLoading(false);

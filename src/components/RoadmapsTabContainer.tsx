@@ -61,6 +61,7 @@ export function RoadmapsTabContainer({
           onSelectRoadmap={onSelectRoadmap}
           onDeleteRoadmap={onDeleteRoadmap}
           isLoading={isLoading}
+          onCreateRoadmap={() => setShowGenerator(true)}
         />
 
         <div className="space-y-3">

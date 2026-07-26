@@ -89,6 +89,7 @@ export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsCl
         onClick={() => setIsOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={isOpen}
+        aria-label="Open profile menu"
         className="relative w-8 h-8 rounded-full overflow-hidden border border-white/10 hover:border-purple-500 transition-all duration-200 flex-shrink-0 cursor-pointer"
       >
         <img src={profile.avatar} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />

@@ -15,7 +15,7 @@ const ChatMessageItem = memo(({ ch, isGenerating }: { ch: ChatMessage; isGenerat
 
   return (
     <div
-      className={`flex gap-3 max-w-full sm:max-w-[85%] ${isAI ? 'mr-auto' : 'ml-auto flex-row-reverse'}`}
+      className={`flex gap-3 max-w-[88%] sm:max-w-[80%] ${isAI ? 'mr-auto' : 'ml-auto flex-row-reverse'}`}
     >
       <div className={`p-1.5 h-8 w-8 rounded-xl flex items-center justify-center flex-shrink-0 border ${
           isAI

@@ -30,6 +30,12 @@ export default defineConfig(() => {
     build: {
       // Required for Sentry source maps
       sourcemap: true,
+      // Belt-and-suspenders: strip all console calls and debugger statements
+      // from the production bundle even if a DEV guard was accidentally omitted.
+      // esbuild drop runs before sourcemap generation so stack traces stay intact.
+      esbuildOptions: {
+        drop: process.env.NODE_ENV === 'production' ? (['console', 'debugger'] as const) : [],
+      },
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

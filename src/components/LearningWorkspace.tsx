@@ -254,7 +254,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
         }
       }
     } catch {
-      console.warn('[LearningWorkspace] Failed to load topic data');
+      if (import.meta.env.DEV) { console.warn('[LearningWorkspace] Failed to load topic data'); }
     } finally {
       setLoading(false);
     }

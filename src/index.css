@@ -1,3 +1,6 @@
+/* TODO: Migrate the .light !important override cascade (lines ~174–885) to proper
+   Tailwind dark: variants on each component. This is a large refactor — do not mix
+   with feature work. See ux-sprint-plan.md § TODO Comments for Future Work. */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 

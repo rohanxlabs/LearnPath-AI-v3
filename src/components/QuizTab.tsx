@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Award, Brain, CheckCircle, XCircle, Video, Bookmark, BookOpen, ExternalLink, Trophy, Repeat, BarChart2, Calendar, RefreshCw, AlertCircle } from 'lucide-react';
+import { NoQuizzesEmptyState } from './EmptyState';
 import { motion, AnimatePresence } from 'motion/react';
 import { Roadmap, TopicQuizAttempt } from '../types';
 import { getQuizRecommendations } from '../lib/recommendations';
@@ -41,7 +42,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
   useEffect(() => {
     let cancelled = false;
     async function loadQuizAttempts() {
-      console.log('[QuizTab] Loading quiz attempts for roadmap:', roadmap.id);
+      if (import.meta.env.DEV) { console.log('[QuizTab] Loading quiz attempts for roadmap:', roadmap.id); }
       setLoading(true);
       setLoadError(null);
 
@@ -53,14 +54,14 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
         if (!cancelled) {
           if (response.ok) {
             seedAttempts = await response.json();
-            console.log('[QuizTab] Loaded quiz attempts:', seedAttempts.length);
+            if (import.meta.env.DEV) { console.log('[QuizTab] Loaded quiz attempts:', seedAttempts.length); }
           } else {
-            console.log('[QuizTab] No quiz attempts found from server');
+            if (import.meta.env.DEV) { console.log('[QuizTab] No quiz attempts found from server'); }
           }
         }
       } catch (e: any) {
         if (!cancelled) {
-          console.error('[QuizTab] Failed to load quiz attempts:', e);
+          if (import.meta.env.DEV) { console.error('[QuizTab] Failed to load quiz attempts:', e); }
           setLoadError(e.message || 'Failed to load quiz attempts.');
         }
       }
@@ -110,7 +111,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
       ? `${phaseName}: ${skillsCovered.join(', ')}`
       : phaseName;
 
-    console.log('[QuizTab] Generating quiz for phase:', { phaseId, phaseName, topicName });
+    if (import.meta.env.DEV) { console.log('[QuizTab] Generating quiz for phase:', { phaseId, phaseName, topicName }); }
 
     setPhaseQuizCache(prev => ({ ...prev, [phaseId]: { questions: [], phaseName, loading: true } }));
 
@@ -122,7 +123,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
       });
       if (res.ok) {
         const questions = await res.json();
-        console.log('[QuizTab] Generated quiz questions:', questions.length);
+        if (import.meta.env.DEV) { console.log('[QuizTab] Generated quiz questions:', questions.length); }
         setPhaseQuizCache(prev => ({ ...prev, [phaseId]: { questions, phaseName, loading: false } }));
         try {
           await fetch('/api/update-roadmap', {
@@ -139,17 +140,17 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
             })
           });
           onRoadmapUpdated?.();
-          console.log('[QuizTab] Successfully persisted quiz to roadmap');
+          if (import.meta.env.DEV) { console.log('[QuizTab] Successfully persisted quiz to roadmap'); }
 
         } catch (e) {
-          console.warn('[QuizTab] Could not persist quiz to roadmap:', e);
+          if (import.meta.env.DEV) { console.warn('[QuizTab] Could not persist quiz to roadmap:', e); }
         }
         return questions;
       } else {
         throw new Error(`HTTP ${res.status}`);
       }
     } catch (e: any) {
-      console.error(`[QuizTab-AI-Fallback] Could not generate quiz for phase "${phaseName}":`, e);
+      if (import.meta.env.DEV) { console.error(`[QuizTab-AI-Fallback] Could not generate quiz for phase "${phaseName}":`, e); }
       setPhaseQuizCache(prev => ({
         ...prev,
         [phaseId]: { questions: [], phaseName, loading: false, error: e.message }
@@ -159,18 +160,18 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
   };
 
   const handlePhaseQuizStart = async (phaseId: string, phaseName: string, skillsCovered?: string[]) => {
-    console.log('[QuizTab] Starting phase quiz:', { phaseId, phaseName });
+    if (import.meta.env.DEV) { console.log('[QuizTab] Starting phase quiz:', { phaseId, phaseName }); }
     setQuizResult(null);
     const cached = phaseQuizCache[phaseId];
     if (cached && cached.questions.length > 0) {
-      console.log('[QuizTab] Using cached quiz questions');
+      if (import.meta.env.DEV) { console.log('[QuizTab] Using cached quiz questions'); }
       setActiveQuizId(phaseId);
       setActiveQuizSource('ai');
     } else if (cached && cached.loading) {
-      console.log('[QuizTab] Quiz generation already in progress');
+      if (import.meta.env.DEV) { console.log('[QuizTab] Quiz generation already in progress'); }
       return;
     } else {
-      console.log('[QuizTab] Generating new quiz for phase');
+      if (import.meta.env.DEV) { console.log('[QuizTab] Generating new quiz for phase'); }
       const questions = await generatePhaseQuiz(phaseId, phaseName, skillsCovered);
       if (questions.length > 0) {
         setActiveQuizId(phaseId);
@@ -255,7 +256,14 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
   }
 
   if (loading) {
-    return <div className="p-4">Loading quiz...</div>;
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3 text-zinc-400">
+          <Brain className="w-8 h-8 animate-pulse text-purple-400" />
+          <p className="text-sm font-medium">Loading quizzes…</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -292,24 +300,16 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
                 <p className="text-sm text-zinc-400">Test your knowledge for each phase. AI-generated questions are tailored to your roadmap.</p>
                 {quizzes.length > 0 ? (
                   <QuizList quizzes={quizzes} onStartQuiz={handleSeedQuizStart} phaseQuizCache={phaseQuizCache} onRetryQuiz={(phaseId, phaseName) => generatePhaseQuiz(phaseId, phaseName)} />
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-zinc-500">No phases available</p>
-                  </div>
-                )}
+                ) : null}
               </div>
-              
+
               {/* Empty State when no quizzes of any type */}
               {quizzes.length === 0 && !quizResult && (
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 mx-auto mb-4">
-                    <BookOpen className="w-10 h-10 text-zinc-500" />
-                  </div>
-                  <h3 className="font-bold text-lg text-white">No quizzes available</h3>
-                  <p className="text-sm text-zinc-400 max-w-xl">
-                    Start by selecting a roadmap phase to generate a personalized quiz, or check back later for assessments.
-                  </p>
-                </div>
+                <NoQuizzesEmptyState onCreateQuiz={() => {
+                  // Navigate to the roadmap to start a lesson — the quiz list populates after progress
+                  const firstPhase = roadmap.phases?.[0];
+                  if (firstPhase) generatePhaseQuiz(firstPhase.id, firstPhase.name, firstPhase.skillsCovered);
+                }} />
               )}
             </div>
           </motion.div>

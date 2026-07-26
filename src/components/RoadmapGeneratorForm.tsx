@@ -50,8 +50,45 @@ export function RoadmapGeneratorForm({
   const [generationError, setGenerationError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Clean up stream on unmount.
-  useEffect(() => () => { abortRef.current?.abort(); }, []);
+  // ── Progress timer — counts elapsed seconds while streaming ──────────────────
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (isStreaming) {
+      setElapsedSeconds(0);
+      intervalRef.current = setInterval(() => {
+        setElapsedSeconds(s => s + 1);
+      }, 1000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      setElapsedSeconds(0);
+    }
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isStreaming]);
+
+  // Clean up stream and timer on unmount.
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    if (intervalRef.current) clearInterval(intervalRef.current);
+  }, []);
+
+  // Clamp progress: 0–95% while streaming; reaches 100 only on completion.
+  // ESTIMATED_DURATION_S is the typical generation time — progress approaches
+  // 95% asymptotically so the bar never stalls at 0 even for slow responses.
+  const ESTIMATED_DURATION_S = 20;
+  const progressPercent = isStreaming
+    ? Math.min(95, Math.round((elapsedSeconds / ESTIMATED_DURATION_S) * 95))
+    : 0;
+  const remainingSeconds = Math.max(0, ESTIMATED_DURATION_S - elapsedSeconds);
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -134,7 +171,7 @@ export function RoadmapGeneratorForm({
         throw new Error('Stream ended without a roadmap');
       } catch (err: any) {
         if (err.name === 'AbortError') return; // user cancelled — do nothing
-        console.warn('[RoadmapGeneratorForm] SSE stream failed, falling back:', err.message);
+        if (import.meta.env.DEV) { console.warn('[RoadmapGeneratorForm] SSE stream failed, falling back:', err.message); }
         setIsStreaming(false);
         setStreamPhases([]);
         // Fall through to legacy onSubmit.
@@ -186,7 +223,7 @@ export function RoadmapGeneratorForm({
                   type="button"
                   onClick={() => handleChipClick(chip)}
                   disabled={busy}
-                  className={`px-3 py-1 text-xs rounded-full border font-medium transition-colors disabled:opacity-50
+                  className={`px-3 py-1.5 text-xs rounded-full border font-medium transition-colors disabled:opacity-50 min-h-[32px]
                     ${goal === chip
                       ? 'bg-purple-600 text-white border-purple-600'
                       : 'border-purple-200 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/20'
@@ -306,7 +343,34 @@ export function RoadmapGeneratorForm({
             transition={{ duration: 0.25 }}
             className="overflow-hidden border-t border-zinc-100 dark:border-white/10"
           >
-            <div className="px-6 pb-6 pt-4 space-y-3">
+            <div
+              role="status"
+              aria-live="polite"
+              aria-label="Roadmap generation progress"
+              className="px-6 pb-6 pt-4 space-y-3"
+            >
+              {/* Progress bar */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                    {streamPhases.length > 0
+                      ? `${streamPhases.length} phase${streamPhases.length !== 1 ? 's' : ''} planned`
+                      : 'Analysing your goal…'}
+                  </span>
+                  <span className="text-xs text-purple-500 dark:text-purple-400 font-mono tabular-nums">
+                    {remainingSeconds > 0 ? `~${remainingSeconds}s remaining` : 'Almost done…'}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-white/10 overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500"
+                    initial={{ width: '0%' }}
+                    animate={{ width: `${progressPercent}%` }}
+                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                  />
+                </div>
+              </div>
+
               {/* spinner row */}
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center animate-spin flex-shrink-0">
@@ -315,9 +379,7 @@ export function RoadmapGeneratorForm({
                 <div>
                   <p className="text-sm font-bold text-zinc-900 dark:text-white">Building your personalised roadmap…</p>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    {streamPhases.length > 0
-                      ? `${streamPhases.length} phase${streamPhases.length !== 1 ? 's' : ''} planned`
-                      : 'Waiting for AI response…'}
+                    This usually takes around {ESTIMATED_DURATION_S} seconds
                   </p>
                 </div>
               </div>

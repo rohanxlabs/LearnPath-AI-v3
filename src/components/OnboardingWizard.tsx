@@ -100,6 +100,16 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
     }
   }
 
+  function handleSkip() {
+    clearDraft();
+    onComplete({
+      goal: 'General Learning',
+      experienceLevel: 'Beginner',
+      weeklyHours: 5,
+      preferredStyle: 'Mixed',
+    });
+  }
+
   function handleBack() {
     setDirection(-1);
     setStep(s => Math.max(0, s - 1));
@@ -116,7 +126,15 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-lg">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="relative text-center mb-8">
+          <button
+            type="button"
+            onClick={handleSkip}
+            aria-label="Skip onboarding setup"
+            className="absolute top-0 right-0 text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+          >
+            Skip for now →
+          </button>
           <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center">
             <Sparkles className="w-7 h-7 text-white" />
           </div>

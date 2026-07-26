@@ -69,7 +69,7 @@ export function ResourcesTab({ roadmap, getAuthHeaders }: ResourcesTabProps) {
           setSavedIds(data.savedIds || []);
         }
       } catch (err) {
-        console.error('Failed to load resource states:', err);
+        if (import.meta.env.DEV) { console.error('Failed to load resource states:', err); }
       }
     }
     loadStates();
@@ -83,7 +83,7 @@ export function ResourcesTab({ roadmap, getAuthHeaders }: ResourcesTabProps) {
         body: JSON.stringify({ completedIds: newCompletedIds, savedIds: newSavedIds })
       });
     } catch (err) {
-      console.error('Failed to persist resource states:', err);
+      if (import.meta.env.DEV) { console.error('Failed to persist resource states:', err); }
     }
   };
 

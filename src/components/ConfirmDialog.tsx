@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Trash2, X } from 'lucide-react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface ConfirmDialogProps {
   /** Whether the dialog is visible. */
@@ -25,6 +26,17 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
+
+  // Close on ESC
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onCancel]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -54,8 +66,14 @@ export function ConfirmDialog({
             transition={{ duration: 0.22, ease: 'easeOut' }}
             className="fixed inset-0 z-[181] flex items-center justify-center p-4 pointer-events-none"
           >
-            <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-white/10 bg-[#161616]/95 backdrop-blur-md p-6 shadow-[0_16px_48px_rgba(0,0,0,0.4)]">
+            <div
+              ref={dialogRef}
+              tabIndex={-1}
+              className="pointer-events-auto w-full max-w-sm rounded-2xl border border-white/10 bg-[#161616]/95 backdrop-blur-md p-6 shadow-[0_16px_48px_rgba(0,0,0,0.4)] outline-none"
+            >
               {/* Header */}
+              {/* TODO: Make the Trash2 icon configurable via a prop — not all confirms are
+                  destructive deletes. See ux-sprint-plan.md § TODO Comments for Future Work. */}
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center flex-shrink-0">
