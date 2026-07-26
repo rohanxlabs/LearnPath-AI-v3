@@ -84,7 +84,7 @@ export const useAnimatedCount = (target: number, isVisible: boolean) => {
 
 // ─── StatCard ──────────────────────────────────────────────────────────────────
 
-export const StatCard: React.FC<{ stat: (typeof stats)[0]; index: number }> = ({ stat, index }) => {
+export const StatCard: React.FC<{ stat: (typeof stats)[0]; index: number; loading?: boolean }> = ({ stat, index, loading = false }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true });
   const count = useAnimatedCount(stat.value, isInView);
@@ -98,12 +98,23 @@ export const StatCard: React.FC<{ stat: (typeof stats)[0]; index: number }> = ({
     >
       <div className="absolute -right-3 -top-3 h-16 w-16 rounded-full bg-purple-200/40 blur-2xl transition-all group-hover:bg-purple-300/50" />
       <stat.icon className="mb-4 h-5 w-5 text-purple-600" />
-      <p className="text-3xl font-extrabold tracking-tight text-[#1a0a2e]">
-        {count.toLocaleString()}
-        {stat.suffix}
-      </p>
-      <p className="mt-1 text-sm font-medium text-slate-600">{stat.label}</p>
-      <p className="mt-0.5 text-xs text-slate-400">{stat.note}</p>
+      {loading ? (
+        <>
+          <div className="h-9 w-24 animate-pulse rounded-lg bg-purple-100" aria-hidden="true" />
+          <div className="mt-2 h-3 w-28 animate-pulse rounded bg-purple-50" aria-hidden="true" />
+          <div className="mt-1.5 h-2.5 w-20 animate-pulse rounded bg-purple-50" aria-hidden="true" />
+          <span className="sr-only">Loading stat…</span>
+        </>
+      ) : (
+        <>
+          <p className="text-3xl font-extrabold tracking-tight text-[#1a0a2e]">
+            {count.toLocaleString()}
+            {stat.suffix}
+          </p>
+          <p className="mt-1 text-sm font-medium text-slate-600">{stat.label}</p>
+          <p className="mt-0.5 text-xs text-slate-400">{stat.note}</p>
+        </>
+      )}
     </motion.div>
   );
 };

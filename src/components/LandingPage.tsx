@@ -9,9 +9,6 @@ import {
   ChevronDown,
   Star,
   Users,
-  Github,
-  Twitter,
-  Linkedin,
   Mail,
   Flame,
   Trophy,
@@ -53,8 +50,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const featuresRef = useRef<HTMLElement | null>(null);
 
   // Live stat overrides fetched from the public (no-auth) endpoint.
-  // Falls back gracefully — the stats section still renders with fallback values.
+  // statsLoading stays true until the request settles (success or failure).
+  // While loading, the two dynamic stat cards render a skeleton instead of "0".
   const [liveStats, setLiveStats] = useState<{ roadmapsGenerated: number; skillsCovered: number } | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   useEffect(() => {
     fetch('/api/public-stats')
       .then((r) => r.ok ? r.json() : null)
@@ -63,7 +62,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           setLiveStats({ roadmapsGenerated: data.roadmapsGenerated, skillsCovered: data.skillsCovered });
         }
       })
-      .catch(() => { /* silently fall back to static values */ });
+      .catch(() => { /* silently fall back to static values */ })
+      .finally(() => setStatsLoading(false));
   }, []);
 
   const scrollToPreview = useCallback(() => {
@@ -146,14 +146,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
           </nav>
 
-          {/* Mobile CTA */}
-          <button
-            type="button"
-            onClick={onGetStarted}
-            className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(168,85,247,0.35)] transition hover:shadow-[0_6px_28px_rgba(168,85,247,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 md:hidden"
-          >
-            Start Free <ArrowRight className="h-3.5 w-3.5" />
-          </button>
+          {/* Mobile CTAs */}
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="rounded-full border border-purple-300 bg-white/80 px-3.5 py-2 text-sm font-semibold text-purple-700 backdrop-blur-sm transition hover:border-purple-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50"
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={onGetStarted}
+              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(168,85,247,0.35)] transition hover:shadow-[0_6px_28px_rgba(168,85,247,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+            >
+              Start Free <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </header>
 
         {/* ══════════════════════════ HERO ══════════════════════════ */}
@@ -172,7 +181,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {/* Eyebrow badge */}
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-300 bg-purple-100 px-3.5 py-1.5 text-sm font-medium text-purple-700">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-500" />
-                GPT-4 powered mentor — free to start
+                AI-powered mentor — free to start
               </div>
 
               {/* Headline */}
@@ -245,12 +254,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               animate={{ opacity: 1, x: 0, scale: 1 }}
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
               className="motion-safe:animate-float-soft relative mx-auto w-full max-w-[520px] lg:mx-0"
+              role="img"
+              aria-label="Product preview: AI roadmap dashboard showing four learning phases, progress tracking, weekly XP ring, and AI mentor chat"
             >
               {/* Outer glow halo */}
               <div className="pointer-events-none absolute -inset-4 rounded-[44px] bg-gradient-to-br from-purple-300/30 via-violet-200/20 to-fuchsia-200/20 blur-3xl" aria-hidden="true" />
 
-              {/* Card shell */}
-              <div className="relative overflow-hidden rounded-[28px] border border-purple-200 bg-white shadow-[0_24px_64px_rgba(124,58,237,0.12),0_0_0_1px_rgba(168,85,247,0.08)] backdrop-blur-xl">
+              {/* Card shell — decorative; described by the parent role="img" aria-label */}
+              <div aria-hidden="true" className="relative overflow-hidden rounded-[28px] border border-purple-200 bg-white shadow-[0_24px_64px_rgba(124,58,237,0.12),0_0_0_1px_rgba(168,85,247,0.08)] backdrop-blur-xl">
 
                 {/* Top bar */}
                 <div className="flex items-center justify-between border-b border-purple-100 bg-purple-50/50 px-4 py-3">
@@ -493,6 +504,76 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <h3 className="mt-5 text-base font-bold text-[#1a0a2e]">{step.title}</h3>
                     <p className="mt-2 max-w-[200px] text-sm leading-6 text-slate-500">{step.description}</p>
+
+                    {/* Step mini-mockup */}
+                    <div className="mt-5 w-full max-w-[220px] overflow-hidden rounded-2xl border border-white/80 bg-white shadow-[0_4px_20px_rgba(124,58,237,0.10)]" aria-hidden="true">
+                      {index === 0 && (
+                        /* Step 1: Goal input field mockup */
+                        <div className="px-4 py-4">
+                          <p className="mb-2 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-purple-400">What do you want to learn?</p>
+                          <div className="flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2.5">
+                            <span className="flex-1 text-left text-[11px] text-purple-700">Learn Python for Machine Learning</span>
+                            <span className="h-3 w-0.5 animate-pulse rounded-full bg-purple-400" />
+                          </div>
+                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                            {['Beginner', '5 hrs/week', '3 months'].map((tag) => (
+                              <span key={tag} className="rounded-full border border-purple-200 bg-purple-100 px-2 py-0.5 text-[9px] font-semibold text-purple-600">{tag}</span>
+                            ))}
+                          </div>
+                          <div className="mt-3 flex items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 to-violet-600 py-2 text-[11px] font-bold text-white">
+                            Generate Roadmap →
+                          </div>
+                        </div>
+                      )}
+                      {index === 1 && (
+                        /* Step 2: Roadmap phases mockup */
+                        <div className="px-4 py-4">
+                          <p className="mb-2.5 text-left text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-500">Your Roadmap — 4 phases</p>
+                          <div className="space-y-1.5">
+                            {[
+                              { label: 'Python Basics', w: 'w-full', done: true },
+                              { label: 'NumPy & Pandas', w: 'w-4/5', done: true },
+                              { label: 'ML Models', w: 'w-2/5', done: false, active: true },
+                              { label: 'Deep Learning', w: 'w-0', done: false },
+                            ].map((phase) => (
+                              <div key={phase.label} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${phase.active ? 'bg-cyan-50 border border-cyan-200' : 'bg-slate-50'}`}>
+                                <span className={`h-3.5 w-3.5 shrink-0 rounded-full ${phase.done ? 'bg-emerald-400' : phase.active ? 'bg-cyan-400' : 'bg-slate-200'}`} />
+                                <span className={`flex-1 text-left text-[10px] font-medium ${phase.done ? 'text-slate-500 line-through' : phase.active ? 'text-cyan-700 font-bold' : 'text-slate-400'}`}>{phase.label}</span>
+                                {phase.active && <span className="text-[9px] font-bold text-cyan-500">In progress</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {index === 2 && (
+                        /* Step 3: Progress & streak mockup */
+                        <div className="px-4 py-4">
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500">This week</p>
+                            <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-600">
+                              🔥 7-day streak
+                            </span>
+                          </div>
+                          <div className="mt-3 flex items-end justify-between gap-1 px-1">
+                            {[40, 70, 55, 90, 65, 80, 100].map((h, i) => (
+                              <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                                <div
+                                  className={`w-full rounded-t-md ${i === 6 ? 'bg-emerald-500' : 'bg-emerald-200'}`}
+                                  style={{ height: `${h * 0.32}px` }}
+                                />
+                                <span className="text-[8px] text-slate-400">
+                                  {['M','T','W','T','F','S','S'][i]}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-2.5 flex items-center justify-between rounded-xl bg-emerald-50 px-3 py-2">
+                            <span className="text-[10px] text-slate-600">XP this week</span>
+                            <span className="text-[11px] font-extrabold text-emerald-600">+340 XP</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
                 </FadeInSection>
               ))}
@@ -605,7 +686,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </FadeInSection>
             <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {stats.map((stat, index) => {
-                  // Slot 0 → roadmapsGenerated, slot 1 → skillsCovered from live endpoint.
+                  // Slots 0 & 1 are dynamic (roadmapsGenerated, skillsCovered).
+                  // Show a skeleton while the fetch is in-flight so we never display "0".
+                  const isDynamic = index === 0 || index === 1;
                   const liveValue =
                     liveStats && index === 0 ? liveStats.roadmapsGenerated
                     : liveStats && index === 1 ? liveStats.skillsCovered
@@ -614,7 +697,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   const displayStat = liveValue !== undefined
                     ? { ...stat, value: liveValue, suffix: liveSuffix }
                     : stat;
-                  return <StatCard key={stat.label} stat={displayStat} index={index} />;
+                  return (
+                    <StatCard
+                      key={stat.label}
+                      stat={displayStat}
+                      index={index}
+                      loading={isDynamic && statsLoading}
+                    />
+                  );
                 })}
               </div>
           </div>
@@ -662,7 +752,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-[#1a0a2e]">{t.name}</p>
-                      <p className="text-xs text-slate-500">{t.role} · {t.company}</p>
+                      <p className="text-xs text-slate-500">
+                        {t.role}{t.company ? ` · ${t.company}` : ''}
+                      </p>
                       <p className="mt-0.5 text-[10px] text-slate-400">{t.date}</p>
                     </div>
                   </div>
@@ -777,7 +869,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     Sign In
                   </motion.button>
                 </div>
-                <p className="mt-4 text-xs text-purple-400">No credit card required · Cancel anytime</p>
+                <p className="mt-4 text-xs text-purple-400">No credit card required · Free to explore</p>
               </div>
             </div>
           </FadeInSection>
@@ -805,22 +897,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 A modern AI learning platform for turning goals into structured, lasting progress.
               </p>
               <div className="mt-5 flex gap-2">
-                {[
-                  { icon: Twitter, label: 'LearnPath AI on Twitter', href: 'https://x.com' },
-                  { icon: Github, label: 'LearnPath AI on GitHub', href: 'https://github.com' },
-                  { icon: Linkedin, label: 'LearnPath AI on LinkedIn', href: 'https://linkedin.com' },
-                ].map((social) => (
-                  <a
-                    key={social.label}
-                    href={social.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={social.label}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-purple-200 text-purple-400 transition-all hover:border-purple-400 hover:text-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50"
-                  >
-                    <social.icon className="h-3.5 w-3.5" />
-                  </a>
-                ))}
+                <a
+                  href="mailto:hello@learnpath.ai"
+                  aria-label="Email LearnPath AI"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-purple-200 text-purple-400 transition-all hover:border-purple-400 hover:text-purple-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                </a>
               </div>
             </div>
 
