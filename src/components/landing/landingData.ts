@@ -122,9 +122,9 @@ export const reasons = [
 // Testimonials reflect real user sentiment gathered via in-app feedback.
 // Names are anonymised initials to protect privacy; quotes are unedited.
 export const testimonials = [
-  { name: 'R. K.', role: 'Final Year CS Student', company: '', stars: 5, date: 'June 2025', verified: true, quote: 'I used to jump between YouTube videos and docs with no clear direction. LearnPath gave me a structured path for my placement prep and I actually finished phases for the first time.' },
-  { name: 'Priya S.', role: 'Self-taught Developer', company: '', stars: 5, date: 'May 2025', verified: true, quote: 'The AI mentor answers questions in context of whatever I\'m learning — not just generic answers. That alone is worth it.' },
-  { name: 'Arjun M.', role: 'Career Switcher', company: '', stars: 5, date: 'April 2025', verified: true, quote: 'Having a daily streak and XP made me come back every day. I completed the React roadmap in 5 weeks working just an hour a night.' },
+  { name: 'R. K.', role: 'Final Year CS Student', company: '', stars: 5, date: 'June 2025', quote: 'I used to jump between YouTube videos and docs with no clear direction. LearnPath gave me a structured path for my placement prep and I actually finished phases for the first time.' },
+  { name: 'Priya S.', role: 'Self-taught Developer', company: '', stars: 5, date: 'May 2025', quote: 'The AI mentor answers questions in context of whatever I\'m learning — not just generic answers. That alone is worth it.' },
+  { name: 'Arjun M.', role: 'Career Switcher', company: '', stars: 5, date: 'April 2025', quote: 'Having a daily streak and XP made me come back every day. I completed the React roadmap in 5 weeks working just an hour a night.' },
 ];
 
 export const faqItems: FAQItem[] = [
@@ -133,10 +133,14 @@ export const faqItems: FAQItem[] = [
   { question: 'Can I use it on mobile?', answer: 'Absolutely. LearnPath AI is mobile-first and fully responsive, delivering a smooth experience across phones, tablets, and desktops.' },
   { question: 'How personalized are the roadmaps?', answer: 'Very. The AI considers your goal, current skill level, available time per week, and learning style to generate a roadmap unique to you.' },
   { question: 'Does it replace a teacher or course?', answer: "It complements your existing resources. Think of LearnPath AI as your personal learning strategist — it structures your path, keeps you accountable, and provides AI-powered guidance when you're stuck." },
+  { question: 'Is my data private?', answer: 'Yes. Your learning data, roadmaps, and progress are stored securely and are never shared or sold to third parties. You can delete your account and all associated data at any time from your profile settings.' },
+  { question: 'Can I edit or change my roadmap after it is generated?', answer: 'Yes. You can regenerate your roadmap at any time or adjust individual phases to match changes in your goals, schedule, or skill level.' },
 ];
 
-// Fallback values used before the /api/public-stats response arrives.
-// These are conservative floor numbers — the live endpoint will replace them.
+// Stats for the "At a glance" section.
+// Slots 0 & 1 are dynamic — fetched from /api/public-stats at runtime.
+// value: 0 is a sentinel meaning "hide this card once the live fetch settles".
+// Slots 2 & 3 are static and always visible.
 export const stats = [
   { value: 0, suffix: '', label: 'Roadmaps Generated', note: 'Since launch', icon: Compass },
   { value: 0, suffix: '', label: 'Skills Covered', note: 'Across all roadmaps', icon: BookOpen },

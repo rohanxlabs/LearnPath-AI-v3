@@ -2,7 +2,6 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sparkles,
-  BookOpen,
   ArrowRight,
   CheckCircle2,
   Play,
@@ -10,10 +9,8 @@ import {
   Star,
   Users,
   Mail,
-  Flame,
-  Trophy,
-  MessageSquare,
-  Zap,
+  Menu,
+  X,
 } from 'lucide-react';
 
 import ParticleCanvas from './landing/ParticleCanvas';
@@ -46,6 +43,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onPrivacy,
 }) => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [ctaLoading, setCtaLoading] = useState(false);
+  // Tracks whether the dashboard screenshot asset loaded successfully.
+  // 'idle' → not yet attempted; 'loaded' → image rendered; 'error' → asset missing.
+  const [screenshotState, setScreenshotState] = useState<'idle' | 'loaded' | 'error'>('idle');
   const previewRef = useRef<HTMLElement | null>(null);
   const featuresRef = useRef<HTMLElement | null>(null);
 
@@ -66,6 +68,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       .finally(() => setStatsLoading(false));
   }, []);
 
+  // Close mobile menu on Escape key.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileMenuOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Scroll to the section referenced by the URL hash on first mount.
+  useEffect(() => {
+    const { hash } = window.location;
+    if (!hash) return;
+    const timer = setTimeout(() => {
+      if (hash === '#preview') previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      else if (hash === '#features') featuresRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   const scrollToPreview = useCallback(() => {
     previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
@@ -78,9 +98,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     setOpenFaq((prev) => (prev === index ? null : index));
   }, []);
 
+  const handleGetStarted = useCallback(() => {
+    setCtaLoading(true);
+    onGetStarted();
+  }, [onGetStarted]);
+
   return (
     // lp-light — light purple + warm cream landing page
     <div className="lp-light relative min-h-screen overflow-x-hidden bg-gradient-to-b from-[#f5f0ff] via-[#fdf8f0] to-[#f9f4fe] text-[#1a0a2e]">
+
+      {/* ── Skip to main content (keyboard / screen-reader accessibility) ── */}
+      <a
+        href="#hero-heading"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-purple-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-white"
+      >
+        Skip to main content
+      </a>
 
       {/* ── Ambient background glows ── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
@@ -157,13 +190,65 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
             <button
               type="button"
-              onClick={onGetStarted}
-              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(168,85,247,0.35)] transition hover:shadow-[0_6px_28px_rgba(168,85,247,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+              onClick={handleGetStarted}
+              disabled={ctaLoading}
+              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(168,85,247,0.35)] transition hover:shadow-[0_6px_28px_rgba(168,85,247,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:opacity-80 disabled:cursor-not-allowed"
             >
-              Start Free <ArrowRight className="h-3.5 w-3.5" />
+              {ctaLoading ? (
+                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <>Start Free <ArrowRight className="h-3.5 w-3.5" /></>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((o) => !o)}
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={mobileMenuOpen}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-purple-300 bg-white/80 text-purple-700 backdrop-blur-sm transition hover:border-purple-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50"
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
           </div>
         </header>
+
+        {/* ── Mobile navigation drawer ── */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.nav
+              key="mobile-nav"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              aria-label="Mobile navigation"
+              className="relative z-20 mb-4 overflow-hidden rounded-2xl border border-purple-200 bg-white/95 shadow-lg backdrop-blur-sm md:hidden"
+            >
+              <ul className="flex flex-col divide-y divide-purple-50 px-2 py-1.5">
+                {[
+                  { label: 'Preview', action: () => { scrollToPreview(); setMobileMenuOpen(false); } },
+                  { label: 'Features', action: () => { scrollToFeatures(); setMobileMenuOpen(false); } },
+                  { label: 'Sign In', action: () => { onSignIn(); setMobileMenuOpen(false); } },
+                  { label: 'Get Started', action: () => { setMobileMenuOpen(false); handleGetStarted(); }, primary: true },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <button
+                      type="button"
+                      onClick={item.action}
+                      className={`w-full rounded-xl px-4 py-3 text-left text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50 ${
+                        item.primary
+                          ? 'text-purple-700 hover:bg-purple-50'
+                          : 'text-[#1a0a2e] hover:bg-purple-50'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </motion.nav>
+          )}
+        </AnimatePresence>
 
         {/* ══════════════════════════ HERO ══════════════════════════ */}
         <section className="relative pb-8 pt-10 sm:pt-14 lg:pt-20" aria-labelledby="hero-heading">
@@ -222,14 +307,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <motion.button
                   type="button"
-                  whileHover={{ scale: 1.03, y: -2 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={onGetStarted}
+                  whileHover={ctaLoading ? {} : { scale: 1.03, y: -2 }}
+                  whileTap={ctaLoading ? {} : { scale: 0.97 }}
+                  onClick={handleGetStarted}
+                  disabled={ctaLoading}
                   aria-label="Start learning for free"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-base font-bold text-white shadow-[0_8px_32px_rgba(124,58,237,0.35)] transition-shadow hover:shadow-[0_12px_40px_rgba(124,58,237,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white sm:w-auto"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-600 px-7 py-3.5 text-base font-bold text-white shadow-[0_8px_32px_rgba(124,58,237,0.35)] transition-shadow hover:shadow-[0_12px_40px_rgba(124,58,237,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-80 sm:w-auto"
                 >
-                  Start Learning Free
-                  <ArrowRight className="h-4 w-4" />
+                  {ctaLoading ? (
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : (
+                    <>Start Learning Free <ArrowRight className="h-4 w-4" /></>
+                  )}
                 </motion.button>
 
                 <motion.button
@@ -248,155 +337,69 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <p className="mt-3.5 text-xs text-purple-400/80">No credit card required · Free to explore</p>
             </motion.div>
 
-            {/* ── Right: dashboard mockup ── */}
+            {/* ── Right: dashboard screenshot ── */}
             <motion.div
               initial={{ opacity: 0, x: 32, scale: 0.96 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
               className="motion-safe:animate-float-soft relative mx-auto w-full max-w-[520px] lg:mx-0"
               role="img"
-              aria-label="Product preview: AI roadmap dashboard showing four learning phases, progress tracking, weekly XP ring, and AI mentor chat"
+              aria-label="Product preview: LearnPath AI dashboard showing AI-generated roadmap, progress tracking, and AI mentor chat"
             >
               {/* Outer glow halo */}
               <div className="pointer-events-none absolute -inset-4 rounded-[44px] bg-gradient-to-br from-purple-300/30 via-violet-200/20 to-fuchsia-200/20 blur-3xl" aria-hidden="true" />
 
-              {/* Card shell — decorative; described by the parent role="img" aria-label */}
-              <div aria-hidden="true" className="relative overflow-hidden rounded-[28px] border border-purple-200 bg-white shadow-[0_24px_64px_rgba(124,58,237,0.12),0_0_0_1px_rgba(168,85,247,0.08)] backdrop-blur-xl">
+              {/*
+               * TODO: Drop public/screenshot-dashboard.webp once UX polish is complete.
+               * The placeholder below is shown automatically while the asset is absent.
+               * No code changes needed — adding the file to public/ is sufficient.
+               */}
+              <div
+                aria-hidden="true"
+                className="relative overflow-hidden rounded-[28px] border border-purple-200 bg-purple-50 shadow-[0_24px_64px_rgba(124,58,237,0.12),0_0_0_1px_rgba(168,85,247,0.08)]"
+              >
+                {/* Aspect-ratio container (16:10 = 62.5%) — holds fixed height whether
+                    the image is present or not, preventing any layout shift. */}
+                <div className="relative w-full" style={{ paddingBottom: '62.5%' }}>
 
-                {/* Top bar */}
-                <div className="flex items-center justify-between border-b border-purple-100 bg-purple-50/50 px-4 py-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  </div>
-                  <span className="rounded-full border border-purple-200 bg-purple-50 px-3 py-0.5 text-[10px] font-medium text-purple-500">
-                    app.learnpath.ai
-                  </span>
-                  <div className="h-2 w-12 rounded-full bg-purple-100" />
-                </div>
+                  {/* Real screenshot — hidden until confirmed loaded */}
+                  <img
+                    src="/screenshot-dashboard.webp"
+                    alt="LearnPath AI dashboard showing AI roadmap, progress tracking, and AI mentor chat"
+                    width={1040}
+                    height={650}
+                    loading="lazy"
+                    decoding="async"
+                    onLoad={() => setScreenshotState('loaded')}
+                    onError={() => setScreenshotState('error')}
+                    className={`absolute inset-0 w-full h-full rounded-[28px] object-cover transition-opacity duration-300 ${
+                      screenshotState === 'loaded' ? 'opacity-100' : 'opacity-0'
+                    }`}
+                  />
 
-                <div className="grid gap-2.5 p-4 sm:grid-cols-2">
-
-                  {/* AI Roadmap card — animated phase preview */}
-                  <div className="col-span-2 rounded-2xl border border-purple-100 bg-gradient-to-br from-purple-50 to-white p-4">
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-purple-600">Your AI Roadmap</p>
-                        <p className="mt-1 text-sm font-bold text-[#1a0a2e]">Python for Machine Learning</p>
+                  {/* Placeholder — visible only while image is absent or loading */}
+                  {screenshotState !== 'loaded' && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 rounded-[28px] bg-gradient-to-br from-purple-50 via-white to-violet-50 px-8">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 via-violet-500 to-cyan-400 shadow-[0_0_32px_rgba(168,85,247,0.35)]">
+                        <Sparkles className="h-7 w-7 text-white" />
                       </div>
-                      <span className="flex items-center gap-1.5 rounded-xl bg-purple-100 px-2.5 py-1 text-[10px] font-bold text-purple-600">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-500" />
-                        Live Demo
-                      </span>
-                    </div>
-                    {/* Phase rows */}
-                    <div className="space-y-2">
-                      {[
-                        { name: 'Python Foundations', progress: 100, lessons: 8, status: 'completed' },
-                        { name: 'Data Structures & NumPy', progress: 100, lessons: 6, status: 'completed' },
-                        { name: 'ML Model Training', progress: 55, lessons: 9, status: 'active' },
-                        { name: 'Deep Learning & Neural Nets', progress: 0, lessons: 10, status: 'locked' },
-                      ].map((phase, i) => (
-                        <div key={phase.name} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 ${phase.status === 'active' ? 'bg-purple-100 border border-purple-200' : 'bg-purple-50/60'}`}>
-                          <div className={`h-5 w-5 shrink-0 flex items-center justify-center rounded-full text-[9px] font-bold ${phase.status === 'completed' ? 'bg-emerald-100 text-emerald-600' : phase.status === 'active' ? 'bg-purple-200 text-purple-700' : 'bg-slate-100 text-slate-400'}`}>
-                            {phase.status === 'completed' ? '✓' : phase.status === 'active' ? i + 1 : '🔒'}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-[11px] font-semibold truncate ${phase.status === 'locked' ? 'text-slate-400' : phase.status === 'active' ? 'text-[#1a0a2e]' : 'text-slate-600'}`}>{phase.name}</p>
-                            <div className="mt-0.5 h-1 w-full overflow-hidden rounded-full bg-purple-100">
-                              <div
-                                className={`h-full rounded-full transition-all ${phase.status === 'completed' ? 'bg-emerald-500' : 'bg-gradient-to-r from-purple-500 to-violet-500'}`}
-                                style={{ width: `${phase.progress}%` }}
-                              />
-                            </div>
-                          </div>
-                          <span className={`shrink-0 text-[10px] ${phase.status === 'locked' ? 'text-slate-300' : 'text-slate-500'}`}>{phase.lessons} lessons</span>
+                      <div className="text-center">
+                        <p className="font-display text-base font-bold text-[#1a0a2e]">LearnPath AI</p>
+                        <p className="mt-1 text-sm text-slate-500">Dashboard screenshot coming soon</p>
+                      </div>
+                      {/* Skeleton rows — suggest a real UI layout */}
+                      <div className="w-full max-w-xs space-y-2.5 pt-1" aria-hidden="true">
+                        <div className="h-2.5 w-full animate-pulse rounded-full bg-purple-100" />
+                        <div className="h-2.5 w-4/5 animate-pulse rounded-full bg-purple-100/70" />
+                        <div className="h-2.5 w-3/5 animate-pulse rounded-full bg-purple-100/50" />
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          <div className="h-12 animate-pulse rounded-xl bg-purple-100/60" />
+                          <div className="h-12 animate-pulse rounded-xl bg-violet-100/60" />
                         </div>
-                      ))}
-                    </div>
-                    <div className="mt-2 flex justify-between text-[10px] text-slate-500">
-                      <span>Phase 3 of 4 active</span>
-                      <span className="text-purple-600 font-semibold">63% complete</span>
-                    </div>
-                  </div>
-
-                  {/* Continue Learning */}
-                  <div className="rounded-2xl border border-purple-100 bg-purple-50/50 p-3.5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-purple-400">Continue</p>
-                    <div className="mt-2.5 flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-[0_6px_18px_rgba(124,58,237,0.3)]">
-                        <BookOpen className="h-4 w-4 text-white" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-[#1a0a2e]">Pick up where you left off</p>
-                        <p className="text-[10px] text-slate-500">AI-selected next lesson</p>
+                        <div className="h-8 animate-pulse rounded-xl bg-purple-100/40" />
                       </div>
                     </div>
-                    <div className="mt-2.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-600">
-                      → Resume lesson
-                    </div>
-                  </div>
-
-                  {/* Progress Ring */}
-                  <div className="flex flex-col items-center justify-center rounded-2xl border border-purple-100 bg-violet-50/50 p-3.5">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-purple-400">Weekly XP</p>
-                    <div className="relative flex h-16 w-16 items-center justify-center">
-                      <svg className="absolute inset-0 -rotate-90" viewBox="0 0 64 64" aria-hidden="true">
-                        <circle cx="32" cy="32" r="26" fill="none" stroke="rgba(168,85,247,0.12)" strokeWidth="6" />
-                        <circle cx="32" cy="32" r="26" fill="none" stroke="url(#xp-grad-light)" strokeWidth="6"
-                          strokeDasharray="163" strokeDashoffset="52" strokeLinecap="round" />
-                        <defs>
-                          <linearGradient id="xp-grad-light" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stopColor="#9333ea" />
-                            <stop offset="100%" stopColor="#7c3aed" />
-                          </linearGradient>
-                        </defs>
-                      </svg>
-                      <div className="relative text-center">
-                        <p className="text-lg font-extrabold leading-none text-purple-700">XP</p>
-                      </div>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-1 text-[10px] text-amber-600">
-                      <Flame className="h-3 w-3" />
-                      <span className="font-bold">Daily streak active</span>
-                    </div>
-                  </div>
-
-                  {/* XP / achievements row */}
-                  <div className="flex items-center justify-between rounded-2xl border border-purple-100 bg-amber-50/60 px-3.5 py-3">
-                    <div className="flex items-center gap-2">
-                      <Trophy className="h-4 w-4 text-amber-500" />
-                      <span className="text-xs font-semibold text-[#1a0a2e]">XP earned</span>
-                    </div>
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-600">+ today</span>
-                  </div>
-
-                  {/* AI Mentor chat preview */}
-                  <div className="rounded-2xl border border-purple-100 bg-sky-50/50 p-3.5">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <MessageSquare className="h-3.5 w-3.5 text-sky-500" />
-                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-600">AI Mentor</p>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="rounded-xl bg-white px-3 py-2 text-[11px] leading-5 text-slate-700 shadow-sm">
-                        Try building a mini project to apply what you've learned so far.
-                      </div>
-                      <div className="rounded-xl bg-purple-100 px-3 py-2 text-[11px] leading-5 text-purple-700">
-                        You: "What should I build next?"
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Smart recommendation */}
-                  <div className="col-span-2 flex items-center justify-between rounded-2xl border border-purple-100 bg-gradient-to-r from-purple-50 to-violet-50 px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <Zap className="h-4 w-4 shrink-0 text-violet-600" />
-                      <span className="text-xs text-slate-600"><span className="font-semibold text-[#1a0a2e]">Next up:</span> AI picks your next best lesson</span>
-                    </div>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-purple-400" />
-                  </div>
-
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -582,7 +585,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </section>
 
         {/* ══════════════════════════ PRODUCT PREVIEW ══════════════════════════ */}
-        <section ref={previewRef} className="py-20 sm:py-24" aria-labelledby="preview-heading">
+        <section ref={previewRef} id="preview" className="py-20 sm:py-24" aria-labelledby="preview-heading">
           <FadeInSection>
             <SectionHeading
               id="preview-heading"
@@ -644,12 +647,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               />
               <motion.button
                 type="button"
-                whileHover={{ scale: 1.03, y: -2 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={onGetStarted}
-                className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-600 px-6 py-3 font-semibold text-white shadow-[0_12px_36px_rgba(124,58,237,0.3)] hover:shadow-[0_16px_48px_rgba(124,58,237,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                whileHover={ctaLoading ? {} : { scale: 1.03, y: -2 }}
+                whileTap={ctaLoading ? {} : { scale: 0.97 }}
+                onClick={handleGetStarted}
+                disabled={ctaLoading}
+                className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-600 px-6 py-3 font-semibold text-white shadow-[0_12px_36px_rgba(124,58,237,0.3)] hover:shadow-[0_16px_48px_rgba(124,58,237,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:cursor-not-allowed disabled:opacity-80"
               >
-                Get started free <ArrowRight className="h-4 w-4" />
+                {ctaLoading ? (
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <>Get started free <ArrowRight className="h-4 w-4" /></>
+                )}
               </motion.button>
             </FadeInSection>
 
@@ -684,29 +692,44 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 center
               />
             </FadeInSection>
-            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {stats.map((stat, index) => {
-                  // Slots 0 & 1 are dynamic (roadmapsGenerated, skillsCovered).
-                  // Show a skeleton while the fetch is in-flight so we never display "0".
-                  const isDynamic = index === 0 || index === 1;
-                  const liveValue =
-                    liveStats && index === 0 ? liveStats.roadmapsGenerated
-                    : liveStats && index === 1 ? liveStats.skillsCovered
-                    : undefined;
-                  const liveSuffix = liveValue !== undefined && liveValue > 0 ? '+' : stat.suffix;
-                  const displayStat = liveValue !== undefined
-                    ? { ...stat, value: liveValue, suffix: liveSuffix }
-                    : stat;
-                  return (
+            {(() => {
+              // Build the list of cards to render.
+              // Dynamic slots (0 & 1): show skeleton while loading; hide after load if value is 0.
+              // Static slots (2 & 3): always shown.
+              const visibleCards = stats.map((stat, index) => {
+                const isDynamic = index === 0 || index === 1;
+                if (isDynamic && !statsLoading) {
+                  const liveValue = index === 0 ? liveStats?.roadmapsGenerated : liveStats?.skillsCovered;
+                  if (!liveValue || liveValue === 0) return null; // hide — no real data yet
+                }
+                const liveValue =
+                  liveStats && index === 0 ? liveStats.roadmapsGenerated
+                  : liveStats && index === 1 ? liveStats.skillsCovered
+                  : undefined;
+                const liveSuffix = liveValue !== undefined && liveValue > 0 ? '+' : stat.suffix;
+                const displayStat = liveValue !== undefined
+                  ? { ...stat, value: liveValue, suffix: liveSuffix }
+                  : stat;
+                return { displayStat, index, isDynamic };
+              }).filter(Boolean) as { displayStat: typeof stats[0]; index: number; isDynamic: boolean }[];
+
+              // Derive responsive column class from visible card count so the grid is always balanced.
+              const count = visibleCards.length;
+              const lgCols = count >= 4 ? 'lg:grid-cols-4' : count === 3 ? 'lg:grid-cols-3' : count === 2 ? 'lg:grid-cols-2' : 'lg:grid-cols-1';
+
+              return (
+                <div className={`mt-10 grid gap-4 sm:grid-cols-2 ${lgCols}`}>
+                  {visibleCards.map(({ displayStat, index, isDynamic }) => (
                     <StatCard
-                      key={stat.label}
+                      key={displayStat.label}
                       stat={displayStat}
                       index={index}
                       loading={isDynamic && statsLoading}
                     />
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </section>
 
@@ -735,12 +758,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
                       ))}
                     </div>
-                    {t.verified && (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                        <CheckCircle2 className="h-2.5 w-2.5" />
-                        Verified
-                      </span>
-                    )}
                   </div>
                   <p className="flex-1 text-sm leading-7 text-slate-600">"{t.quote}"</p>
                   <div className="flex items-center gap-3 border-t border-purple-100 pt-4">
@@ -831,7 +848,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         {/* ══════════════════════════ FINAL CTA ══════════════════════════ */}
         <section className="pb-24 pt-4" aria-labelledby="cta-heading">
           <FadeInSection>
-            <div className="relative overflow-hidden rounded-[36px] border border-purple-200 bg-gradient-to-br from-purple-100 via-white to-violet-100 px-8 py-18 text-center sm:px-12 sm:py-20">
+            <div className="relative overflow-hidden rounded-[36px] border border-purple-200 bg-gradient-to-br from-purple-100 via-white to-violet-100 px-8 py-16 text-center sm:px-12 sm:py-20">
               {/* Glows */}
               <div className="pointer-events-none absolute -left-20 -top-20 h-56 w-56 rounded-full bg-purple-300/30 blur-3xl" aria-hidden="true" />
               <div className="pointer-events-none absolute -bottom-16 -right-16 h-48 w-48 rounded-full bg-amber-200/30 blur-3xl" aria-hidden="true" />
@@ -852,12 +869,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                   <motion.button
                     type="button"
-                    whileHover={{ scale: 1.03, y: -2 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={onGetStarted}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-600 px-8 py-4 text-base font-bold text-white shadow-[0_8px_32px_rgba(124,58,237,0.35)] transition-shadow hover:shadow-[0_12px_48px_rgba(124,58,237,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 sm:w-auto"
+                    whileHover={ctaLoading ? {} : { scale: 1.03, y: -2 }}
+                    whileTap={ctaLoading ? {} : { scale: 0.97 }}
+                    onClick={handleGetStarted}
+                    disabled={ctaLoading}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-600 px-8 py-4 text-base font-bold text-white shadow-[0_8px_32px_rgba(124,58,237,0.35)] transition-shadow hover:shadow-[0_12px_48px_rgba(124,58,237,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:cursor-not-allowed disabled:opacity-80 sm:w-auto"
                   >
-                    Start Learning Free <ArrowRight className="h-4 w-4" />
+                    {ctaLoading ? (
+                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <>Start Learning Free <ArrowRight className="h-4 w-4" /></>
+                    )}
                   </motion.button>
                   <motion.button
                     type="button"

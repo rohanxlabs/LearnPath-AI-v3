@@ -78,6 +78,7 @@ const ParticleCanvas: React.FC = () => {
   return (
     <canvas
       ref={canvasRef}
+      style={{ willChange: 'transform' }}
       className="pointer-events-none absolute inset-0 h-full w-full"
       aria-hidden="true"
     />
