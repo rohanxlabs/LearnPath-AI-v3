@@ -7,6 +7,7 @@
 //   src/router/AppRouter.tsx        — route-to-component mapping
 
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
+import * as Sentry from '@sentry/react';
 import { CheckCircle } from 'lucide-react';
 import { Toast } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -287,6 +288,7 @@ function AppShell() {
 
   // Mentor chat
   const handleSendMessage = useCallback(async (text: string) => {
+    Sentry.setTag('feature', 'ai-mentor');
     const userMsg = { id: `chat-usr-${Date.now()}`, sender: 'user' as const, text, timestamp: new Date().toISOString() };
     setChats(prev => [...prev, userMsg]);
     setIsAiChatGenerating(true);
@@ -305,7 +307,10 @@ function AppShell() {
         aiMsg = { ...aiMsg, text: aiMsg.text + decoder.decode(value) };
         setChats(prev => prev.map(c => c.id === aiMsgId ? aiMsg : c));
       }
-    } catch (err) { console.error(err); } finally { setIsAiChatGenerating(false); }
+    } catch (err) {
+      console.error(err);
+      Sentry.captureException(err, { tags: { feature: 'ai-mentor' } });
+    } finally { setIsAiChatGenerating(false); }
   }, [chats, mutatingHeaders, getStoredUserEmail]);
 
   const handleSelectRecommendationTask = useCallback((rec: any) => {

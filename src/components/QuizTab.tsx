@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import * as Sentry from '@sentry/react';
 import { Award, Brain, CheckCircle, XCircle, Video, Bookmark, BookOpen, ExternalLink, Trophy, Repeat, BarChart2, Calendar, RefreshCw, AlertCircle } from 'lucide-react';
 import { NoQuizzesEmptyState } from './EmptyState';
 import { motion, AnimatePresence } from 'motion/react';
@@ -103,6 +104,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
   }, [roadmap.id, retryKey]);
 
   const generatePhaseQuiz = async (phaseId: string, phaseName: string, skillsCovered?: string[]) => {
+    Sentry.setTag('feature', 'quiz-generation');
     // Sub-Task 7: if quiz already cached (from roadmap.quizzes or prior generation), skip API call
     const existing = phaseQuizCache[phaseId];
     if (existing && existing.questions.length > 0 && !existing.loading) return existing.questions;
@@ -151,6 +153,8 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
       }
     } catch (e: any) {
       if (import.meta.env.DEV) { console.error(`[QuizTab-AI-Fallback] Could not generate quiz for phase "${phaseName}":`, e); }
+      // Only report genuine network/server failures, not expected empty-result fallbacks.
+      Sentry.captureException(e, { tags: { feature: 'quiz-generation' }, extra: { phaseId, phaseName } });
       setPhaseQuizCache(prev => ({
         ...prev,
         [phaseId]: { questions: [], phaseName, loading: false, error: e.message }

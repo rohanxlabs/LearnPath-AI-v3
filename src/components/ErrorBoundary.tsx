@@ -28,7 +28,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Sentry captures this in production via captureException — DEV-only console output.
+    // Forward to Sentry in all environments where the SDK is initialised.
+    Sentry.captureException(error, { tags: { source: 'ErrorBoundary' }, extra: { componentStack: errorInfo.componentStack } });
     if (import.meta.env.DEV) {
       console.error('[ErrorBoundary] Caught render error:', error.message, errorInfo.componentStack);
     }

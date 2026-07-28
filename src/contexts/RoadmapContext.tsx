@@ -2,6 +2,7 @@
 // Extracted from App.tsx.
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import * as Sentry from '@sentry/react';
 import { Roadmap, Achievement, SystemNotification } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -191,6 +192,7 @@ export function RoadmapProvider({
   // The form already shows isStreaming=true; we keep isAiGeneratingRoadmap=true here only for
   // the DB-persist phase — do NOT call setIsAiGeneratingRoadmap(true) again as the form already did.
   const handleRoadmapReadyFromStream = useCallback(async (data: any) => {
+    Sentry.setTag('feature', 'roadmap-generation');
     // Ensure the context loading state is active (form may have already set it)
     setIsAiGeneratingRoadmap(true);
     try {
@@ -231,11 +233,13 @@ export function RoadmapProvider({
       onTabChange('roadmaps');
     } catch (err) {
       console.error('Failed to persist streamed roadmap:', err);
+      Sentry.captureException(err, { tags: { feature: 'roadmap-generation' } });
       onShowToast('Roadmap was generated but could not be saved. Please try again.');
     } finally { setIsAiGeneratingRoadmap(false); }
   }, [mutatingHeaders, onAchievementUnlocked, onNotification, onShowToast, onTabChange, syncRoadmapsFromDatabase]);
 
   const handleGenerateRoadmap = useCallback(async (params: { goal: string; experienceLevel: string; weeklyHours: number; preferredStyle: string }) => {
+    Sentry.setTag('feature', 'roadmap-generation');
     setIsAiGeneratingRoadmap(true);
     try {
       const response = await fetch('/api/generate-roadmap', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify(params) });
@@ -279,6 +283,7 @@ export function RoadmapProvider({
       onTabChange('roadmaps');
     } catch (err) {
       console.error('Failed to generate roadmap:', err);
+      Sentry.captureException(err, { tags: { feature: 'roadmap-generation' } });
       onShowToast('Failed to generate roadmap. Please try again.');
     } finally { setIsAiGeneratingRoadmap(false); }
   }, [mutatingHeaders, onAchievementUnlocked, onNotification, onShowToast, onTabChange, syncRoadmapsFromDatabase]);

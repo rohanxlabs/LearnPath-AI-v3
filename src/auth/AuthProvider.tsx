@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useEffect, useRef, useState } from 'react';
+import * as Sentry from '@sentry/react';
 import type { Achievement, ChatMessage, SystemNotification, UserProfile, UserSettings } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import { getAuthHeaders } from './authMiddleware';
@@ -55,6 +56,8 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
           }).catch(() => undefined);
           setProfile(resolved); setSettings({ ...DEFAULT_SETTINGS, ...(data.settings || {}) }); setAchievements(data.achievements || []);
           setNotifications(data.notifications || []); setChats(data.chats || []); setActivityLog(data.activityLog || {}); setIsAuthenticated(true);
+          // Populate Sentry user context so events are linked to the session.
+          Sentry.setUser({ id: resolved.id || email, email });
           identify(email, { name: resolved.name }); onAuthenticated({ ...data, email, profile: resolved });
           booting.current = false; setIsLoadingAuth(false);
           return;
@@ -109,6 +112,14 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
     await fetch('/api/user-profile', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ profile, settings, achievements, notifications, activityLog, chats }) });
   }, [isAuthenticated, profile, settings, achievements, notifications, activityLog, chats]);
 
-  const handleLogout = useCallback(async () => { await fullSave().catch(() => undefined); await authService.signOut(); clear(); onLoggedOut(); }, [clear, onLoggedOut, fullSave]);
+  const handleLogout = useCallback(async () => {
+    await fullSave().catch(() => undefined);
+    await authService.signOut();
+    // Clear Sentry user context so subsequent errors are not attributed to the
+    // logged-out session.
+    Sentry.setUser(null);
+    clear();
+    onLoggedOut();
+  }, [clear, onLoggedOut, fullSave]);
   return <AuthContext.Provider value={{ isAuthenticated, isLoadingAuth, profile, setProfile, settings, setSettings, achievements, setAchievements, notifications, setNotifications, chats, setChats, activityLog, setActivityLog, handleLogout, mutatingHeaders: getAuthHeaders, getStoredUserEmail: () => profile.email }}>{children}</AuthContext.Provider>;
 }
