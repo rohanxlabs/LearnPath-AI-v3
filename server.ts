@@ -1,6 +1,13 @@
 import 'dotenv/config';
 import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
+// ---------------------------------------------------------------------------
+// Sentry MUST be initialised before any other import that could throw, so
+// the very first import after dotenv is the dedicated backend Sentry module.
+// ---------------------------------------------------------------------------
+import { initialiseSentryBackend, Sentry, setupExpressErrorHandler } from './src/server/lib/sentry';
+initialiseSentryBackend();
+
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -10,7 +17,6 @@ import { exec } from 'child_process';
 import { platform } from 'os';
 import { createServer as createViteServer } from 'vite';
 import pinoHttp from 'pino-http';
-import * as Sentry from '@sentry/node';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 
@@ -37,18 +43,6 @@ if (missingEnvVars.length > 0) {
 if (isProduction && !process.env.FRONTEND_URL) {
   logger.fatal('FRONTEND_URL must be set in production (required for CORS). Set it to your public service URL, e.g. https://learnpath-ai.onrender.com');
   process.exit(1);
-}
-
-// ---------------------------------------------------------------------------
-// Sentry — must be initialised before any other instrumentation.
-// ---------------------------------------------------------------------------
-if (process.env.SENTRY_DSN) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV || 'development',
-    tracesSampleRate: isProduction ? 0.1 : 1.0,
-  });
-  logger.info('[Sentry] Backend error tracking enabled');
 }
 
 export const app = express();
@@ -170,6 +164,19 @@ app.use('/api', aiRouter);
 app.use('/api', userRouter);
 
 // ---------------------------------------------------------------------------
+// Debug / verification endpoint — DEVELOPMENT ONLY.
+// Intentionally throws so you can verify Sentry receives the event, stack
+// trace, request metadata, and feature tag.
+// Remove this endpoint after verifying the Sentry integration.
+// ---------------------------------------------------------------------------
+if (!isProduction) {
+  app.get('/debug/sentry', (_req, res, _next) => {
+    Sentry.setTag('feature', 'sentry-debug');
+    throw new Error('Backend Sentry Test');
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Redis-backed rate-limit store (Upstash).
 // When REDIS_URL is present the auth/login limiters are upgraded to a shared
 // store so horizontal scaling (multiple instances) shares the same counters.
@@ -213,13 +220,17 @@ app.get('/sw.js', (req, res, next) => {
 
 // Defined here, registered LAST inside bootstrap() so it also catches errors
 // thrown by the Vite/static frontend middleware.
+//
+// Capture strategy: setupExpressErrorHandler (registered just before this in
+// bootstrap) already forwards every error to Sentry automatically.  This
+// handler's only job is to log and send the HTTP response — no manual
+// captureException here to avoid duplicate events in the Sentry dashboard.
 const errorHandler: express.ErrorRequestHandler = (err, req, res, _next) => {
-  if (process.env.SENTRY_DSN) Sentry.captureException(err);
+  const status = err.status || err.statusCode || 500;
   logger.error({ err, url: req.url, method: req.method }, 'Unhandled request error');
   // Guard against ERR_HTTP_HEADERS_SENT when a route already started a response
   // (e.g. an SSE stream that errored mid-flight, or a double-next() call).
   if (res.headersSent) return;
-  const status = err.status || err.statusCode || 500;
   res.status(status).json({ error: isProduction ? 'Internal server error' : err.message });
 };
 
@@ -282,13 +293,22 @@ async function bootstrap() {
     });
   }
 
+  // Sentry Express error handler — must come BEFORE the custom errorHandler so
+  // Sentry processes the error before we send a response. setupExpressErrorHandler
+  // is a no-op when Sentry is disabled (no DSN), so it is always safe to call.
+  setupExpressErrorHandler(app);
+
   // Must be the final middleware — after Vite/static so it catches their errors too.
   app.use(errorHandler);
 
   // Surface pool errors — these indicate a saturated or misconfigured connection
   // pool.  Log at fatal so on-call is paged immediately.
   pool.on('error', (err: Error) => {
-    if (process.env.SENTRY_DSN) Sentry.captureException(err);
+    Sentry.withScope((scope) => {
+      scope.setTag('feature', 'database');
+      scope.setLevel('fatal');
+      Sentry.captureException(err);
+    });
     logger.fatal({ err: err.message }, '[Pool] Idle client error — connection pool problem');
   });
 
@@ -337,6 +357,25 @@ async function bootstrap() {
 
   return server;
 }
+
+// ---------------------------------------------------------------------------
+// Process-level unhandled error capture — catches exceptions and rejections
+// that escape all Express middleware (e.g. background tasks, startup code).
+// These are forwarded to Sentry before the process crashes.
+// ---------------------------------------------------------------------------
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, '[Process] Uncaught exception — forwarding to Sentry and exiting');
+  Sentry.captureException(err);
+  // Flush Sentry buffer (max 2 s) then exit — don't keep running after an
+  // uncaught exception since the process state is undefined.
+  Sentry.close(2000).finally(() => process.exit(1));
+});
+
+process.on('unhandledRejection', (reason) => {
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.error({ err }, '[Process] Unhandled promise rejection — forwarding to Sentry');
+  Sentry.captureException(err);
+});
 
 bootstrap().catch((err) => {
   logger.fatal({ err }, 'Server failed to start');

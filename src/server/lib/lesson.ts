@@ -9,6 +9,7 @@ import {
 import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt, GROQ_MODELS } from './ai';
 import { sql } from './db';
 import { logger } from './logger';
+import { Sentry } from './sentry';
 
 // ---------------------------------------------------------------------------
 // Subject detection
@@ -253,6 +254,16 @@ export async function generateLessonContent(ctx: {
       logger.warn({ lessonId: ctx.lessonId, sectionsFound, attempt: attempt + 1 }, '[Lesson-Gen] Attempt incomplete');
     } catch (err: any) {
       logger.warn({ lessonId: ctx.lessonId, attempt: attempt + 1, err: err.message }, '[Lesson-Gen] Attempt failed');
+      // Capture the last attempt's AI provider failure so Groq outages are
+      // visible in Sentry even though the route returns a graceful fallback.
+      if (attempt === MAX_ATTEMPTS - 1) {
+        Sentry.withScope((scope) => {
+          scope.setTag('feature', 'lesson-generation');
+          scope.setExtra('lessonId', ctx.lessonId);
+          scope.setExtra('attempt', attempt + 1);
+          Sentry.captureException(err);
+        });
+      }
     }
   }
 

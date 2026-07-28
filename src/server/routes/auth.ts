@@ -10,6 +10,7 @@ import { requireAuth } from '../lib/middleware';
 import { getDefaultUserDB, loadUserDB, saveUserDB, sql } from '../lib/db';
 import { getUserRoadmapsReconstructed, backfillUserLessonProgress } from '../db/queries';
 import { logger } from '../lib/logger';
+import { Sentry } from '../lib/sentry';
 
 const router = Router();
 
@@ -48,6 +49,11 @@ router.get('/bootstrap', requireAuth, async (req, res) => {
     });
   } catch (error: any) {
     logger.error({ err: error?.message }, 'bootstrap failed');
+    Sentry.withScope((scope) => {
+      scope.setTag('feature', 'authentication');
+      scope.setExtra('route', 'bootstrap');
+      Sentry.captureException(error);
+    });
     res.status(503).json({ error: 'Could not load your data right now. Please retry in a moment.', code: 'BOOTSTRAP_FAILED' });
   }
 });

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, aiLimiter, lessonLimiter, HttpError, withUserLock } from '../lib/middleware';
 import { loadUserDB, saveUserDB, updateStreak, unlockAchievement, addUserXp } from '../lib/db';
 import { logger } from '../lib/logger';
+import { Sentry } from '../lib/sentry';
 import {
   findLessonContext,
   completeLessonForUser,
@@ -50,6 +51,11 @@ router.get('/lessons/:lessonId/content', requireAuth, async (req, res) => {
     return res.json(payload);
   } catch (error: any) {
     logger.error({ err: error?.message || error }, '[Lesson-Gen] content retrieval error');
+    Sentry.withScope((scope) => {
+      scope.setTag('feature', 'lesson-generation');
+      scope.setExtra('lessonId', req.params.lessonId);
+      Sentry.captureException(error);
+    });
     return res.status(500).json({ error: 'Failed to load lesson content', code: 'LESSON_CONTENT_FAILED' });
   }
 });
@@ -69,6 +75,11 @@ router.post('/lessons/:lessonId/generate', requireAuth, aiLimiter, async (req, r
     return res.json({ ...payload, regenerated: regenerate && !result.cached });
   } catch (error: any) {
     logger.error({ err: error?.message || error }, '[Lesson-Gen] generation error');
+    Sentry.withScope((scope) => {
+      scope.setTag('feature', 'lesson-generation');
+      scope.setExtra('lessonId', req.params.lessonId);
+      Sentry.captureException(error);
+    });
     return res.status(500).json({ error: 'Failed to generate lesson content', code: 'LESSON_GEN_FAILED' });
   }
 });
@@ -97,6 +108,7 @@ router.get('/lessons/:lessonId/meta', requireAuth, async (req, res) => {
     return res.json({ lessonId, name: lesson.title, hasContent, metadata, progress });
   } catch (error: any) {
     logger.error({ err: error?.message || error }, '[Lesson-Gen] meta retrieval error');
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to load lesson metadata', code: 'LESSON_META_FAILED' });
   }
 });
@@ -181,6 +193,11 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
     return res.json({ topic });
   } catch (error) {
     logger.error({ err: error }, 'Get topic error');
+    Sentry.withScope((scope) => {
+      scope.setTag('feature', 'lesson-generation');
+      scope.setExtra('topicId', req.params.topicId);
+      Sentry.captureException(error);
+    });
     return res.status(500).json({ error: 'Failed to load topic', code: 'TOPIC_FAILED' });
   }
 });
@@ -274,6 +291,11 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
   } catch (error) {
     if (error instanceof HttpError) return res.status(error.status).json({ error: error.message });
     logger.error({ err: error }, 'Complete lesson error');
+    Sentry.withScope((scope) => {
+      scope.setTag('feature', 'lesson-completion');
+      scope.setExtra('lessonId', req.body?.lessonId);
+      Sentry.captureException(error);
+    });
     return res.status(500).json({ error: 'Failed to complete lesson. Database unavailable.', code: 'COMPLETE_LESSON_FAILED' });
   }
 });
@@ -295,6 +317,7 @@ router.post('/generate-quiz', requireAuth, aiLimiter, async (req, res) => {
     }
   }
 
+  Sentry.setTag('feature', 'quiz-generation');
   const questions = await generateQuizQuestions(topicName);
   return res.json(questions);
 });

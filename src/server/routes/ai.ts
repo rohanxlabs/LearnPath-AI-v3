@@ -4,6 +4,7 @@ import { requireAuth, aiLimiter, createLimiter } from '../lib/middleware';
 import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt } from '../lib/ai';
 import { recCache, REC_CACHE_TTL, cacheSet } from '../lib/db';
 import { logger } from '../lib/logger';
+import { Sentry } from '../lib/sentry';
 
 const router = Router();
 
@@ -51,6 +52,7 @@ Rules:
 - techStack entries must be real, recognizable technologies
 `;
 
+  Sentry.setTag('feature', 'ai-mentor');
   try {
     const response = await callGroqChatCompletion(prompt, { temperature: 0.7, asJSON: true });
     const parsed = cleanAndParseJSON(response, '{"projects":[]}');
@@ -61,6 +63,7 @@ Rules:
     return res.json({ projects });
   } catch (error: any) {
     logger.error({ err: error.message }, '[AI] generate-projects fallback');
+    Sentry.captureException(error);
     // Return empty array — the roadmap already has embedded phase projects.
     // Better to show nothing than random unrelated project ideas.
     return res.json({ projects: [] });
@@ -74,6 +77,7 @@ router.post('/mentor-chat', requireAuth, aiLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Message payload is required', code: 'MISSING_MESSAGE' });
   }
 
+  Sentry.setTag('feature', 'ai-mentor');
   try {
     if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured');
 
@@ -116,6 +120,7 @@ Use clean formatting without markdown symbols like ** or ##.`;
     res.end(responseText);
   } catch (error: any) {
     logger.error({ err: error.message }, '[AI] mentor-chat error');
+    Sentry.captureException(error);
     const q = sanitizeForPrompt(message, 200);
     const lc = message.toLowerCase();
 
@@ -202,11 +207,13 @@ Concoct your response as a valid JSON object matching this structure:
   "explanation": "A 1-2 paragraph markdown walkthrough explaining the code line-by-line in a highly pedagogical way."
 }`;
 
+  Sentry.setTag('feature', 'lesson-generation');
   try {
     const response = await callGroqChatCompletion(prompt, { temperature: 0.3, asJSON: true });
     return res.json(cleanAndParseJSON(response, '{}'));
   } catch (error: any) {
     logger.error({ err: error.message }, '[AI] analyze-code fallback');
+    Sentry.captureException(error);
     return res.json({ passed: false, systemError: true, suggestions: '', explanation: 'Verification service unavailable. Please retry.' });
   }
 });
@@ -238,6 +245,7 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
   }
 ]`;
 
+  Sentry.setTag('feature', 'ai-mentor');
   try {
     const response = await callGroqChatCompletion(prompt, { temperature: 0.8, asJSON: true });
     const parsed = cleanAndParseJSON(response, '[]');
@@ -245,6 +253,7 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
     return res.json(parsed);
   } catch (error: any) {
     logger.error({ err: error.message }, '[AI] recommendations fallback');
+    Sentry.captureException(error);
     // Goal-aware fallback recs: derive action titles from the activeGoal string
     const goal = sanitizeForPrompt(activeGoal || '', 120);
     const goalLabel = goal || 'your learning goal';
@@ -299,11 +308,13 @@ Output MUST be a valid JSON object matching this schema:
   "outcomes": [string]
 }`;
 
+  Sentry.setTag('feature', 'lesson-generation');
   try {
     const response = await callGroqChatCompletion(prompt, { temperature: 0.6, asJSON: true });
     return res.json(cleanAndParseJSON(response, '{}'));
   } catch (error: any) {
     logger.warn({ err: error.message }, '[AI] topic-overview fallback');
+    Sentry.captureException(error);
     return res.json({
       what: `This module delivers the core logical paradigms and mathematical definitions behind ${topicName}.`,
       why: `Completing this section establishes the fundamental framework necessary to debug and scale complex code in ${roadmapContext || 'this domain'}.`,
@@ -332,6 +343,7 @@ Return JSON with progressive hint levels:
 
 Level ${attemptNumber || 1} is requested. Keep hints educational, not giving away answers.`;
 
+  Sentry.setTag('feature', 'lesson-generation');
   try {
     const response = await callGroqChatCompletion(prompt, { temperature: 0.5, asJSON: true });
     const parsed = cleanAndParseJSON(response, '{"hints":[],"hintCostXp":10}');
@@ -346,6 +358,7 @@ Level ${attemptNumber || 1} is requested. Keep hints educational, not giving awa
     return res.json(parsed);
   } catch (error: any) {
     logger.error({ err: error.message }, '[AI] hints fallback');
+    Sentry.captureException(error);
     return res.json({ hints: [{ level: 1, type: 'conceptual', text: 'Focus on the core concept being taught.' }, { level: 2, type: 'syntax', text: 'Think about the key syntax patterns.' }], hintCostXp: 10 });
   }
 });
@@ -369,6 +382,7 @@ Context:
 Rules: Be specific to the goal and phase. Be encouraging but honest. Mention one concrete next action. Maximum 3 sentences.
 Return ONLY the summary text (no JSON, no preamble).`;
 
+  Sentry.setTag('feature', 'ai-mentor');
   try {
     const text = await callGroqChatCompletion(prompt, { temperature: 0.65, asJSON: false, maxTokens: 150 });
     const data = { summary: text.trim() };
@@ -376,6 +390,7 @@ Return ONLY the summary text (no JSON, no preamble).`;
     return res.json(data);
   } catch (error: any) {
     logger.warn({ err: error.message }, '[AI] ai-summary fallback');
+    Sentry.captureException(error);
     const pct = progressPercent || 0;
     const summary = pct < 30
       ? `You're building the foundations for ${sanitizeForPrompt(roadmapGoal || 'your goal', 60)}. Keep momentum by completing one lesson today.`

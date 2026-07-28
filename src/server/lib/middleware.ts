@@ -4,6 +4,7 @@ import express from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import { logger } from './logger';
+import { setSentryUser, clearSentryUser } from './sentry';
 
 /** Never log raw emails. Produces a stable, non-reversible-at-a-glance tag. */
 function maskEmail(email?: string): string {
@@ -177,6 +178,10 @@ export function requireAuth(
         return;
       }
       req.supabaseUser = { id: sub, email };
+      // Attach user context to Sentry scope for this request.
+      // Cleared in a response-finish listener to avoid cross-request leakage.
+      setSentryUser({ id: sub, email });
+      res.once('finish', clearSentryUser);
       next();
     } catch (e: any) {
       logger.warn({ route, err: e?.message, tokenExp }, 'auth: 401 HS256 verify failed');
@@ -243,6 +248,10 @@ export function requireAuth(
         }
 
         req.supabaseUser = { id: result.sub, email: result.email };
+        // Attach user context to Sentry scope for this request.
+        // Cleared in a response-finish listener to avoid cross-request leakage.
+        setSentryUser({ id: result.sub, email: result.email });
+        res.once('finish', clearSentryUser);
         next();
       })
       .catch((e: any) => {

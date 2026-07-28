@@ -7,6 +7,7 @@ import {
   getQuizForLesson,
 } from '../db/queries';
 import { logger } from '../lib/logger';
+import { Sentry } from '../lib/sentry';
 
 // ---------------------------------------------------------------------------
 // Public stats cache — TTL 5 minutes so the landing page is fast.
@@ -65,6 +66,7 @@ router.get('/user-stats', requireAuth, async (req, res) => {
     });
   } catch (error: any) {
     logger.error({ err: error?.message }, 'user-stats query failed');
+    Sentry.captureException(error);
     return res.status(503).json({ error: 'Stats temporarily unavailable', code: 'STATS_FAILED' });
   }
 });
@@ -93,6 +95,7 @@ router.post('/user-resource-states', requireAuth, async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     logger.error({ err: error }, 'Save resource states error');
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to save resource states', code: 'RESOURCE_SAVE_FAILED' });
   }
 });
@@ -155,6 +158,7 @@ router.put('/user-profile', requireAuth, async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     logger.error({ err: error }, 'Update user profile error');
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to update profile', code: 'PROFILE_UPDATE_FAILED' });
   }
 });
@@ -218,6 +222,7 @@ router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
     return res.json({ success: true, attempt: quizzes[idx >= 0 ? idx : quizzes.length - 1], newAchievement });
   } catch (error) {
     logger.error({ err: error }, 'Upsert topic wise quiz error');
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to save quiz attempt', code: 'QUIZ_SAVE_FAILED' });
   }
 });
@@ -255,6 +260,12 @@ router.post('/progress', requireAuth, async (req, res) => {
     return res.json({ success: true, progress });
   } catch (error: any) {
     logger.error({ err: error }, 'Progress tracking error');
+    Sentry.withScope((scope) => {
+      scope.setTag('feature', 'progress-tracking');
+      scope.setExtra('roadmapId', req.body?.roadmapId);
+      scope.setExtra('lessonId', req.body?.lessonId);
+      Sentry.captureException(error);
+    });
     return res.status(500).json({ error: 'Failed to update progress', code: 'PROGRESS_UPDATE_FAILED' });
   }
 });

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { requireAuth, aiLimiter, roadmapGenLimiter } from '../lib/middleware';
 import { unlockAchievement } from '../lib/db';
 import { logger } from '../lib/logger';
+import { Sentry } from '../lib/sentry';
 import {
   reconstructRoadmapJson,
   getRoadmapsByOwner,
@@ -69,6 +70,7 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
   const MAX_RETRIES = 2;
   let bestCandidate: { parsed: any; score: number } | null = null;
 
+  Sentry.setTag('feature', 'roadmap-generation');
   try {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       const prompt = attempt === 0 ? buildRoadmapPrompt() : buildCorrectivePrompt(bestCandidate ? validateCurriculumQuality(bestCandidate.parsed).issues : []);
@@ -110,6 +112,7 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
     let readableError = error.message || String(error);
     try { const pe = JSON.parse(error.message); if (pe?.error?.message) readableError = pe.error.message; } catch (_) {}
     logger.error({ err: readableError }, '[Roadmap] Generation failed, using offline fallback');
+    Sentry.captureException(error);
     // Pass meta (which includes roadmapId) so fallback IDs are also scoped.
     const fallbackRoadmap = buildFallbackCurriculum(meta);
     logCurriculumStats('AI-Fallback', fallbackRoadmap);
@@ -192,6 +195,7 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
   const MAX_RETRIES = 2;
   let bestCandidate: { parsed: any; score: number } | null = null;
 
+  Sentry.setTag('feature', 'roadmap-generation');
   try {
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       const prompt = attempt === 0
@@ -232,6 +236,7 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
     }
   } catch (error: any) {
     logger.error({ err: error.message }, '[Roadmap-Stream] Falling back to local curriculum');
+    Sentry.captureException(error);
     const fallbackRoadmap = buildFallbackCurriculum(meta);
     // Emit fallback phase names so the UI still animates.
     for (const phase of fallbackRoadmap.phases || []) {
@@ -252,11 +257,13 @@ router.get('/roadmaps', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
   const offset = Math.max(0, Number(req.query.offset) || 0);
+  Sentry.setTag('feature', 'roadmap-generation');
   try {
     const { roadmaps, total } = await getUserRoadmapsReconstructed(userEmail, { limit, offset });
     return res.json({ roadmaps, total, limit, offset });
   } catch (error) {
     logger.error({ err: error }, 'Get roadmaps error');
+    Sentry.captureException(error);
     return res.status(503).json({ error: 'Could not load roadmaps. Please retry.', code: 'ROADMAPS_FAILED' });
   }
 });
@@ -289,6 +296,7 @@ router.get('/roadmaps/:roadmapId', requireAuth, async (req, res) => {
     return res.json({ roadmap: workspaceRoadmap });
   } catch (error) {
     logger.error({ err: error }, 'Get roadmap error');
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to load roadmap', code: 'ROADMAP_LOAD_FAILED' });
   }
 });
@@ -305,6 +313,7 @@ router.delete('/roadmaps/:id', requireAuth, async (req, res) => {
     return res.json({ success: true, deletedId: id });
   } catch (error) {
     logger.error({ err: error }, 'Delete roadmap error');
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to delete roadmap. Database unavailable.', code: 'ROADMAP_DELETE_FAILED' });
   }
 });
@@ -337,6 +346,7 @@ router.post('/roadmaps', requireAuth, async (req, res) => {
     return res.json({ success: true, roadmap: saved, newAchievement });
   } catch (error) {
     logger.error({ err: error }, 'Create roadmap error');
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to create roadmap', code: 'ROADMAP_CREATE_FAILED' });
   }
 });
@@ -387,6 +397,7 @@ router.post('/update-roadmap', requireAuth, async (req, res) => {
     return res.json({ success: true, roadmap: updated });
   } catch (error) {
     logger.error({ err: error }, 'Update roadmap error');
+    Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to update roadmap', code: 'ROADMAP_UPDATE_FAILED' });
   }
 });
