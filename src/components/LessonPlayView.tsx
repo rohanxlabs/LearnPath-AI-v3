@@ -244,7 +244,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               </div>
             ) : (
               <div className="p-5 rounded-2xl border border-white/10 bg-white/[0.03] flex flex-col items-center text-center space-y-2">
-                <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Quiz Results Summary</span>
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Quiz Results Summary</span>
                 <p className="text-xl font-bold font-display text-white">
                   Scored: <span className="text-purple-400">{quizScore} / {lesson.quizQuestions?.length || 0}</span> Correct
                 </p>
@@ -273,7 +273,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
             <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col justify-between space-y-4">
               <div className="space-y-4">
                 <div className="border-b border-white/10 pb-3">
-                  <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">Exercise specifications</span>
+                  <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Exercise specifications</span>
                   <h4 className="font-semibold text-xs md:text-sm text-white">Logic Scripting Objectives</h4>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed max-w-md select-text whitespace-pre-wrap">
@@ -350,7 +350,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                     <ConfettiParticles count={15} />
                   )}
                   <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1 bg-transparent">
-                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center gap-1">
+                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
                       <Code2 className="w-3.5 h-3.5 text-purple-400" /> Compiler Log Diagnostic
                     </span>
                     <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
@@ -391,7 +391,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center mx-auto mb-3 border border-white/10">
                 <Swords className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">Boss Challenge</span>
+              <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Boss Challenge</span>
               <h4 className="font-display font-black text-base text-white mt-1">{lesson.name}</h4>
               <p className="text-xs text-zinc-400 leading-relaxed mt-2 select-text">
                 {lesson.content || 'Demonstrate your understanding by answering the challenge question below. Think carefully before submitting.'}
@@ -420,7 +420,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               {challengeStep === 'intro' && (
                 <motion.div key="intro" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   className="p-5 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3 text-center">
-                  <p className="text-xs text-amber-300 font-semibold uppercase tracking-widest">How this works</p>
+                  <p className="text-xs text-amber-300 font-semibold uppercase tracking-wider">How this works</p>
                   <ul className="text-xs text-zinc-400 space-y-1.5 text-left max-w-sm mx-auto">
                     <li className="flex items-start gap-2"><ChevronRight className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" /><span>Read the challenge prompt carefully</span></li>
                     <li className="flex items-start gap-2"><ChevronRight className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" /><span>Write your answer in your own words — no copy/paste</span></li>
@@ -436,7 +436,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               {challengeStep === 'thinking' && (
                 <motion.div key="thinking" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
-                  <p className="text-xs font-bold text-purple-400 uppercase tracking-widest">Challenge Prompt</p>
+                  <p className="text-xs font-bold text-purple-400 uppercase tracking-wider">Challenge Prompt</p>
                   <p className="text-sm text-zinc-200 leading-relaxed font-medium select-text">
                     {lesson.quizQuestions?.[0]?.question ||
                       `Explain the key concept behind "${lesson.name}" and give one real-world example of where you would apply it.`}
@@ -454,7 +454,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                 <motion.div key="answer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   className="space-y-3">
                   <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
-                    <p className="text-xs font-bold text-purple-400 uppercase tracking-widest">Your Answer</p>
+                    <p className="text-xs font-bold text-purple-400 uppercase tracking-wider">Your Answer</p>
                     <textarea
                       value={challengeAnswer}
                       onChange={e => setChallengeAnswer(e.target.value)}
@@ -586,7 +586,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               </button>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">{lesson.type} module</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">{lesson.type} module</span>
                   <XPBadge amount={lesson.xpReward} size="sm" />
                 </div>
                 <h3 className="font-display font-semibold text-sm md:text-base text-white mt-0.5 truncate max-w-xs sm:max-w-md">

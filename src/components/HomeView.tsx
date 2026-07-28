@@ -109,9 +109,9 @@ function SectionHeader({
         <div className={`p-1.5 rounded-lg text-purple-400 bg-purple-500/10`}>
           <Icon className="w-4 h-4" />
         </div>
-        <h3 className={`font-display font-semibold text-base text-white`}>{title}</h3>
+        <h3 className={`font-display font-bold text-lg text-white`}>{title}</h3>
       </div>
-      {subtitle && <p className={`text-xs text-zinc-400 mt-1 ml-9`}>{subtitle}</p>}
+      {subtitle && <p className={`text-sm text-zinc-400 mt-1 ml-9`}>{subtitle}</p>}
     </div>
   );
 }
@@ -470,10 +470,10 @@ export function HomeView({
           <div className="absolute bottom-0 left-0 w-36 h-36 bg-blue-600 rounded-full blur-[100px] opacity-10 pointer-events-none" />
 
           <div className="relative z-10">
-            <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">
+            <span className="text-sm font-bold text-purple-400 uppercase tracking-wider">
               {getTimeGreeting()}, {firstName}
             </span>
-            <h1 className="font-display text-xl sm:text-3xl font-bold text-white mt-1 leading-tight">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-white mt-1 leading-tight">
               Continue your learning journey
             </h1>
 
@@ -585,7 +585,7 @@ export function HomeView({
             <div className="flex flex-col gap-3.5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="text-xs font-bold uppercase tracking-widest text-purple-400">
+                  <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
                     {activeRoadmap.goal}
                   </span>
                   <h4 className="font-display font-bold text-lg text-white mt-1">
@@ -610,7 +610,7 @@ export function HomeView({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {currentLesson && (
                   <div className="state-current rounded-2xl p-3.5">
-                    <p className="text-xs font-bold uppercase tracking-widest text-emerald-400">
+                    <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">
                       Current Lesson
                     </p>
                     <p className="font-semibold text-sm text-white mt-1 truncate">
@@ -623,7 +623,7 @@ export function HomeView({
                 )}
                 {nextLesson && nextLesson.lesson.id !== currentLesson?.lesson.id && (
                   <div className="state-upcoming rounded-2xl p-3.5 opacity-100">
-                    <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">
+                    <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                       Up Next
                     </p>
                     <p className="font-semibold text-sm text-white mt-1 truncate">
@@ -790,7 +790,7 @@ export function HomeView({
               {!task.completed && task.lessonId && task.levelId && task.phaseId && (
                   <button
                     onClick={() => onStartLesson(task.phaseId!, task.levelId!, task.lessonId!)}
-                    className="shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
+                    className="shrink-0 text-sm font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
                   >
                     Start
                   </button>
@@ -798,7 +798,7 @@ export function HomeView({
                 {!task.completed && !task.lessonId && task.id === 'task-create-roadmap' && (
                   <button
                     onClick={onGenerateRoadmap}
-                    className="shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
+                    className="shrink-0 text-sm font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
                   >
                     Start
                   </button>

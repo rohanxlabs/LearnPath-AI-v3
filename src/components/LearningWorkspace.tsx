@@ -54,7 +54,7 @@ interface LearningWorkspaceProps {
 // ---------------------------------------------------------------------------
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+    <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
       <span className="flex-1 h-px bg-slate-200" />
       {children}
       <span className="flex-1 h-px bg-slate-200" />
@@ -388,7 +388,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                 <>
                   {/* Lesson title */}
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-widest text-violet-500 mb-1">Current Lesson</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-violet-500 mb-1">Current Lesson</p>
                     <h1 className="text-xl font-extrabold text-slate-900 leading-snug">{topicData.name}</h1>
                     {topicData.description && (
                       <p className="text-sm text-slate-500 mt-1 leading-relaxed">{topicData.description}</p>

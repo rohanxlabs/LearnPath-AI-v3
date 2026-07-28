@@ -23,7 +23,7 @@ export function ProgressCard({ progressPercent, currentPhaseName, totalXp, onCon
       
       <div className="flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
         <div className="flex-1 min-w-0 text-center sm:text-left">
-          <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">ACTIVE SYLLABUS</span>
+          <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">ACTIVE SYLLABUS</span>
           <h3 className="font-display font-bold text-xl md:text-2xl text-white mt-1 truncate">
             {currentPhaseName}
           </h3>
@@ -229,7 +229,7 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
-        <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">
+        <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">
           +{achievement.xpReward} XP REWARD
         </span>
 {isUnlocked && onShare && (
@@ -374,7 +374,7 @@ export function AIRecommendationCard({ recommendation, onLaunch }: AIRecommendat
           </span>
 <button
             onClick={() => onLaunch(recommendation)}
-            className={`inline-flex items-center gap-1 hover:gap-1.5 text-xs text-purple-400 font-bold hover:text-purple-300 transition-all cursor-pointer ${buttonStyles.ghost}`}
+            className={`inline-flex items-center gap-1 hover:gap-1.5 text-sm text-purple-400 font-bold hover:text-purple-300 transition-all cursor-pointer ${buttonStyles.ghost}`}
           >
             <span>Start Task</span>
            <ChevronRight className="w-3.5 h-3.5" />
@@ -407,7 +407,7 @@ export function LearningScoreCard({ profile }: LearningScoreCardProps) {
       <div className="flex items-center justify-between gap-2.5 mb-4">
         <div className="flex items-center gap-2">
           <BrainCircuit className="w-5 h-5 text-purple-400" />
-           <h4 className="font-display font-semibold text-sm text-white font-sans">Skill Mastery</h4>
+           <h4 className="font-display font-semibold text-sm text-white">Skill Mastery</h4>
          </div>
          <span className="text-xs text-zinc-400 font-semibold flex items-center gap-1">
            <BarChart className="w-3.5 h-3.5" /> Based on your activity

@@ -73,7 +73,7 @@ export function PhaseCompletionModal({ phase, nextPhase, xpEarned, onContinue, o
 
           {/* Heading */}
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-            <p className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-1">Phase Complete!</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-500 mb-1">Phase Complete!</p>
             <h2 id="phase-completion-title" className="text-2xl font-extrabold text-zinc-900 dark:text-white tracking-tight leading-tight">
               {phase.name}
             </h2>

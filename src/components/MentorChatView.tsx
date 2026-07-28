@@ -262,7 +262,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
       {/* Suggested fast click starting prompt bubbles */}
       {chats.length <= 1 && (
         <div className="p-4 border-t border-white/10 bg-zinc-950/20 backdrop-blur-md">
-          <label className="block text-xs font-bold text-zinc-400 uppercase tracking-widest mb-2 px-1">Suggested discussions</label>
+          <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 px-1">Suggested discussions</label>
           <div className="grid grid-cols-2 gap-2">
             {suggestedPrompts.map((p) => {
               const Icon = p.icon;

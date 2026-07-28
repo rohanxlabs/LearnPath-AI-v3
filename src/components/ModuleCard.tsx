@@ -92,7 +92,7 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
           </div>
           
           {phaseName && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-widest mb-2">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-semibold uppercase tracking-wider mb-2">
               {phaseName}
             </p>
           )}

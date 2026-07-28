@@ -148,9 +148,9 @@ export function AnalyticsView({ profile, activityLog = {}, onNavigate, getAuthHe
       {/* 2. Overall completion ring card */}
       <div className="p-6 rounded-2xl glass-card glass-card-purple flex flex-col sm:flex-row items-center justify-between gap-6 transition-all duration-200">
         <div className="flex-1 text-center sm:text-left">
-          <span className="text-xs font-bold text-purple-400 uppercase tracking-widest">OVERALL PROGRESS</span>
+          <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">OVERALL PROGRESS</span>
           <h3 className="font-display font-bold text-xl text-white mt-1">Your Roadmap Progress</h3>
-          <p className="text-xs text-zinc-300 mt-1.5">
+          <p className="text-sm text-zinc-300 mt-1.5">
             You're making steady progress. Keep completing lessons to raise your overall completion.
           </p>
         </div>
@@ -476,7 +476,7 @@ export function ProfileView({
 
           {/* Theme mode selector — Light / Dark / System */}
           <div className="space-y-1.5 border-b border-white/10 pb-3">
-            <span className="block text-xs font-bold text-zinc-300 uppercase tracking-widest">Theme Mode</span>
+            <span className="block text-xs font-bold text-zinc-300 uppercase tracking-wider">Theme Mode</span>
             <div className="grid grid-cols-3 gap-1.5">
               {(['light', 'dark', 'system'] as const).map((t) => {
                 const active = settings.theme === t;
