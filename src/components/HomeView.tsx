@@ -421,47 +421,53 @@ export function HomeView({
   ], [onGenerateRoadmap, onOpenMentor, onViewProgress, onStartLesson, onContinueLearning, currentLesson, activeRoadmap]);
 
   return (
-    <div className="home-view space-y-8 pb-4 max-w-full overflow-x-hidden">
-
-      {/* Welcome-back re-engagement banner */}
-      {showWelcomeBack && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="relative flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-sm"
-        >
-          <RefreshCw className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-amber-500">
-              Welcome back, {firstName}!{' '}
-              {liveStats!.daysSinceLastVisit === 1
-                ? "You were away yesterday."
-                : `You've been away for ${liveStats!.daysSinceLastVisit} days.`}
-            </p>
-            <p className="text-xs text-zinc-400 mt-0.5">
-              {liveStats!.lessonsCompleted > 0
-                ? `You've completed ${liveStats!.lessonsCompleted} lesson${liveStats!.lessonsCompleted === 1 ? '' : 's'} — that work doesn't disappear. Pick up where you left off.`
-                : "Your roadmap is waiting. Every day you come back counts."}
-            </p>
-            {activeRoadmap && (
-              <button
-                onClick={onContinueLearning}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors cursor-pointer"
-              >
-                <Play className="w-3 h-3 fill-current" /> Resume learning
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => setBannerDismissed(true)}
-            className="flex-shrink-0 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer p-0.5"
-            aria-label="Dismiss"
+    <>
+      {/* Welcome-back sticky re-engagement banner — sits just below the 64px nav bar */}
+      <AnimatePresence>
+        {showWelcomeBack && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.25 }}
+            className="sticky top-16 z-30 mx-auto max-w-full px-4 sm:px-6 pb-2 pointer-events-none"
           >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </motion.div>
-      )}
+            <div className="pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 shadow-md text-sm backdrop-blur-sm">
+              <RefreshCw className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-amber-500">
+                  Welcome back, {firstName}!{' '}
+                  {liveStats!.daysSinceLastVisit === 1
+                    ? "You were away yesterday."
+                    : `You've been away for ${liveStats!.daysSinceLastVisit} days.`}
+                </p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  {liveStats!.lessonsCompleted > 0
+                    ? `You've completed ${liveStats!.lessonsCompleted} lesson${liveStats!.lessonsCompleted === 1 ? '' : 's'} — that work doesn't disappear. Pick up where you left off.`
+                    : "Your roadmap is waiting. Every day you come back counts."}
+                </p>
+                {activeRoadmap && (
+                  <button
+                    onClick={onContinueLearning}
+                    className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors cursor-pointer"
+                  >
+                    <Play className="w-3 h-3 fill-current" /> Resume learning
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setBannerDismissed(true)}
+                className="flex-shrink-0 text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer p-0.5 rounded"
+                aria-label="Dismiss welcome back banner"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    <div className="home-view space-y-8 pb-4 max-w-full overflow-x-hidden">
 
       {/* SECTION 1 — Personalized Hero */}
       <motion.section {...fadeUp}>
@@ -575,6 +581,21 @@ export function HomeView({
             );
           })}
         </div>
+        {/* Zero-state onboarding nudge — shown only when no activity at all */}
+        {!activeRoadmap && stats.completedLessons === 0 && profile.streak === 0 && (
+          <div className="col-span-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-purple-500/8 border border-purple-500/20 mt-1">
+            <Sparkles className="w-4 h-4 text-purple-400 flex-shrink-0" />
+            <p className="text-xs text-zinc-400 flex-1">
+              Complete your first lesson to unlock live tracking — streak, XP, progress, and more.
+            </p>
+            <button
+              onClick={onGenerateRoadmap}
+              className="flex-shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              Get started →
+            </button>
+          </div>
+        )}
       </motion.section>
 
       {/* SECTION 3 — Continue Learning */}
@@ -645,10 +666,10 @@ export function HomeView({
                       currentLesson.lesson.id,
                     )
                   }
-                  className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 font-bold text-sm text-white bg-gradient-to-br from-purple-500 to-blue-600 rounded-xl hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer shadow-[0_4px_14px_rgba(124,58,237,0.30)] w-full sm:w-auto self-start`}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 font-bold text-sm text-purple-400 border border-purple-500/30 bg-purple-500/10 rounded-xl hover:bg-purple-500/20 active:scale-[0.98] transition-all cursor-pointer w-full sm:w-auto self-start"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  Continue Learning
+                  Open Lesson
                 </button>
               )}
             </div>
@@ -675,6 +696,55 @@ export function HomeView({
         )}
       </motion.section>
 
+      {/* SECTION 4 — Today's Tasks (always visible — highest daily retention value) */}
+      <motion.section {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.12 }}>
+        <SectionHeader icon={ClipboardList} title="Today's Tasks" subtitle="Generated from your roadmap status" />
+        <GlassCard className="p-4 sm:p-5">
+          <ul className="space-y-2">
+            {todaysTasks.map((task) => (
+              <li
+                key={task.id}
+                className={`flex items-start gap-3 p-4 rounded-xl transition-all duration-200 ${
+                  task.completed ? 'state-completed' : 'home-nested-glass hover:border-purple-500/20'
+                }`}
+              >
+                {task.completed ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                ) : (
+                  <Circle className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p
+                    className={`text-sm font-semibold ${
+                      task.completed ? 'text-emerald-400 line-through' : 'text-white'
+                    }`}
+                  >
+                    {task.title}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{task.description}</p>
+                </div>
+              {!task.completed && task.lessonId && task.levelId && task.phaseId && (
+                  <button
+                    onClick={() => onStartLesson(task.phaseId!, task.levelId!, task.lessonId!)}
+                    className="shrink-0 text-sm font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
+                  >
+                    Start
+                  </button>
+                )}
+                {!task.completed && !task.lessonId && task.id === 'task-create-roadmap' && (
+                  <button
+                    onClick={onGenerateRoadmap}
+                    className="shrink-0 text-sm font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
+                  >
+                    Start
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </GlassCard>
+      </motion.section>
+
       {/* ── Show more / Show less toggle ── */}
       <div className="flex justify-center pt-1 pb-1">
         <button
@@ -687,7 +757,7 @@ export function HomeView({
           {showSecondary ? (
             <>Show less <ChevronUp className="w-3.5 h-3.5" /></>
           ) : (
-            <>Show more <ChevronDown className="w-3.5 h-3.5" /></>
+            <>More insights & achievements <ChevronDown className="w-3.5 h-3.5" /></>
           )}
         </button>
       </div>
@@ -705,7 +775,7 @@ export function HomeView({
             className="overflow-hidden space-y-8"
           >
 
-      {/* SECTION 4 — AI Insights */}
+      {/* SECTION 5 — AI Insights */}
       <motion.section {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.12 }}>
         <SectionHeader
           icon={Sparkles}
@@ -758,55 +828,6 @@ export function HomeView({
             </div>
           </GlassCard>
         )}
-      </motion.section>
-
-      {/* SECTION 5 — Today's Tasks */}
-      <motion.section {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.16 }}>
-        <SectionHeader icon={ClipboardList} title="Today's Tasks" subtitle="Generated from your roadmap status" />
-        <GlassCard className="p-4 sm:p-5">
-          <ul className="space-y-2">
-            {todaysTasks.map((task) => (
-              <li
-                key={task.id}
-                className={`flex items-start gap-3 p-4 rounded-xl transition-all duration-200 ${
-                  task.completed ? 'state-completed' : 'home-nested-glass hover:border-purple-500/20'
-                }`}
-              >
-                {task.completed ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                ) : (
-                  <Circle className="w-5 h-5 text-zinc-500 shrink-0 mt-0.5" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p
-                    className={`text-sm font-semibold ${
-                      task.completed ? 'text-emerald-400 line-through' : 'text-white'
-                    }`}
-                  >
-                    {task.title}
-                  </p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{task.description}</p>
-                </div>
-              {!task.completed && task.lessonId && task.levelId && task.phaseId && (
-                  <button
-                    onClick={() => onStartLesson(task.phaseId!, task.levelId!, task.lessonId!)}
-                    className="shrink-0 text-sm font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
-                  >
-                    Start
-                  </button>
-                )}
-                {!task.completed && !task.lessonId && task.id === 'task-create-roadmap' && (
-                  <button
-                    onClick={onGenerateRoadmap}
-                    className="shrink-0 text-sm font-bold text-purple-400 hover:text-purple-300 cursor-pointer px-3 py-2 min-h-[36px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-purple-500/10 transition-colors"
-                  >
-                    Start
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </GlassCard>
       </motion.section>
 
       {/* SECTION 6 — Learning Activity */}
@@ -952,5 +973,6 @@ export function HomeView({
         )}
       </AnimatePresence>
     </div>
+    </>
   );
 }
