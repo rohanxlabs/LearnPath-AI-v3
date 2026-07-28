@@ -209,7 +209,7 @@ export function SideDrawer({
           </div>
           <div className="mt-3.5 flex items-center justify-between">
             <div className="text-xs text-zinc-600 dark:text-zinc-400">
-              Level <span className="font-bold text-zinc-900 dark:text-white text-xs bg-zinc-100 dark:bg-white/5 border border-zinc-300 dark:border-white/10 px-1.5 py-0.5 rounded ml-1">{profile.level}</span>
+              Level <span className="font-bold text-zinc-900 dark:text-white text-xs bg-zinc-100 dark:bg-white/5 border border-zinc-300 dark:border-white/10 px-1.5 py-0.5 rounded-full ml-1">{profile.level}</span>
             </div>
             <TierBadge isPro={profile.isPro} onClick={onUpgradeClick} />
           </div>

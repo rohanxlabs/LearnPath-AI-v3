@@ -101,7 +101,7 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
 
     return (
       <div key={index} className="relative">
-        <div className={`rounded-xl border-2 p-5 transition-all duration-200 ${getCardStyles(node.status)}`}>
+        <div className={`rounded-xl border p-5 transition-all duration-200 ${getCardStyles(node.status)}`}>
           {/* Module Header */}
           <div className="flex items-start justify-between gap-3 mb-3">
             <div className="flex items-start gap-3 flex-1">

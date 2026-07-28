@@ -276,7 +276,7 @@ export function HomeView({
         </div>
         <div className="space-y-3">
           <Skeleton className="h-4 w-28" />
-          <div className="p-4 sm:p-5 rounded-3xl bg-white/5 border border-white/10 space-y-2">
+          <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="flex items-start gap-3 p-3 rounded-2xl">
                 <Skeleton className="w-5 h-5 rounded-full shrink-0 mt-0.5" />
@@ -290,7 +290,7 @@ export function HomeView({
         </div>
         <div className="space-y-3">
           <Skeleton className="h-4 w-24" />
-          <div className="p-5 sm:p-6 rounded-3xl bg-white/5 border border-white/10 space-y-3">
+          <div className="p-5 sm:p-6 rounded-2xl bg-white/5 border border-white/10 space-y-3">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="flex items-center gap-3">
                 <Skeleton className="w-8 h-8 rounded-xl shrink-0" />
@@ -320,7 +320,7 @@ export function HomeView({
           <Skeleton className="h-4 w-20" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="p-4 rounded-3xl bg-white/5 border border-white/10 text-left">
+              <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/10 text-left">
                 <Skeleton className="h-4 w-16 mb-2" />
                 <Skeleton className="h-6 w-12 mb-1" />
                 <Skeleton className="h-3 w-16" />
@@ -480,22 +480,22 @@ export function HomeView({
             {activeRoadmap ? (
               <>
                 <div className="flex flex-wrap items-center gap-2 mt-3.5">
-                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-300">
+                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300">
                     <Map className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                     <span className="truncate max-w-[220px]">{roadmapTitle}</span>
                   </span>
-                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-300">
+                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300">
                     <Target className="w-3.5 h-3.5 text-purple-400" />
                     Level {stats.curriculumLevel}
                   </span>
-                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-300">
+                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300">
                     <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
                     {stats.progressPercent}% complete
                   </span>
                   {profile.streak > 0 ? (
                     <StreakBadge days={profile.streak} />
                   ) : (
-                    <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-zinc-400">
+                    <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-zinc-400">
                       <Flame className="w-3.5 h-3.5 text-zinc-500" />
                       {profile.streak} day streak
                     </span>
@@ -936,7 +936,7 @@ export function HomeView({
                 key={action.id}
                 onClick={action.onClick}
                 disabled={action.disabled}
-                className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-3xl p-4 text-left transition-all duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[80px]`}
+                className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-2xl p-4 text-left transition-all duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[80px]`}
               >
                 <div className="p-2 rounded-xl border text-purple-400 bg-purple-500/10 border-purple-500/20 w-fit mb-2.5">
                   <Icon className="w-4 h-4" />
