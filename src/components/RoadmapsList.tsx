@@ -86,8 +86,12 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
       {roadmaps.map((roadmap) => (
         <div
           key={roadmap.id}
-          className="group glass-card rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] transition-all duration-200 cursor-pointer relative"
+          role="button"
+          tabIndex={0}
+          aria-label={`Open roadmap: ${roadmap.goal}`}
+          className="group glass-card rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] transition-all duration-200 cursor-pointer relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
           onClick={() => onSelectRoadmap(roadmap.id)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectRoadmap(roadmap.id); } }}
         >
           {/* Delete Button */}
           <button
@@ -95,7 +99,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
               e.stopPropagation();
               onDeleteRoadmap(roadmap.id);
             }}
-            className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-lg hover:bg-rose-500/10"
+            className="absolute top-4 right-4 opacity-40 group-hover:opacity-100 transition-opacity p-2 rounded-lg hover:bg-rose-500/10 focus-visible:opacity-100"
             aria-label="Delete roadmap"
           >
             <Trash2 className="w-4 h-4 text-rose-400" />
@@ -152,7 +156,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
           </div>
 
           {/* Arrow Icon */}
-          <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true">
             <ChevronRight className="w-5 h-5 text-purple-400" />
           </div>
         </div>

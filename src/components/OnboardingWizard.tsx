@@ -48,13 +48,18 @@ function clearDraft() {
 
 function StepDots({ current }: { current: number }) {
   return (
-    <div className="flex items-center justify-center gap-2 mb-8" role="tablist" aria-label="Onboarding progress">
+    <div
+      className="flex items-center justify-center gap-2 mb-8"
+      role="progressbar"
+      aria-valuenow={current + 1}
+      aria-valuemin={1}
+      aria-valuemax={STEP_COUNT}
+      aria-label={`Step ${current + 1} of ${STEP_COUNT}`}
+    >
       {Array.from({ length: STEP_COUNT }).map((_, i) => (
         <div
           key={i}
-          role="tab"
-          aria-selected={i === current}
-          aria-label={`Step ${i + 1} of ${STEP_COUNT}`}
+          aria-hidden="true"
           className={`rounded-full transition-all duration-300 ${
             i < current ? 'w-6 h-2 bg-purple-500' : i === current ? 'w-6 h-2 bg-purple-400' : 'w-2 h-2 bg-white/20'
           }`}

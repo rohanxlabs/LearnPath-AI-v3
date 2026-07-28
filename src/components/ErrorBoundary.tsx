@@ -54,8 +54,8 @@ export class ErrorBoundary extends Component<Props, State> {
       }
       return (
         <div className={`flex flex-col items-center justify-center py-20 px-6 ${glassCardClass()} rounded-2xl`}>
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-4">
-            <AlertTriangle className="w-8 h-8 text-red-600" />
+          <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-center justify-center mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Something went wrong</h3>
           <p className="text-sm text-zinc-400 max-w-md mb-6 text-center">

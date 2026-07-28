@@ -349,11 +349,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {/* Outer glow halo */}
               <div className="pointer-events-none absolute -inset-4 rounded-[44px] bg-gradient-to-br from-purple-300/30 via-violet-200/20 to-fuchsia-200/20 blur-3xl" aria-hidden="true" />
 
-              {/*
-               * TODO: Drop public/screenshot-dashboard.webp once UX polish is complete.
-               * The placeholder below is shown automatically while the asset is absent.
-               * No code changes needed — adding the file to public/ is sufficient.
-               */}
               <div
                 aria-hidden="true"
                 className="relative overflow-hidden rounded-[28px] border border-purple-200 bg-purple-50 shadow-[0_24px_64px_rgba(124,58,237,0.12),0_0_0_1px_rgba(168,85,247,0.08)]"

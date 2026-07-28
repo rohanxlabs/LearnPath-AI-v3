@@ -14,7 +14,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   message = 'Loading your learning space...' 
 }) => {
   return (
-    <div role="status" aria-label={message} className="fixed inset-0 bg-[#0A0A0A] flex flex-col items-center justify-center z-50">
+    <div role="status" aria-label={message} className="fixed inset-0 bg-white dark:bg-[#0A0A0A] flex flex-col items-center justify-center z-50">
       <div className="relative w-24 h-24 mb-6">
         {variant === 'book' && (
           <motion.div
@@ -76,7 +76,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
 
       <motion.p
         aria-live="polite"
-        className="text-zinc-400 text-xs font-medium"
+        className="text-zinc-600 dark:text-zinc-400 text-xs font-medium"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}

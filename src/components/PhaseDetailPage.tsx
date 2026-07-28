@@ -217,14 +217,14 @@ export function PhaseDetailPage({
                 <circle cx="32" cy="32" r="26" stroke="#e5e7eb" strokeWidth="6" fill="none" className="dark:stroke-white/10" />
                 <circle
                   cx="32" cy="32" r="26"
-                  stroke="url(#phaseGrad)" strokeWidth="6" fill="none"
+                  stroke={`url(#phaseGrad-${phase.id})`} strokeWidth="6" fill="none"
                   strokeDasharray={`${2 * Math.PI * 26}`}
                   strokeDashoffset={`${2 * Math.PI * 26 * (1 - progress / 100)}`}
                   strokeLinecap="round"
                   className="transition-all duration-700"
                 />
                 <defs>
-                  <linearGradient id="phaseGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <linearGradient id={`phaseGrad-${phase.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#8b5cf6" />
                     <stop offset="100%" stopColor="#3b82f6" />
                   </linearGradient>

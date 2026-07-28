@@ -36,14 +36,19 @@ export function MobileHeader({
         >
           <Menu className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
         </button>
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => onTabChange('home')}>
+        <button
+          type="button"
+          onClick={() => onTabChange('home')}
+          aria-label="Go to home"
+          className="flex items-center gap-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors px-1 py-0.5 -mx-1"
+        >
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <span className="font-display text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
             LearnPath <span className="text-purple-600 dark:text-purple-400 font-extrabold">AI</span>
           </span>
-        </div>
+        </button>
       </div>
 
       <div className="flex items-center gap-2.5">
@@ -90,7 +95,7 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
   // aria-label always carries the full accessible name.
   const tabs = [
     { id: 'home',     label: 'Home',    ariaLabel: 'Home',              icon: Home },
-    { id: 'roadmaps', label: 'Maps',    ariaLabel: 'Roadmaps',          icon: Compass },
+    { id: 'roadmaps', label: 'Paths',   ariaLabel: 'Roadmaps',          icon: Compass },
     { id: 'mentor',   label: 'Mentor',  ariaLabel: 'AI Mentor',         icon: MessageSquare },
     { id: 'progress', label: 'Stats',   ariaLabel: 'Progress',          icon: BarChart3 },
     { id: 'profile',  label: 'Profile', ariaLabel: 'Profile',           icon: User },
@@ -179,6 +184,9 @@ export function SideDrawer({
     <div className="fixed inset-0 z-50 overflow-hidden md:hidden">
       {/* Backdrop */}
       <div
+        role="button"
+        aria-label="Close sidebar"
+        tabIndex={-1}
         className={`absolute inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300 ${mounted ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
       />
@@ -280,7 +288,7 @@ export function SideDrawer({
             className="w-full flex items-center gap-3 px-4 py-3.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-200/50 dark:hover:bg-white/5 rounded-xl text-left min-h-[44px]"
           >
             <Settings className="w-4 h-4 text-zinc-500" />
-            <span>Settings Preferences</span>
+            <span>Settings</span>
           </button>
           <button
             onClick={() => {

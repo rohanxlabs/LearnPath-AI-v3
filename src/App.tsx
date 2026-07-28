@@ -43,19 +43,18 @@ export function renderHomeView(props: {
   aiRecommendations: any[];
   isRecsLoading: boolean;
   isLoading?: boolean;
-  roadmapProgress?: Record<string, any>;
   getNextIncompleteLesson: (roadmap: Roadmap) => { phaseId: string; levelId: string; lessonId: string } | null;
   setActiveTab: (tab: string) => void;
   setActiveLesson: (lesson: { phaseId: string; levelId: string; lessonId: string } | null) => void;
   handleSelectRecommendationTask: (rec: any) => void;
   getAuthHeaders?: () => Promise<Record<string, string>>;
 }) {
-  const { profile, activeRoadmap, activePhase, achievements, aiRecommendations, isRecsLoading, isLoading, roadmapProgress, getNextIncompleteLesson, setActiveTab, setActiveLesson, handleSelectRecommendationTask, getAuthHeaders } = props;
+  const { profile, activeRoadmap, activePhase, achievements, aiRecommendations, isRecsLoading, isLoading, getNextIncompleteLesson, setActiveTab, setActiveLesson, handleSelectRecommendationTask, getAuthHeaders } = props;
   return (
     <HomeView
       profile={profile} activeRoadmap={activeRoadmap} activePhase={activePhase}
       achievements={achievements} aiRecommendations={aiRecommendations}
-      isRecsLoading={isRecsLoading} isLoading={isLoading} roadmapProgress={roadmapProgress}
+      isRecsLoading={isRecsLoading} isLoading={isLoading}
       getAuthHeaders={getAuthHeaders}
       onContinueLearning={() => {
         const nextLesson = getNextIncompleteLesson(activeRoadmap!);
@@ -336,9 +335,16 @@ function AppShell() {
         setProfile(p => ({ ...p, isPro: true }));
         setStripeCheckoutStatus(data.message || 'Pro unlocked!');
         setNotifications(prev => [{ id: `notif-pro-${Date.now()}`, title: 'LearnPath AI Pro Gained! 👑', message: data.message || 'Pro subscription activated.', category: 'system', read: false, timestamp: new Date().toISOString() }, ...prev]);
-      } else { setStripeCheckoutStatus(data.error || 'Checkout unavailable.'); }
-    } catch { setStripeCheckoutStatus('Network error — please retry.'); }
-  }, [mutatingHeaders]);
+      } else {
+        const msg = data.error || 'Checkout unavailable.';
+        setStripeCheckoutStatus(null);
+        showToast(msg, 'info');
+      }
+    } catch {
+      setStripeCheckoutStatus(null);
+      showToast('Network error — please retry.', 'error');
+    }
+  }, [mutatingHeaders, showToast]);
 
   // --- Loading state ---
   // Cold page load (no session confirmed yet): show splash so the auth gateway
@@ -353,7 +359,7 @@ function AppShell() {
       <div className={`min-h-screen pb-20 ${themeClass} transition-colors duration-300`} style={customBackground}>
         <MobileHeader profile={profile} notifications={[]} onTabChange={() => {}} onNotificationsClick={() => {}} onUpgradeClick={() => {}} onOpenDrawer={() => {}} />
         <main className="max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]">
-          {renderHomeView({ profile, activeRoadmap: null, activePhase: null, achievements: [], aiRecommendations: [], isRecsLoading: false, isLoading: true, roadmapProgress: {}, getNextIncompleteLesson: () => ({ phaseId: '', levelId: '', lessonId: '' }), setActiveTab: () => {}, setActiveLesson: () => {}, handleSelectRecommendationTask: () => {} })}
+          {renderHomeView({ profile, activeRoadmap: null, activePhase: null, achievements: [], aiRecommendations: [], isRecsLoading: false, isLoading: true, getNextIncompleteLesson: () => ({ phaseId: '', levelId: '', lessonId: '' }), setActiveTab: () => {}, setActiveLesson: () => {}, handleSelectRecommendationTask: () => {} })}
         </main>
       </div>
     );

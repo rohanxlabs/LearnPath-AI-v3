@@ -217,7 +217,7 @@ export function RoadmapOverviewPage({
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="flex items-center gap-3 px-4 py-3 rounded-xl border-l-4 border-purple-500 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20"
+          className="flex items-center gap-3 px-4 py-3 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 shadow-[inset_4px_0_0_#8b5cf6]"
         >
           <div className="flex-shrink-0 w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center">
             <MapPin className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -251,16 +251,20 @@ export function RoadmapOverviewPage({
             const doneLs = (phase.levels || []).flatMap(l => l.lessons || []).filter(l => l.status === 'completed').length;
 
             return (
-              <motion.div
+              <motion.button
                 key={phase.id}
+                type="button"
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: idx * 0.06 }}
                 onClick={() => handlePhaseClick(phase.id, status, idx)}
-                className={`relative rounded-2xl border p-5 transition-all duration-200 overflow-hidden
+                disabled={status === 'locked'}
+                aria-label={`${status === 'locked' ? 'Locked: ' : ''}Phase ${idx + 1}: ${phase.name}`}
+                aria-disabled={status === 'locked'}
+                className={`relative rounded-2xl border p-5 transition-all duration-200 overflow-hidden w-full text-left
                   ${status === 'locked'
                     ? 'border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/[0.02] cursor-not-allowed'
-                    : 'border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.03] cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] hover:border-purple-300 dark:hover:border-purple-500/40'
+                    : 'border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.03] cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] hover:border-purple-300 dark:hover:border-purple-500/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500'
                   }
                   ${status === 'unlocked' ? 'ring-2 ring-purple-400/40 dark:ring-purple-500/30' : ''}
                 `}
@@ -369,7 +373,7 @@ export function RoadmapOverviewPage({
                     </div>
                   )}
                 </div>
-              </motion.div>
+              </motion.button>
             );
           })}
         </div>

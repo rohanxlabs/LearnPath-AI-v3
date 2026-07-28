@@ -53,7 +53,7 @@ export function FeedbackWidget({ context, getAuthHeaders }: FeedbackWidgetProps)
   }
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 md:bottom-6">
+    <div className="fixed bottom-[5.5rem] right-4 z-50 md:bottom-8">
       <AnimatePresence>
         {open && (
           <motion.div
@@ -133,7 +133,7 @@ export function FeedbackWidget({ context, getAuthHeaders }: FeedbackWidgetProps)
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         className="w-12 h-12 rounded-full bg-white border border-zinc-200 shadow-[0_4px_20px_rgba(0,0,0,0.35)] flex items-center justify-center text-purple-600 hover:bg-zinc-50 transition-all"
-        aria-label="Share feedback"
+        aria-label={open ? 'Close feedback' : 'Share feedback'}
       >
         {open ? <X className="w-5 h-5" /> : <MessageSquarePlus className="w-5 h-5" />}
       </motion.button>

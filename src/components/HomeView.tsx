@@ -67,7 +67,6 @@ export interface HomeViewProps {
   onLaunchRecommendation: (rec: AIRecommendation) => void;
   onOpenMentor: () => void;
   onViewProgress: () => void;
-  roadmapProgress?: Record<string, any>;
   getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
@@ -251,7 +250,7 @@ export function HomeView({
 
   if (isLoading) {
     return (
-      <div className="home-view space-y-8 pb-2 max-w-full overflow-x-hidden">
+      <div className="home-view space-y-6 pb-2 max-w-full overflow-x-hidden">
         {/* SkeletonHomeHero matches the real hero's rounded-2xl dimensions exactly — prevents CLS */}
         <SkeletonHomeHero />
         <div className="space-y-3">
@@ -261,68 +260,6 @@ export function HomeView({
               <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="h-7 w-14" />
-                <Skeleton className="h-3 w-16" />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-3">
-          <Skeleton className="h-3 w-36" />
-          <div className="p-5 sm:p-6 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-3 w-5/6" />
-            <Skeleton className="h-10 w-40 rounded-xl" />
-          </div>
-        </div>
-        <div className="space-y-3">
-          <Skeleton className="h-4 w-28" />
-          <div className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-2xl">
-                <Skeleton className="w-5 h-5 rounded-full shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-3">
-          <Skeleton className="h-4 w-24" />
-          <div className="p-5 sm:p-6 rounded-2xl bg-white/5 border border-white/10 space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <Skeleton className="w-8 h-8 rounded-xl shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-3 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-3">
-          <Skeleton className="h-4 w-28" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3">
-                <Skeleton className="w-8 h-8 rounded-xl shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-full" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-3">
-          <Skeleton className="h-4 w-20" />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/10 text-left">
-                <Skeleton className="h-4 w-16 mb-2" />
-                <Skeleton className="h-6 w-12 mb-1" />
                 <Skeleton className="h-3 w-16" />
               </div>
             ))}

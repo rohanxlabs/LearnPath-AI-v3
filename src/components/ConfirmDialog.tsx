@@ -72,8 +72,6 @@ export function ConfirmDialog({
               className="pointer-events-auto w-full max-w-sm rounded-2xl border border-white/10 bg-[#161616]/95 backdrop-blur-md p-6 shadow-[0_16px_48px_rgba(0,0,0,0.4)] outline-none"
             >
               {/* Header */}
-              {/* TODO: Make the Trash2 icon configurable via a prop — not all confirms are
-                  destructive deletes. See ux-sprint-plan.md § TODO Comments for Future Work. */}
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center flex-shrink-0">

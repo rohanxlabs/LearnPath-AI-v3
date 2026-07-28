@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { ArrowLeft, CheckCircle2, AlertTriangle, Lightbulb, Code2, PlayCircle, RefreshCw, Swords, ChevronRight } from 'lucide-react';
@@ -45,7 +46,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
   // States for Writing Code
   const [userCode, setUserCode] = useState(lesson.codingExercise?.templateCode || `def compute_operations():\n    # Type code here\n    return True`);
   const [codeIsVerifying, setCodeIsVerifying] = useState(false);
-  const [codeFeedback, setCodeFeedback] = useState<any | null>(null);
+  interface CodeFeedback { passed: boolean; suggestions?: string; explanation?: string; systemError?: boolean; }
+  const [codeFeedback, setCodeFeedback] = useState<CodeFeedback | null>(null);
 
   // Quiz submission scorer
   const handleQuizSubmit = () => {
@@ -129,20 +131,21 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-3 text-zinc-300">{children}</ul>,
                   ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-3 text-zinc-300">{children}</ol>,
                   li: ({ children }) => <li className="text-zinc-300 text-sm leading-relaxed">{children}</li>,
-                  code: ({ inline, children, ...props }: any) =>
-                    inline
-                      ? <code className="px-1.5 py-0.5 bg-white/10 rounded text-purple-300 font-mono text-xs" {...props}>{children}</code>
-                      : <code className="block bg-[#0d0d0d] border border-white/10 rounded-xl p-4 font-mono text-xs text-emerald-300 overflow-x-auto whitespace-pre mb-3" {...props}>{children}</code>,
+                  code: (({ node: _n, className, children }) =>
+                    className
+                      ? <code className="block bg-[#0d0d0d] border border-white/10 rounded-xl p-4 font-mono text-xs text-emerald-300 overflow-x-auto whitespace-pre mb-3">{children}</code>
+                      : <code className="px-1.5 py-0.5 bg-white/10 rounded text-purple-300 font-mono text-xs">{children}</code>
+                  ) as Components['code'],
                   pre: ({ children }) => <>{children}</>,
                   blockquote: ({ children }) => <blockquote className="border-l-2 border-purple-500 pl-4 italic text-zinc-400 my-3">{children}</blockquote>,
                   strong: ({ children }) => <strong className="text-white font-semibold">{children}</strong>,
                   em: ({ children }) => <em className="text-zinc-300 italic">{children}</em>,
-                  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">{children}</a>,
+                  a: ({ href, children }) => <a href={href as string | undefined} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline underline-offset-2">{children}</a>,
                   hr: () => <hr className="border-white/10 my-4" />,
                   table: ({ children }) => <div className="overflow-x-auto mb-3"><table className="w-full text-sm border-collapse">{children}</table></div>,
                   th: ({ children }) => <th className="border border-white/10 px-3 py-2 text-left text-zinc-200 font-semibold bg-white/5">{children}</th>,
                   td: ({ children }) => <td className="border border-white/10 px-3 py-2 text-zinc-300">{children}</td>,
-                }}
+                } satisfies Components}
               >
                 {lesson.content || ''}
               </ReactMarkdown>
@@ -154,7 +157,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                 className="inline-flex items-center gap-2 px-5 py-2.5 font-bold text-xs text-white bg-gradient-to-br from-emerald-500 to-teal-600 hover:brightness-110 rounded-xl shadow-md cursor-pointer transition-all"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Mark Lesson Chapter Complete</span>
+                <span>Mark as complete</span>
               </button>
             </div>
           </div>
@@ -223,7 +226,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
                   {submittedQuiz && (
                     <div className="p-4 bg-white/[0.03] rounded-xl border border-white/10 text-xs leading-relaxed text-zinc-400 font-sans">
-                      <strong className="text-purple-300 font-semibold block mb-0.5">Explanation Matrix:</strong>
+                      <strong className="text-purple-300 font-semibold block mb-0.5">Explanation:</strong>
                       {q.explanation}
                     </div>
                   )}
@@ -239,12 +242,12 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   className="px-5 py-2.5 font-bold text-sm text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl disabled:opacity-50 transition-all cursor-pointer"
                   id="btn-quiz-submit"
                 >
-                  Verify Quiz Answers
+                  Check answers
                 </button>
               </div>
             ) : (
               <div className="p-5 rounded-2xl border border-white/10 bg-white/[0.03] flex flex-col items-center text-center space-y-2">
-                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Quiz Results Summary</span>
+                <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Quiz results</span>
                 <p className="text-xl font-bold font-display text-white">
                   Scored: <span className="text-purple-400">{quizScore} / {lesson.quizQuestions?.length || 0}</span> Correct
                 </p>
@@ -273,8 +276,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
             <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col justify-between space-y-4">
               <div className="space-y-4">
                 <div className="border-b border-white/10 pb-3">
-                  <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Exercise specifications</span>
-                  <h4 className="font-semibold text-xs md:text-sm text-white">Logic Scripting Objectives</h4>
+                  <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Instructions</span>
+                 <h4 className="font-semibold text-xs md:text-sm text-white">Challenge</h4>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed max-w-md select-text whitespace-pre-wrap">
                   {lesson.codingExercise?.instructions}
@@ -287,7 +290,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                     className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-bold hover:text-amber-450 cursor-pointer"
                   >
                     <Lightbulb className="w-3.5 h-3.5" />
-                    <span>{showHint ? 'Hide Logic Hint' : 'Reveal Hint'}</span>
+                    <span>{showHint ? 'Hide hint' : 'Show hint'}</span>
                   </button>
                   {showHint && (
                     <div className="mt-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/20 text-xs text-amber-300 leading-relaxed font-mono whitespace-pre-wrap select-text">
@@ -299,7 +302,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
               <div className="p-3 rounded-xl bg-white/[0.02] border border-white/10 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-zinc-500 flex-shrink-0" />
-                <span className="text-xs text-zinc-500">Submit robust PEP8 scripting parameters. Avoid modifying function headers directly.</span>
+                <span className="text-xs text-zinc-500">Follow the exercise instructions and keep function signatures intact.</span>
               </div>
             </div>
 
@@ -307,8 +310,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
             <div className="flex flex-col h-full gap-3">
               <div className="flex-1 flex flex-col bg-white/[0.03] rounded-2xl overflow-hidden border border-white/10 md:min-h-[220px]">
                 <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.04] border-b border-white/10 text-xs text-zinc-400 font-mono font-bold">
-                  <span>Interactive Editor (python)</span>
-                  <span className="text-emerald-400">● Live Code validation active</span>
+                  <span>Code editor</span>
+                  <span className="text-emerald-400">● Verification active</span>
                 </div>
                 <textarea
                   value={userCode}
@@ -326,12 +329,12 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                     {codeIsVerifying ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Compiling logic scripts...</span>
+                        <span>Verifying…</span>
                       </>
                     ) : (
                       <>
                         <PlayCircle className="w-3.5 h-3.5 fill-current" />
-                        <span>Run Code Verification</span>
+                        <span>Run &amp; verify</span>
                       </>
                     )}
                   </button>
@@ -351,7 +354,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   )}
                   <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1 bg-transparent">
                     <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
-                      <Code2 className="w-3.5 h-3.5 text-purple-400" /> Compiler Log Diagnostic
+                      <Code2 className="w-3.5 h-3.5 text-purple-400" /> Result
                     </span>
                     <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
                       codeFeedback.passed ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'
@@ -370,7 +373,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                       animate={{ x: [-2, 2, -2, 2, 0] }}
                       transition={{ duration: 0.4, ease: easeInOut }}
                     >
-                      <p className="font-bold">Error Traceback (most recent call last):</p>
+                      <p className="font-bold">Not quite — here's what to fix:</p>
                       <p className="text-zinc-300">{codeFeedback.suggestions}</p>
                       <p className="text-xs text-zinc-500 mt-1.5 font-sans whitespace-pre-wrap">{codeFeedback.explanation}</p>
                     </motion.div>
@@ -579,7 +582,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               <button
                 onClick={onClose}
                 className="p-2 text-zinc-400 hover:text-white rounded-xl hover:bg-white/5 transition-colors cursor-pointer"
-                aria-label="Back to Tree path"
+                aria-label="Back to roadmap"
                 id="btn-play-close"
               >
                 <ArrowLeft className="w-4 h-4 text-zinc-300" />
@@ -595,12 +598,6 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="text-xs font-semibold text-zinc-400 hover:text-white cursor-pointer px-3.5 py-1.5 rounded-xl border border-white/10 hover:border-white/20 hover:bg-white/5 transition-all"
-            >
-              Exit Practice
-            </button>
           </div>
 
           {/* Primary viewport content */}
@@ -616,8 +613,8 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-display font-bold text-base text-white">Syllabus Checkpoint Mastered!</h4>
-                  <p className="text-xs text-zinc-400 mt-0.5">Epic parameters verified successfully. Click to unlock adjacent modules and claim your XP rewards!</p>
+                  <h4 className="font-display font-bold text-base text-white">Lesson complete! 🎉</h4>
+                  <p className="text-xs text-zinc-400 mt-0.5">Great work — click below to save your progress and claim your XP.</p>
                 </div>
               </div>
 
@@ -626,7 +623,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                 className="px-5 py-2.5 shrink-0 font-bold text-sm text-white bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 rounded-xl transition-all cursor-pointer shadow-[0_4px_14px_rgba(16,185,129,0.25)]"
                 id="btn-claim-rewards"
               >
-                Claim rewards & Unlock Tree
+                Claim XP &amp; continue
               </button>
             </div>
           )}

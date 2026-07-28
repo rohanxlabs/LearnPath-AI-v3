@@ -29,7 +29,6 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@upstash/redis": "^1.38.0",
     "@vitejs/plugin-react": "^5.0.4",
-    "animejs": "^4.5.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",

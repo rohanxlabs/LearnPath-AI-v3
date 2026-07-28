@@ -123,7 +123,7 @@ export function AppRouter({
       return renderHomeView({
         profile, activeRoadmap: null, activePhase: null, achievements,
         aiRecommendations: [], isRecsLoading: false, isLoading: isLoadingAuth,
-        roadmapProgress: {}, getNextIncompleteLesson,
+        getNextIncompleteLesson,
         setActiveTab, setActiveLesson, handleSelectRecommendationTask,
         getAuthHeaders: mutatingHeaders,
       });
@@ -175,7 +175,7 @@ export function AppRouter({
       return renderHomeView({
         profile, activeRoadmap, activePhase, achievements,
         aiRecommendations: [], isRecsLoading: false, isLoading: isLoadingAuth,
-        roadmapProgress: {}, getNextIncompleteLesson,
+        getNextIncompleteLesson,
         setActiveTab, setActiveLesson, handleSelectRecommendationTask,
         getAuthHeaders: mutatingHeaders,
       });
@@ -257,8 +257,8 @@ export function AppRouter({
       return (
         <div className="space-y-5">
           <div>
-            <h2 className="font-display font-bold text-xl sm:text-2xl text-white">Achievements Sandbox</h2>
-            <p className="text-xs text-zinc-400">Complete curriculum chapters to unlock high-integrity milestones.</p>
+            <h2 className="font-display font-bold text-xl sm:text-2xl text-white">Your Achievements</h2>
+            <p className="text-xs text-zinc-400">Unlock milestones as you progress through your learning journey.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {achievements.map((ach) => (
@@ -281,7 +281,7 @@ export function AppRouter({
             </button>
           </div>
           {notifications.length === 0 ? (
-            <div className="p-8 text-center bg-[#111111] border border-white/5 rounded-2xl text-xs text-zinc-500">
+            <div className="p-8 text-center bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-2xl text-xs text-zinc-500 dark:text-zinc-500">
               Inbox clear! No active notifications.
             </div>
           ) : (
@@ -305,6 +305,17 @@ export function AppRouter({
       );
 
     default:
-      return <p className="text-xs text-zinc-400">Section placeholder.</p>;
+      return (
+        <div className="flex flex-col items-center justify-center py-20 px-6 text-center gap-4">
+          <p className="text-base font-semibold text-zinc-300">Page not found</p>
+          <p className="text-sm text-zinc-500">Something went wrong. Return to Home to continue.</p>
+          <button
+            onClick={() => setActiveTab('home')}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 text-white text-sm font-bold hover:brightness-110 transition-all"
+          >
+            Go to Home
+          </button>
+        </div>
+      );
   }
 }

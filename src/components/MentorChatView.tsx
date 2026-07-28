@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, memo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { Send, Sparkles, MessageSquare, Bot, HelpCircle, Code2, BookOpen, Lightbulb, Mic, MicOff, Paperclip, CheckCircle, Search, Terminal, AlertTriangle } from 'lucide-react';
@@ -41,41 +42,28 @@ const ChatMessageItem = memo(({ ch, isGenerating }: { ch: ChatMessage; isGenerat
                   const match = /language-(\w+)/.exec(codeElement?.props.className || '');
                   return (
                     <div className="my-3 max-w-full rounded-xl overflow-hidden border border-white/10">
-                                      <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.06] border-b border-white/10 text-xs text-zinc-400 font-bold uppercase tracking-wider">
-                                        <span>{match ? match[1] : 'code'} example</span>
-                                        <span className="text-xs bg-white/[0.08] px-1.5 py-0.5 rounded-md">walkthrough</span>
-                                      </div>
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-white/[0.06] border-b border-white/10 text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                        <span>{match ? match[1] : 'code'} example</span>
+                        <span className="text-xs bg-white/[0.08] px-1.5 py-0.5 rounded-md">walkthrough</span>
+                      </div>
                       <pre className="p-3 bg-zinc-950 overflow-x-auto whitespace-pre-wrap text-zinc-300 text-[11px]">
                         {children}
                       </pre>
                     </div>
                   );
                 },
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                code({ className, children }: any) {
-                  return <code className={className}>{children}</code>;
-                },
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                h1: ({ children }: any) => <h1 className="font-display font-bold text-xl text-purple-300 mt-3 mb-2">{children}</h1>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                h2: ({ children }: any) => <h2 className="font-display font-bold text-lg text-purple-400 mt-3 mb-1.5">{children}</h2>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                h3: ({ children }: any) => <h3 className="font-display font-semibold text-base text-purple-300 mt-3 mb-1">{children}</h3>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                h4: ({ children }: any) => <h4 className="font-display font-semibold text-sm text-purple-300 mt-3 mb-1">{children}</h4>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                p: ({ children }: any) => <p className="mt-1.5 leading-relaxed">{children}</p>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ul: ({ children }: any) => <ul className="list-disc ml-4 mt-2 mb-2 text-zinc-300">{children}</ul>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                ol: ({ children }: any) => <ol className="list-decimal ml-4 mt-2 mb-2 text-zinc-300">{children}</ol>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                li: ({ children }: any) => <li className="mt-1">{children}</li>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                strong: ({ children }: any) => <strong className="text-white font-bold">{children}</strong>,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                em: ({ children }: any) => <em className="text-zinc-200 italic">{children}</em>
-              }}
+                code: (({ className, children }) => <code className={className as string | undefined}>{children}</code>) as Components['code'],
+                h1: ({ children }) => <h1 className="font-display font-bold text-xl text-purple-300 mt-3 mb-2">{children}</h1>,
+                h2: ({ children }) => <h2 className="font-display font-bold text-lg text-purple-400 mt-3 mb-1.5">{children}</h2>,
+                h3: ({ children }) => <h3 className="font-display font-semibold text-base text-purple-300 mt-3 mb-1">{children}</h3>,
+                h4: ({ children }) => <h4 className="font-display font-semibold text-sm text-purple-300 mt-3 mb-1">{children}</h4>,
+                p: ({ children }) => <p className="mt-1.5 leading-relaxed">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc ml-4 mt-2 mb-2 text-zinc-300">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal ml-4 mt-2 mb-2 text-zinc-300">{children}</ol>,
+                li: ({ children }) => <li className="mt-1">{children}</li>,
+                strong: ({ children }) => <strong className="text-white font-bold">{children}</strong>,
+                em: ({ children }) => <em className="text-zinc-200 italic">{children}</em>,
+              } satisfies Components}
             >
               {ch.text}
             </ReactMarkdown>
