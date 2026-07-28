@@ -71,6 +71,23 @@ export function AnalyticsView({ profile, activityLog = {}, onNavigate, getAuthHe
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (completionPercent / 100) * circumference;
 
+  // Streak-based engagement score — independent of completion %.
+  // Formula: min(100, streak * 5 + lessonsCompleted * 2 + hoursStudied)
+  // This gives a genuinely different number that rewards daily consistency.
+  const engagementScore = Math.min(
+    100,
+    Math.round(
+      (stats?.streak ?? 0) * 5 +
+      (stats?.lessonsCompleted ?? 0) * 2 +
+      Math.floor(stats?.hoursStudied ?? 0),
+    ),
+  );
+  const engagementCircumference = 2 * Math.PI * 45;
+  const engagementDashoffset = engagementCircumference - (engagementScore / 100) * engagementCircumference;
+
+  // Whether the current week has any study data at all
+  const hasWeeklyData = weeklyHours.some((h) => h > 0);
+
   const statItems = [
     {
       id: 'p-stat-xp',
@@ -216,54 +233,91 @@ export function AnalyticsView({ profile, activityLog = {}, onNavigate, getAuthHe
             <span className="text-xs font-bold text-purple-300 font-mono">Tot: {(stats?.hoursStudied ?? 0).toFixed(1)} hrs worked</span>
           </div>
 
-          {/* SVG Visual bar drawings */}
-          <div className="h-44 flex items-end justify-between gap-2.5 pt-4 px-2">
-            {weeklyHours.map((hours, index) => {
-              const pct = (hours / maxHour) * 100;
-              return (
-                <div key={weekdays[index]} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
-                  <div className="relative w-full flex justify-center">
-                    {/* Hover tooltip label */}
-                    <span className="absolute -top-7 scale-0 group-hover:scale-100 transition-transform bg-[#0A0A0A] border border-white/5 text-xs text-zinc-300 font-bold px-1.5 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap">
-                      {hours} hrs
-                    </span>
-                    {/* Rounded status bar */}
-                    <div className="w-full sm:w-6 h-32 bg-white/5 group-hover:bg-white/10 rounded-xl border border-white/10 overflow-hidden flex items-end">
-                      <div
-                        className="w-full bg-gradient-to-t from-purple-500 to-blue-500 rounded-sm transition-all duration-500 group-hover:brightness-110"
-                        style={{ height: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                  <span className="text-xs text-zinc-400 group-hover:text-zinc-200 font-semibold">{weekdays[index]}</span>
+          {/* Bar chart with Y-axis scale, min-height empty bars, and no-data overlay */}
+          <div className="relative">
+            {/* Y-axis labels */}
+            <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between pointer-events-none">
+              {[maxHour, Math.round(maxHour / 2), 0].map((v) => (
+                <span key={v} className="text-[10px] text-zinc-500 font-mono leading-none">{v}h</span>
+              ))}
+            </div>
+            <div className="pl-6 h-44 flex items-end justify-between gap-2.5 pt-4 px-2 relative">
+              {/* No-data overlay */}
+              {!hasWeeklyData && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-xs text-zinc-500 font-medium bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
+                    No study sessions this week yet
+                  </span>
                 </div>
-              );
-            })}
+              )}
+              {weeklyHours.map((hours, index) => {
+                const pct = hours > 0 ? (hours / maxHour) * 100 : 0;
+                const isEmpty = hours === 0;
+                return (
+                  <div key={weekdays[index]} className="flex-1 flex flex-col items-center gap-2 group cursor-pointer">
+                    <div className="relative w-full flex justify-center">
+                      {/* Hover tooltip — only when there's data */}
+                      {!isEmpty && (
+                        <span className="absolute -top-7 scale-0 group-hover:scale-100 transition-transform bg-[#0A0A0A] border border-white/5 text-xs text-zinc-300 font-bold px-1.5 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap">
+                          {hours} hrs
+                        </span>
+                      )}
+                      {/* Bar container */}
+                      <div className="w-full sm:w-6 h-32 bg-white/5 group-hover:bg-white/10 rounded-xl border border-white/10 overflow-hidden flex items-end">
+                        {isEmpty ? (
+                          /* Min-height placeholder bar for empty days */
+                          <div className="w-full bg-white/10 rounded-sm" style={{ height: '4px' }} />
+                        ) : (
+                          <div
+                            className="w-full bg-gradient-to-t from-purple-500 to-blue-500 rounded-sm transition-all duration-500 group-hover:brightness-110"
+                            style={{ height: `${pct}%` }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-xs text-zinc-400 group-hover:text-zinc-200 font-semibold">{weekdays[index]}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Dynamic Consistency Score wheel styled with glass-card-purple */}
+        {/* Engagement score wheel — derived from streak + lessons + hours, NOT completion % */}
         <div className="p-5 rounded-2xl glass-card glass-card-purple flex flex-col justify-between">
           <div>
-            <h4 className="font-display font-semibold text-sm text-white">Platform Learning Score</h4>
-            <p className="text-xs text-zinc-400 mt-0.5">Calculated based on streaks & speed answers</p>
+            <h4 className="font-display font-semibold text-sm text-white">Engagement Score</h4>
+            <p className="text-xs text-zinc-400 mt-0.5">Based on streak consistency, lessons & study time</p>
           </div>
 
           <div className="my-4 flex items-center justify-center relative">
-            {/* Simple concentric SVG indicator */}
-            <svg className="w-28 h-28 transform -rotate-90">
+            <svg
+              role="img"
+              aria-label={`${engagementScore}% engagement score`}
+              className="w-28 h-28 transform -rotate-90"
+            >
               <circle cx="56" cy="56" r="45" className="stroke-white/5" strokeWidth="6" fill="none" />
-              <circle cx="56" cy="56" r="45" className="stroke-purple-500" strokeWidth="6" strokeDasharray="282" strokeDashoffset={282 - (completionPercent / 100) * 282} strokeLinecap="round" fill="none" />
+              <circle
+                cx="56"
+                cy="56"
+                r="45"
+                className="stroke-amber-500 transition-all duration-500"
+                strokeWidth="6"
+                strokeDasharray={engagementCircumference}
+                strokeDashoffset={engagementDashoffset}
+                strokeLinecap="round"
+                fill="none"
+              />
             </svg>
             <div className="absolute text-center">
-               <span className="text-xl sm:text-2xl font-extrabold text-white font-display">{Math.round(completionPercent)}%</span>
-              <span className="block text-xs font-bold text-zinc-400 tracking-wider">MASTERY INDEX</span>
+              <span className="text-xl sm:text-2xl font-extrabold text-white font-display">{engagementScore}%</span>
+              <span className="block text-xs font-bold text-zinc-400 tracking-wider">ENGAGEMENT</span>
             </div>
           </div>
 
           <div className="text-center pt-2">
             <p className="text-xs text-zinc-300">
-                             Your streak is <strong className="text-amber-500 font-bold">{stats?.streak ?? 0} days</strong> strong. Keep learning each day to unlock legendary achievements.
+              Your streak is <strong className="text-amber-500 font-bold">{stats?.streak ?? 0} days</strong> strong. Keep learning each day to raise your score.
             </p>
           </div>
         </div>

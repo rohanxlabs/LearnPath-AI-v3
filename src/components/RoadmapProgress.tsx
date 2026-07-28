@@ -21,15 +21,13 @@ export const RoadmapProgress: React.FC<RoadmapProgressProps> = ({
         <span className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white">{progress}%</span>
       </div>
       
-      <div className="w-full bg-zinc-200 dark:bg-white/10 rounded-full h-4 overflow-hidden">
+      <div className="w-full bg-zinc-100 dark:bg-white/10 rounded-full h-2 overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 1.4, ease: 'easeOut' }}
-          className="h-full bg-gradient-to-r from-purple-500 via-violet-500 to-blue-500 rounded-full relative"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent rounded-full" />
-        </motion.div>
+          className="h-full bg-gradient-to-r from-purple-500 via-violet-500 to-blue-500 rounded-full"
+        />
       </div>
       
       {recommendedLessonName && (

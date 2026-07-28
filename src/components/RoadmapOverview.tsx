@@ -105,34 +105,34 @@ export function RoadmapOverview({
       </div>
 
       {showGenerator && (
-        <form onSubmit={handleCreate} className="p-6 rounded-2xl bg-white/5 border border-white/10 shadow-lg space-y-4">
-          <div className="flex items-center gap-3 border-b border-white/10 pb-3">
-            <GraduationCap className="w-6 h-6 text-purple-400" />
+        <form onSubmit={handleCreate} className="glass-card p-6 rounded-2xl space-y-4">
+          <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/10 pb-3">
+            <GraduationCap className="w-6 h-6 text-purple-500 dark:text-purple-400" />
             <div>
-              <h3 className="font-bold text-white">AI Roadmap Architect</h3>
-              <p className="text-xs text-gray-400">Customize your learning journey.</p>
+              <h3 className="font-bold text-zinc-900 dark:text-white">AI Roadmap Architect</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Customize your learning journey.</p>
             </div>
           </div>
 
           <div className="space-y-2">
-            <label className="block text-xs font-medium text-gray-300">Goal / Project Intent</label>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">Goal / Project Intent</label>
             <input
               type="text"
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
               placeholder="e.g., Build a full-stack application with React and Node.js"
-              className="w-full px-4 py-2 bg-black/20 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="w-full px-4 py-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-gray-300">Experience Level</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">Experience Level</label>
               <select
                 value={experienceLevel}
                 onChange={(e) => setExperienceLevel(e.target.value)}
-                className="w-full px-3 py-2 bg-black/20 border border-white/10 rounded-lg text-sm text-gray-200"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-zinc-200"
               >
                 <option>Beginner</option>
                 <option>Intermediate</option>
@@ -141,11 +141,11 @@ export function RoadmapOverview({
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-gray-300">Weekly Commitment</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">Weekly Commitment</label>
               <select
                 value={weeklyHours}
                 onChange={(e) => setWeeklyHours(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-black/20 border border-white/10 rounded-lg text-sm text-gray-200"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-zinc-200"
               >
                 <option value={5}>5 hours</option>
                 <option value={10}>10 hours</option>
@@ -155,11 +155,11 @@ export function RoadmapOverview({
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-medium text-gray-300">Learning Style</label>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">Learning Style</label>
               <select
                 value={preferredStyle}
                 onChange={(e) => setPreferredStyle(e.target.value)}
-                className="w-full px-3 py-2 bg-black/20 border border-white/10 rounded-lg text-sm text-gray-200"
+                className="w-full px-3 py-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-zinc-200"
               >
                 <option>Hands-on</option>
                 <option>Visual</option>
@@ -168,7 +168,7 @@ export function RoadmapOverview({
             </div>
           </div>
 
-<div className="pt-2">
+          <div className="pt-2">
             <button
               type="submit"
               disabled={isGenerating || !goal.trim()}
@@ -182,15 +182,33 @@ export function RoadmapOverview({
       )}
 
       {isGenerating && (
-        <div className="p-8 rounded-2xl bg-white/5 border border-white/10 text-center space-y-4 shadow-xl flex flex-col items-center">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center animate-spin">
-            <Sparkles className="w-6 h-6 text-white" />
+        <div className="glass-card p-8 rounded-2xl text-center space-y-4 flex flex-col items-center">
+          {/* SVG spinner ring + pulsing icon — avoids rotating a square */}
+          <div className="relative w-14 h-14 flex items-center justify-center">
+            <svg className="absolute inset-0 w-14 h-14 animate-spin-slow" viewBox="0 0 56 56" fill="none">
+              <circle cx="28" cy="28" r="24" className="stroke-white/10" strokeWidth="4" />
+              <circle
+                cx="28" cy="28" r="24"
+                stroke="url(#gen-ring)"
+                strokeWidth="4"
+                strokeDasharray="150.796"
+                strokeDashoffset="100"
+                strokeLinecap="round"
+              />
+              <defs>
+                <linearGradient id="gen-ring" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#8b5cf6" />
+                  <stop offset="100%" stopColor="#3b82f6" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
           </div>
           <div className="space-y-1">
-            <h3 className="font-bold text-white">Personalizing Your Roadmap</h3>
-            <p className="text-sm text-gray-300">Our AI is tailoring your learning path.</p>
+            <h3 className="font-bold text-zinc-900 dark:text-white">Personalizing Your Roadmap</h3>
+            <p className="text-sm text-zinc-500 dark:text-zinc-300">Our AI is tailoring your learning path.</p>
           </div>
-          <div className="px-3 py-1 rounded-md bg-white/10 text-xs text-purple-300 font-mono animate-pulse">
+          <div className="px-3 py-1 rounded-md bg-white/10 text-xs text-purple-400 dark:text-purple-300 font-mono animate-pulse">
             {loadingQuotes[quoteIdx]}
           </div>
         </div>

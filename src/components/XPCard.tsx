@@ -31,15 +31,13 @@ export const XPCard: React.FC<XPCardProps> = ({ xp, level, levelName }) => {
           <span className="text-sm font-medium text-zinc-500 dark:text-zinc-400">/ {nextLevelXp} XP</span>
         </div>
         
-        <div className="w-full bg-zinc-200 dark:bg-white/10 rounded-full h-3 overflow-hidden">
+        <div className="w-full bg-zinc-100 dark:bg-white/10 rounded-full h-2 overflow-hidden">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${progressPercent}%` }}
             transition={{ duration: 1.1, ease: 'easeOut' }}
-            className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full relative"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-white/30 to-transparent rounded-full" />
-          </motion.div>
+            className="h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full"
+          />
         </div>
       </div>
     </div>

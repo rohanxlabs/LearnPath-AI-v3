@@ -178,10 +178,28 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
   const renderTree = (node: SkillNode) => {
     if (!node.children || node.children.length === 0) return null;
 
+    // Each phase segment of the connector is coloured by that phase's status.
+    // Completed → emerald, current/available → purple, locked → muted zinc.
+    const segmentColour = (status: string) => {
+      switch (status) {
+        case 'completed': return 'bg-emerald-400/60 dark:bg-emerald-500/50';
+        case 'current':
+        case 'available': return 'bg-purple-400/70 dark:bg-purple-500/50';
+        default:          return 'bg-zinc-300/40 dark:bg-zinc-600/30';
+      }
+    };
+
     return (
       <div className="relative">
-        {/* Vertical connector line */}
-        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-300 via-violet-300 to-purple-300 dark:from-purple-500/40 dark:via-violet-500/30 dark:to-purple-500/40 rounded-full" />
+        {/* Segmented vertical connector — one coloured strip per phase card */}
+        <div className="absolute left-0 top-0 bottom-0 w-1 flex flex-col rounded-full overflow-hidden">
+          {node.children.map((child, i) => (
+            <div
+              key={i}
+              className={`flex-1 ${segmentColour(child.status)} transition-colors duration-300`}
+            />
+          ))}
+        </div>
 
         {/* Cards with left spacing */}
         <div className="pl-6 space-y-4">
