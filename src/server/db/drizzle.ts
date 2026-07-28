@@ -20,8 +20,14 @@ export const pool = new Pool({
     ? { rejectUnauthorized: false }
     : { rejectUnauthorized: true },
   max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  // Supabase / PgBouncer drops idle connections after ~5 min. Evict pool
+  // entries well before that so we never hand a dead socket to a query.
+  idleTimeoutMillis: 60000,
+  connectionTimeoutMillis: 10000,
+  // TCP keep-alive prevents the OS / firewall from silently killing idle
+  // sockets between the app server and the PgBouncer proxy.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 // drizzle-orm/node-postgres uses `name: undefined` for non-.prepare() queries,

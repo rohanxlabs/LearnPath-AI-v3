@@ -104,7 +104,7 @@ function SectionHeader({
   subtitle?: string;
 }) {
   return (
-    <div className="mb-3">
+    <div className="mb-4">
       <div className="flex items-center gap-2">
         <div className={`p-1.5 rounded-lg text-purple-400 bg-purple-500/10`}>
           <Icon className="w-4 h-4" />
@@ -467,7 +467,7 @@ export function HomeView({
         )}
       </AnimatePresence>
 
-    <div className="home-view space-y-8 pb-4 max-w-full overflow-x-hidden">
+    <div className="home-view space-y-10 pb-[calc(4rem+env(safe-area-inset-bottom,0px)+1rem)] max-w-full overflow-x-hidden">
 
       {/* SECTION 1 — Personalized Hero */}
       <motion.section {...fadeUp}>

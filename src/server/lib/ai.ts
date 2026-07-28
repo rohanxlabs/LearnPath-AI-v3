@@ -85,17 +85,17 @@ export function sanitizeForPrompt(input: string | number | undefined | null, max
  * Only active (non-decommissioned) models listed here.
  * https://console.groq.com/docs/models
  *
- * Removed decommissioned models (as of 2025):
- *   llama-3.1-70b-versatile  → decommissioned
- *   gemma2-9b-it             → decommissioned
- *   mixtral-8x7b-32768       → decommissioned
+ * Removed decommissioned / unavailable models (as of 2025):
+ *   llama-3.1-70b-versatile                  → decommissioned
+ *   gemma2-9b-it                              → decommissioned
+ *   mixtral-8x7b-32768                        → decommissioned
+ *   llama3-70b-8192                           → decommissioned (confirmed in logs)
+ *   llama3-8b-8192                            → decommissioned (confirmed in logs)
+ *   meta-llama/llama-4-scout-17b-16e-instruct → model_not_found / no access (confirmed in logs)
  */
 export const GROQ_MODELS = [
-  'meta-llama/llama-4-scout-17b-16e-instruct', // primary — Llama 4 Scout, 131k context
-  'llama-3.3-70b-versatile',                   // second — strong reasoning, 128k context
-  'llama3-70b-8192',                            // third — capable, 8k context
-  'llama3-8b-8192',                             // fast fallback — lighter tasks, 8k context
-  'llama-3.1-8b-instant',                       // last resort — very fast, 128k context
+  'llama-3.3-70b-versatile',  // primary — strong reasoning, 128k context, 12k TPM
+  'llama-3.1-8b-instant',     // fallback — very fast, 128k context (use for small payloads)
 ];
 
 

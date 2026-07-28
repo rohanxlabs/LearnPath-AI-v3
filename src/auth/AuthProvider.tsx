@@ -100,10 +100,19 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
   // debounce.  Chats are intentionally excluded here — they are persisted on
   // logout via handleLogout → fullSave() so the full payload is preserved,
   // but they should not trigger a PUT on every AI mentor message.
+  //
+  // IMPORTANT: use refs to capture the *latest* state values rather than
+  // closing over them in the useCallback deps.  This prevents a new `save`
+  // identity (and therefore a new 8s timer) from being created on every state
+  // change, which was causing a PUT storm (one PUT per state update × 8s lag).
+  const latestSavePayload = useRef({ profile, settings, achievements, notifications, activityLog });
+  useEffect(() => { latestSavePayload.current = { profile, settings, achievements, notifications, activityLog }; }, [profile, settings, achievements, notifications, activityLog]);
+
   const save = useCallback(async () => {
     if (!isAuthenticated) return;
-    await fetch('/api/user-profile', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ profile, settings, achievements, notifications, activityLog }) });
-  }, [isAuthenticated, profile, settings, achievements, notifications, activityLog]);
+    const { profile: p, settings: s, achievements: a, notifications: n, activityLog: al } = latestSavePayload.current;
+    await fetch('/api/user-profile', { method: 'PUT', headers: await getAuthHeaders(), body: JSON.stringify({ profile: p, settings: s, achievements: a, notifications: n, activityLog: al }) });
+  }, [isAuthenticated]);
   useEffect(() => { const timer = setTimeout(() => void save().catch(() => undefined), 8000); return () => clearTimeout(timer); }, [save]);
 
   // Full save (including chats) used on explicit logout only.
