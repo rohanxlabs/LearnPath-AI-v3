@@ -229,17 +229,25 @@ export function AchievementCard({ achievement, onShare }: AchievementCardProps) 
       </div>
 
       <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
-        <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">
-          +{achievement.xpReward} XP REWARD
-        </span>
-{isUnlocked && onShare && (
-           <button
-             onClick={onShare}
-             className={`text-xs font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer ${buttonStyles.ghost}`}
-           >
-             Share Milestone
-           </button>
-         )}
+        {isUnlocked ? (
+          /* Unlocked: amber accent, semibold — still visible but not over-emphasised */
+          <span className="text-xs font-semibold text-amber-500">
+            +{achievement.xpReward} XP
+          </span>
+        ) : (
+          /* Locked: muted — don't tease users with an inaccessible reward */
+          <span className="text-xs text-zinc-500">
+            +{achievement.xpReward} XP on unlock
+          </span>
+        )}
+        {isUnlocked && onShare && (
+          <button
+            onClick={onShare}
+            className={`text-xs font-semibold text-zinc-400 hover:text-white transition-colors cursor-pointer ${buttonStyles.ghost}`}
+          >
+            Share Milestone
+          </button>
+        )}
       </div>
     </div>
   );
@@ -293,19 +301,22 @@ export function NotificationCard({ notification, onReadToggle, onDelete }: Notif
           </p>
         </div>
 
-        <div className="flex h-full items-center gap-2">
+        <div className="flex h-full items-center gap-1">
+          {/* Mark read / unread — meets 44×44px touch target */}
           <button
             onClick={() => onReadToggle(notification.id)}
-            className="text-xs font-bold text-purple-400 hover:text-purple-300 cursor-pointer p-1"
+            className="text-xs font-bold text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded-lg transition-colors cursor-pointer min-h-[36px] min-w-[44px] px-2 flex items-center justify-center"
           >
             {notification.read ? 'Unread' : 'Mark Read'}
           </button>
+          {/* Delete — icon + visible label on sm+ screens */}
           <button
             onClick={() => onDelete(notification.id)}
-            className="p-1.5 text-zinc-500 hover:text-rose-400 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+            className="flex items-center gap-1 text-xs font-medium text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer min-h-[36px] min-w-[44px] px-2"
             aria-label="Delete notification"
           >
-            <Trash2 className="w-4 h-4 text-zinc-400 hover:text-rose-400" />
+            <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="hidden sm:inline">Delete</span>
           </button>
         </div>
       </div>

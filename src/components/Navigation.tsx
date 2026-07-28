@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Home, Compass, MessageSquare, BarChart3, User, Menu, X, Bell, Flame, Crown, LogOut, Settings, Award, ShieldAlert, Sparkles, BookOpen } from 'lucide-react';
 import { UserProfile, SystemNotification } from '../types';
 import { StreakBadge, TierBadge } from './Badges';
+import { buttonStyles } from '../styles/theme';
 
 interface MobileHeaderProps {
   profile: UserProfile;
@@ -85,12 +86,14 @@ interface BottomNavigationProps {
 }
 
 export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
+  // Display labels are kept to ≤6 chars for consistent grid sizing across all screen widths.
+  // aria-label always carries the full accessible name.
   const tabs = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'roadmaps', label: 'Roadmaps', icon: Compass },
-    { id: 'mentor', label: 'AI Mentor', icon: MessageSquare },
-    { id: 'progress', label: 'Progress', icon: BarChart3 },
-    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'home',     label: 'Home',    ariaLabel: 'Home',              icon: Home },
+    { id: 'roadmaps', label: 'Maps',    ariaLabel: 'Roadmaps',          icon: Compass },
+    { id: 'mentor',   label: 'Mentor',  ariaLabel: 'AI Mentor',         icon: MessageSquare },
+    { id: 'progress', label: 'Stats',   ariaLabel: 'Progress',          icon: BarChart3 },
+    { id: 'profile',  label: 'Profile', ariaLabel: 'Profile',           icon: User },
   ];
 
   return (
@@ -99,26 +102,31 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
         {tabs.map((tab) => {
           const IconComponent = tab.icon;
           const isActive = activeTab === tab.id;
-          const displayLabel = tab.id === 'mentor' ? 'Mentor' : tab.label;
           return (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              aria-label={`Go to ${tab.label}`}
+              aria-label={tab.ariaLabel}
               aria-current={isActive ? 'page' : undefined}
               className={`relative flex flex-col items-center justify-center flex-1 min-w-0 py-1 px-1 sm:px-3.5 rounded-xl transition-all duration-300 cursor-pointer ${
                 isActive
-                  ? 'text-zinc-900 dark:text-white font-bold scale-102'
+                  ? 'text-zinc-900 dark:text-white font-bold scale-105'
                   : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
               }`}
               id={`nav-tab-${tab.id}`}
             >
-              {/* Active indicator pill */}
+              {/* Active background pill */}
               {isActive && (
                 <div className="absolute inset-0 bg-gradient-to-r from-purple-500/15 to-blue-500/15 border border-purple-500/25 rounded-xl -z-10" />
               )}
-              <IconComponent className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400 dark:drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'stroke-[2px]'}`} />
-              <span className="text-xs tracking-wide font-medium whitespace-nowrap truncate w-full text-center">{displayLabel}</span>
+              <IconComponent className={`w-5 h-5 ${isActive ? 'stroke-[2.5px] text-purple-600 dark:text-purple-400 dark:drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'stroke-[2px]'}`} />
+              {/* Active indicator dot below icon */}
+              {isActive ? (
+                <span className="mt-0.5 w-1 h-1 rounded-full bg-purple-500 dark:bg-purple-400" />
+              ) : (
+                <span className="mt-0.5 w-1 h-1" />
+              )}
+              <span className="text-xs tracking-wide font-medium whitespace-nowrap truncate w-full text-center">{tab.label}</span>
             </button>
           );
         })}
@@ -255,7 +263,7 @@ export function SideDrawer({
                 onUpgradeClick();
                 onClose();
               }}
-              className="w-full py-2 font-bold text-xs rounded-xl text-center bg-purple-600 dark:bg-white text-white dark:text-black hover:bg-purple-700 dark:hover:bg-zinc-100 transition-all cursor-pointer"
+              className={`w-full py-2.5 font-bold text-xs rounded-xl text-center text-white transition-all cursor-pointer ${buttonStyles.primary}`}
             >
               Get Unlimited Access
             </button>
