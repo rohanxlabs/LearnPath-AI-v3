@@ -193,6 +193,7 @@ body {
 }
 
 /* Subtitles, secondary texts, and zinc labels */
+/* text-zinc-400 → #64748b (slate-500) gives 4.6:1 on white — WCAG AA pass */
 .light p,
 .light span.text-zinc-300,
 .light span.text-zinc-400,
@@ -205,7 +206,7 @@ body {
 .light .text-zinc-450,
 .light .text-zinc-500,
 .light .text-zinc-650 {
-  color: #475569 !important;
+  color: #64748b !important;
 }
 
 .light .text-zinc-305,
@@ -549,8 +550,9 @@ body {
   color: #0f172a !important;
 }
 
+/* text-zinc-400/500 secondary text → #475569 (slate-600) for sufficient contrast on tinted glass surfaces */
 .light :is(.text-zinc-400, .text-zinc-450, .text-zinc-500, .text-zinc-550, .text-zinc-600, .text-zinc-605, .text-zinc-650, .text-zinc-700, .dark\:text-zinc-100, .dark\:text-zinc-200, .dark\:text-zinc-300, .dark\:text-zinc-350, .dark\:text-zinc-400) {
-  color: #334155 !important;
+  color: #475569 !important;
 }
 
 .light :is(.text-purple-300, .text-purple-400, .text-purple-450, .dark\:text-purple-300, .dark\:text-purple-400) {
@@ -565,7 +567,8 @@ body {
   color: #047857 !important;
 }
 
-.light :is(.text-amber-300, .text-amber-400, .text-amber-500) {
+/* amber-300/400/500/600 all map to amber-700 equivalent in light for contrast (#b45309 = 4.7:1 on white) */
+.light :is(.text-amber-300, .text-amber-400, .text-amber-500, .text-amber-600) {
   color: #b45309 !important;
 }
 
@@ -682,7 +685,9 @@ body {
   background-color: rgba(226, 232, 240, 0.72) !important;
 }
 
-.light [class*="bg-gradient-to"] {
+/* Scope gradient shadow to interactive buttons only — not progress bars, blobs, or decorative elements */
+.light button[class*="bg-gradient-to"],
+.light a[class*="bg-gradient-to"] {
   box-shadow: 0 10px 24px rgba(79, 70, 229, 0.18);
 }
 

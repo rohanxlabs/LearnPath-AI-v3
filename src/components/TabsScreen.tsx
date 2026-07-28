@@ -195,7 +195,7 @@ export function AnalyticsView({ profile, activityLog = {}, onNavigate, getAuthHe
                 <span className="text-xl sm:text-2xl font-bold text-white font-display">
                   {item.value}
                 </span>
-                <span className="block text-xs text-zinc-400 mt-1 truncate">
+                <span className="block text-xs text-zinc-500 mt-1 truncate">
                   {item.desc}
                 </span>
               </div>
@@ -263,7 +263,7 @@ export function AnalyticsView({ profile, activityLog = {}, onNavigate, getAuthHe
 
           <div className="text-center pt-2">
             <p className="text-xs text-zinc-300">
-                             Your streak is <strong className="text-amber-400 font-bold">{stats?.streak ?? 0} days</strong> strong. Keep learning each day to unlock legendary achievements.
+                             Your streak is <strong className="text-amber-500 font-bold">{stats?.streak ?? 0} days</strong> strong. Keep learning each day to unlock legendary achievements.
             </p>
           </div>
         </div>

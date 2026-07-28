@@ -19,7 +19,7 @@ export const XPCard: React.FC<XPCardProps> = ({ xp, level, levelName }) => {
           <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
           <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">XP Progress</span>
         </div>
-        <span className="px-3 py-1 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-full flex items-center gap-1">
+        <span className="px-3 py-1 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-500 dark:text-amber-500 text-xs font-bold rounded-full flex items-center gap-1">
           <ArrowUp className="w-3 h-3" />
           {levelName}
         </span>

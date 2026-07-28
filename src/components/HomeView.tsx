@@ -431,9 +431,9 @@ export function HomeView({
           transition={{ duration: 0.3 }}
           className="relative flex items-start gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-sm"
         >
-          <RefreshCw className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <RefreshCw className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-amber-300">
+            <p className="font-semibold text-amber-500">
               Welcome back, {firstName}!{' '}
               {liveStats!.daysSinceLastVisit === 1
                 ? "You were away yesterday."
@@ -447,7 +447,7 @@ export function HomeView({
             {activeRoadmap && (
               <button
                 onClick={onContinueLearning}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-amber-500 hover:text-amber-600 transition-colors cursor-pointer"
               >
                 <Play className="w-3 h-3 fill-current" /> Resume learning
               </button>
@@ -570,7 +570,7 @@ export function HomeView({
                   </div>
                 </div>
                 <p className="font-display text-xl sm:text-2xl font-bold text-white mt-3">{card.value}</p>
-                <p className="text-xs text-zinc-400 mt-1 truncate">{card.sub}</p>
+                <p className="text-xs text-zinc-500 mt-1 truncate">{card.sub}</p>
               </GlassCard>
             );
           })}
@@ -610,7 +610,7 @@ export function HomeView({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {currentLesson && (
                   <div className="state-current rounded-2xl p-3.5">
-                    <p className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                    <p className="text-xs font-bold uppercase tracking-wider text-purple-400">
                       Current Lesson
                     </p>
                     <p className="font-semibold text-sm text-white mt-1 truncate">
@@ -785,7 +785,7 @@ export function HomeView({
                   >
                     {task.title}
                   </p>
-                  <p className="text-xs text-zinc-400 mt-0.5">{task.description}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{task.description}</p>
                 </div>
               {!task.completed && task.lessonId && task.levelId && task.phaseId && (
                   <button
