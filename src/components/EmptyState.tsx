@@ -26,13 +26,13 @@ export function EmptyState({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-20 px-6 text-center"
+      className="flex flex-col items-center justify-center py-12 sm:py-20 px-6 text-center"
     >
-      <div className="w-20 h-20 rounded-full bg-purple-500/15 dark:bg-purple-500/10 flex items-center justify-center mb-6">
+      <div className="w-20 h-20 rounded-full bg-purple-500/15 flex items-center justify-center mb-6">
         {icon || <Sparkles className="w-10 h-10 text-purple-600" />}
       </div>
-      <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">{title}</h3>
-      <p className="text-sm text-zinc-400 max-w-md mb-6 leading-relaxed">
+      <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white mb-3">{title}</h3>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mb-6 leading-relaxed">
         {description}
       </p>
       {actionLabel && onAction && (

@@ -8,10 +8,12 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    '[Supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set. ' +
-    'Authentication will not work. Check your .env file.'
-  );
+  if (import.meta.env.DEV) {
+    console.error(
+      '[Supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not set. ' +
+      'Authentication will not work. Check your .env file.'
+    );
+  }
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

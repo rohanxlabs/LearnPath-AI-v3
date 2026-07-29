@@ -10,11 +10,11 @@ interface LegalPageProps {
 // ---------------------------------------------------------------------------
 function LegalLayout({ title, icon: Icon, onBack, children }: { title: string; icon: React.ElementType; onBack: () => void; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white">
+    <div className="min-h-screen bg-zinc-50 dark:bg-[#0A0A0A] text-zinc-900 dark:text-white">
       <div className="max-w-3xl mx-auto px-4 py-10">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white mb-8 transition-colors"
+          className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white mb-8 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
@@ -22,12 +22,12 @@ function LegalLayout({ title, icon: Icon, onBack, children }: { title: string; i
           <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
             <Icon className="w-5 h-5 text-purple-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white">{title}</h1>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{title}</h1>
         </div>
-        <div className="prose prose-invert prose-sm max-w-none space-y-6 text-zinc-300 leading-relaxed">
+        <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-zinc-600 dark:text-zinc-300 leading-relaxed">
           {children}
         </div>
-        <p className="mt-10 text-xs text-zinc-600 border-t border-white/5 pt-6">
+        <p className="mt-10 text-xs text-zinc-400 dark:text-zinc-600 border-t border-zinc-200 dark:border-white/5 pt-6">
           Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
@@ -38,8 +38,8 @@ function LegalLayout({ title, icon: Icon, onBack, children }: { title: string; i
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="text-base font-semibold text-white mb-2">{title}</h2>
-      <div className="text-sm text-zinc-400 space-y-2">{children}</div>
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-white mb-2">{title}</h2>
+      <div className="text-sm text-zinc-500 dark:text-zinc-400 space-y-2">{children}</div>
     </section>
   );
 }

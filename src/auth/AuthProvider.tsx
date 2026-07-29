@@ -9,7 +9,7 @@ const avatar = 'data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg
 export const DEFAULT_SETTINGS: UserSettings = { theme: 'system', notificationsEnabled: true, emailNotifications: true, pushNotifications: false, privacyPublicProfile: false };
 export function createEmptyProfile(email = '', name = ''): UserProfile {
   const normalized = email.trim().toLowerCase();
-  return { id: normalized || 'user-pending', name: name || normalized.split('@')[0] || 'Learner', email: normalized, avatar, xp: 0, level: 1, streak: 0, isPro: false, roadmapsCompleted: 0, hoursStudied: 0, aiSessionsCount: 0, createdAt: new Date().toISOString() };
+  return { id: normalized || 'user-pending', name: name || normalized.split('@')[0] || 'Learner', email: normalized, avatar, xp: 0, level: 1, streak: 0, isPro: false, roadmapsCompleted: 0, hoursStudied: 0, aiSessionsCount: 0, lessonsCompleted: 0, createdAt: new Date().toISOString() };
 }
 
 type Setter<T> = React.Dispatch<React.SetStateAction<T>>;

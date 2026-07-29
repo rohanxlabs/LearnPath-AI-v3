@@ -115,12 +115,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         Skip to main content
       </a>
 
-      {/* ── Ambient background glows ── */}
+      {/* ── Ambient background glows ──
+           will-change:transform promotes each blob to its own compositor layer so the
+           blur is GPU-composited rather than re-painted on every scroll tick.
+           On mobile (≤ md) the blur radius is halved via the landing-blob-mobile class
+           to avoid GPU overload on mid-range Android devices. */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-        <div className="absolute -left-40 -top-40 h-[44rem] w-[44rem] rounded-full bg-purple-300/30 blur-[140px]" />
-        <div className="absolute -right-24 top-20 h-[34rem] w-[34rem] rounded-full bg-amber-200/25 blur-[110px]" />
-        <div className="absolute bottom-0 left-1/2 h-[28rem] w-[48rem] -translate-x-1/2 rounded-full bg-violet-200/20 blur-[110px]" />
-        <div className="absolute left-1/3 top-1/2 h-[20rem] w-[20rem] rounded-full bg-rose-100/20 blur-[90px]" />
+        <div className="landing-blob absolute -left-40 -top-40 h-[44rem] w-[44rem] rounded-full bg-purple-300/30 blur-[140px] md:blur-[140px]" />
+        <div className="landing-blob absolute -right-24 top-20 h-[34rem] w-[34rem] rounded-full bg-amber-200/25 blur-[110px] md:blur-[110px]" />
+        <div className="landing-blob absolute bottom-0 left-1/2 h-[28rem] w-[48rem] -translate-x-1/2 rounded-full bg-violet-200/20 blur-[110px] md:blur-[110px]" />
+        <div className="landing-blob absolute left-1/3 top-1/2 h-[20rem] w-[20rem] rounded-full bg-rose-100/20 blur-[90px] md:blur-[90px]" />
         <div className="landing-grid-overlay-light" />
       </div>
 
@@ -184,7 +188,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <button
               type="button"
               onClick={onSignIn}
-              className="rounded-full border border-purple-300 bg-white/80 px-3.5 py-2 text-sm font-semibold text-purple-700 backdrop-blur-sm transition hover:border-purple-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50"
+              className="min-h-[44px] rounded-full border border-purple-300 bg-white/80 px-3.5 py-2 text-sm font-semibold text-purple-700 backdrop-blur-sm transition hover:border-purple-400 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50"
             >
               Sign In
             </button>
@@ -192,7 +196,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               type="button"
               onClick={handleGetStarted}
               disabled={ctaLoading}
-              className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(168,85,247,0.35)] transition hover:shadow-[0_6px_28px_rgba(168,85,247,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:opacity-80 disabled:cursor-not-allowed"
+              className="min-h-[44px] flex items-center gap-1.5 rounded-full bg-gradient-to-r from-purple-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(168,85,247,0.35)] transition hover:shadow-[0_6px_28px_rgba(168,85,247,0.5)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:opacity-80 disabled:cursor-not-allowed"
             >
               {ctaLoading ? (
                 <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -379,8 +383,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <Sparkles className="h-7 w-7 text-white" />
                       </div>
                       <div className="text-center">
-                        <p className="font-display text-base font-bold text-[#1a0a2e]">LearnPath AI</p>
-                        <p className="mt-1 text-sm text-slate-500">Dashboard screenshot coming soon</p>
+                        <p className="font-display text-base font-bold text-[#1a0a2e]">LearnPath AI Dashboard</p>
+                        <p className="mt-1 text-sm text-slate-500">AI roadmaps · Progress tracking · Mentor chat</p>
                       </div>
                       {/* Skeleton rows — suggest a real UI layout */}
                       <div className="w-full max-w-xs space-y-2.5 pt-1" aria-hidden="true">

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { authService } from '../auth/authService';
-import { AuthLayout, buttonClass, inputClass } from './AuthLayout';
+import { AuthLayout, buttonClass, inputClass, authLinkClass, labelClass } from './AuthLayout';
 
 export function Login({ navigate }: { navigate: (path: string) => void }) {
   const [error, setError] = useState('');
@@ -26,15 +26,19 @@ export function Login({ navigate }: { navigate: (path: string) => void }) {
 
   return (
     <AuthLayout title="Welcome back" subtitle="Sign in with your email and password.">
-      <form onSubmit={submit} className="mt-7 space-y-4">
-        <label className="block text-sm font-medium text-violet-950">
-          Email
-          <input className={inputClass} name="email" type="email" autoComplete="email" required />
-        </label>
-        <label className="block text-sm font-medium text-violet-950">
-          Password
-          <input className={inputClass} name="password" type="password" autoComplete="current-password" required />
-        </label>
+      <form onSubmit={submit} noValidate className="mt-7 space-y-4">
+        <div>
+          <label htmlFor="login-email" className={labelClass}>
+            Email
+          </label>
+          <input id="login-email" className={inputClass} name="email" type="email" autoComplete="email" required />
+        </div>
+        <div>
+          <label htmlFor="login-password" className={labelClass}>
+            Password
+          </label>
+          <input id="login-password" className={inputClass} name="password" type="password" autoComplete="current-password" required />
+        </div>
         {error && (
           <p role="alert" className="rounded-xl bg-rose-100/80 px-3 py-2 text-sm text-rose-700">
             {error}
@@ -44,17 +48,11 @@ export function Login({ navigate }: { navigate: (path: string) => void }) {
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
-      <div className="mt-5 flex justify-between text-sm">
-        <button
-          className="font-medium text-violet-700 hover:text-fuchsia-600"
-          onClick={() => navigate('/forgot-password')}
-        >
+      <div className="mt-2 flex justify-between">
+        <button className={authLinkClass} onClick={() => navigate('/forgot-password')}>
           Forgot password?
         </button>
-        <button
-          className="font-medium text-violet-700 hover:text-fuchsia-600"
-          onClick={() => navigate('/register')}
-        >
+        <button className={authLinkClass} onClick={() => navigate('/register')}>
           Create account
         </button>
       </div>

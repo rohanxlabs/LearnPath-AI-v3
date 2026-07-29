@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import { ArrowLeft, CheckCircle2, AlertTriangle, Lightbulb, Code2, PlayCircle, RefreshCw, Swords, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertTriangle, Lightbulb, Code2, PlayCircle, RefreshCw, Swords, ChevronRight, Check } from 'lucide-react';
 import { Lesson } from '../types';
 import { XPBadge } from './Badges';
 import { BookOpeningAnimation } from './BookOpeningAnimation';
@@ -41,8 +41,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
   const [submittedQuiz, setSubmittedQuiz] = useState(false);
   const [quizScore, setQuizScore] = useState(0);
 
-  // TODO: Replace this textarea with CodeMirror 6 for syntax highlighting, line numbers,
-  // and tab-key indentation. See ux-sprint-plan.md § TODO Comments for Future Work.
+  // Code editor state — plain textarea for v1. Syntax-highlighted editor planned for v2.
   // States for Writing Code
   const [userCode, setUserCode] = useState(lesson.codingExercise?.templateCode || `def compute_operations():\n    # Type code here\n    return True`);
   const [codeIsVerifying, setCodeIsVerifying] = useState(false);
@@ -235,11 +234,16 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
             </div>
 
             {!submittedQuiz ? (
-              <div className="flex justify-end pt-4">
+              <div className="flex flex-col items-end gap-2 pt-4">
+                {Object.keys(quizAnswers).length < (lesson.quizQuestions?.length || 0) && (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-500">
+                    {Object.keys(quizAnswers).length} of {lesson.quizQuestions?.length || 0} answered
+                  </p>
+                )}
                 <button
                   onClick={handleQuizSubmit}
                   disabled={Object.keys(quizAnswers).length < (lesson.quizQuestions?.length || 0)}
-                  className="px-5 py-2.5 font-bold text-sm text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl disabled:opacity-50 transition-all cursor-pointer"
+                  className="px-5 py-2.5 font-bold text-sm text-white bg-gradient-to-br from-purple-500 to-blue-600 hover:brightness-110 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
                   id="btn-quiz-submit"
                 >
                   Check answers
@@ -271,13 +275,16 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
 
       case 'coding':
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch h-full">
-            {/* Left Column: instructions & hint */}
+          // Mobile: editor first (primary action), then instructions below.
+          // Desktop (lg): side-by-side — instructions left, editor right.
+          <div className="flex flex-col-reverse lg:grid lg:grid-cols-2 gap-5 items-stretch">
+
+            {/* Instructions column — shown below editor on mobile, left on desktop */}
             <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 flex flex-col justify-between space-y-4">
               <div className="space-y-4">
                 <div className="border-b border-white/10 pb-3">
                   <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Instructions</span>
-                 <h4 className="font-semibold text-xs md:text-sm text-white">Challenge</h4>
+                  <h4 className="font-semibold text-xs md:text-sm text-white mt-0.5">Challenge</h4>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed max-w-md select-text whitespace-pre-wrap">
                   {lesson.codingExercise?.instructions}
@@ -287,7 +294,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                 <div>
                   <button
                     onClick={() => setShowHint(!showHint)}
-                    className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-bold hover:text-amber-450 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-bold hover:text-amber-400 cursor-pointer"
                   >
                     <Lightbulb className="w-3.5 h-3.5" />
                     <span>{showHint ? 'Hide hint' : 'Show hint'}</span>
@@ -306,24 +313,29 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               </div>
             </div>
 
-            {/* Right Column: Code input area & terminal result log */}
-            <div className="flex flex-col h-full gap-3">
-              <div className="flex-1 flex flex-col bg-white/[0.03] rounded-2xl overflow-hidden border border-white/10 md:min-h-[220px]">
+            {/* Editor column — shown first on mobile, right on desktop */}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col bg-white/[0.03] rounded-2xl overflow-hidden border border-white/10">
                 <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.04] border-b border-white/10 text-xs text-zinc-400 font-mono font-bold">
                   <span>Code editor</span>
                   <span className="text-emerald-400">● Verification active</span>
                 </div>
                 <textarea
+                  id="code-editor"
+                  aria-label="Code editor — write your solution here"
                   value={userCode}
                   onChange={(e) => setUserCode(e.target.value)}
-                  className="flex-1 p-4 font-mono text-xs text-zinc-300 bg-transparent resize-none focus:outline-hidden leading-relaxed h-full focus:ring-0"
+                  rows={12}
+                  className="p-4 font-mono text-xs text-zinc-300 bg-transparent resize-y focus:outline-hidden leading-relaxed min-h-[200px] focus:ring-0"
                   spellCheck="false"
                 />
-                <div className="p-3 bg-white/[0.04] border-t border-white/10 flex justify-end">
+                {/* Run button is in a sticky bar on mobile so it stays visible
+                    while the user scrolls the textarea on small screens. */}
+                <div className="sticky bottom-0 p-3 bg-white/[0.04] border-t border-white/10 flex justify-end">
                   <button
                     onClick={handleVerifyCode}
                     disabled={codeIsVerifying}
-                    className="px-4 py-2 font-bold text-xs text-white bg-purple-600 hover:bg-purple-500 rounded-xl disabled:opacity-40 transition-all cursor-pointer flex items-center gap-1.5"
+                    className="px-4 py-2.5 font-bold text-xs text-white bg-purple-600 hover:bg-purple-500 rounded-xl disabled:opacity-40 transition-all cursor-pointer flex items-center gap-1.5 min-h-[44px]"
                     id="btn-code-run-verify"
                   >
                     {codeIsVerifying ? (
@@ -341,9 +353,9 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                 </div>
               </div>
 
-              {/* Console logs */}
+              {/* Result panel */}
               {codeFeedback && (
-                <motion.div 
+                <motion.div
                   className="p-4 rounded-xl bg-white/[0.03] border border-white/10 font-mono text-xs leading-relaxed space-y-2 select-text selection:bg-purple-500/20 max-h-[160px] overflow-y-auto relative"
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -368,7 +380,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                       <p className="text-xs text-zinc-500 mt-1"><strong className="text-purple-300 font-semibold">Walkthrough analysis:</strong> {codeFeedback.explanation}</p>
                     </div>
                   ) : (
-                    <motion.div 
+                    <motion.div
                       className="text-red-400 bg-transparent"
                       animate={{ x: [-2, 2, -2, 2, 0] }}
                       transition={{ duration: 0.4, ease: easeInOut }}
@@ -411,7 +423,9 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
                       i < stepIndex ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
                       i === stepIndex ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' :
                       'bg-white/5 text-zinc-600 border border-white/10'
-                    }`}>{i < stepIndex ? '✓' : i + 1}</div>
+                    }`}>
+                      {i < stepIndex ? <Check className="w-3 h-3" /> : i + 1}
+                    </div>
                     {i < 3 && <div className={`h-px w-6 transition-all ${i < stepIndex ? 'bg-emerald-500/40' : 'bg-white/10'}`} />}
                   </React.Fragment>
                 );
@@ -589,15 +603,20 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
               </button>
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">{lesson.type} module</span>
-                  <XPBadge amount={lesson.xpReward} size="sm" />
-                </div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                      {lesson.type === 'boss_challenge' ? 'Boss Challenge' :
+                       lesson.type === 'ai_session' ? 'AI Session' :
+                       lesson.type === 'coding' ? 'Coding' :
+                       lesson.type === 'quiz' ? 'Quiz' :
+                       lesson.type === 'challenge' ? 'Challenge' : 'Lesson'} module
+                    </span>
+                    <XPBadge amount={lesson.xpReward} size="sm" />
+                  </div>
                 <h3 className="font-display font-semibold text-sm md:text-base text-white mt-0.5 truncate max-w-xs sm:max-w-md">
                   {lesson.name}
                 </h3>
               </div>
             </div>
-
           </div>
 
           {/* Primary viewport content */}

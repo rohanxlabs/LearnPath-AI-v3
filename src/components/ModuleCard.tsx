@@ -4,6 +4,7 @@ import { Level, Lesson } from '../types';
 import { ChevronDown, BookOpen, CheckCircle2, Circle, Play, Lock } from 'lucide-react';
 import { LessonItem } from './LessonItem';
 import { easeInOut } from 'motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 type ModuleDisplayStatus = 'completed' | 'in-progress' | 'not-started';
 
@@ -28,6 +29,7 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
   moduleStatus,
   phaseId,
 }) => {
+  const reduced = useReducedMotion();
   const lessons = level.lessons || [];
   const totalLessons = lessons.length;
   const completedLessons = lessons.filter((l) => l.status === 'completed').length;
@@ -78,7 +80,7 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
   
   return (
     <motion.div
-      layout
+      layout={reduced ? false : true}
       className="bg-zinc-50 dark:bg-white/[0.03] rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm overflow-hidden transition-all hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
     >
       <motion.button
@@ -111,8 +113,8 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
         <div className="flex items-center gap-3 flex-shrink-0">
           {getStatusBadge()}
           <motion.div
-            animate={{ rotate: expanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            animate={reduced ? {} : { rotate: expanded ? 180 : 0 }}
+            transition={{ duration: reduced ? 0 : 0.2 }}
             className="text-zinc-400 dark:text-zinc-500"
           >
             <ChevronDown className="w-5 h-5" />
@@ -123,10 +125,10 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
       <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
+            initial={reduced ? false : { height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
+            exit={reduced ? {} : { height: 0, opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.25, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
             <div className="px-5 pb-5 pt-1">

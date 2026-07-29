@@ -119,8 +119,16 @@ export function RoadmapGeneratorForm({
     if (onRoadmapReady) {
       setIsStreaming(true);
       setStreamPhases([]);
+      setGenerationError(null);
       const controller = new AbortController();
       abortRef.current = controller;
+
+      // Hard 60-second timeout — aborts the stream and shows an error so the
+      // user is never left staring at a stuck spinner indefinitely.
+      const STREAM_TIMEOUT_MS = 60_000;
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, STREAM_TIMEOUT_MS);
 
       try {
         const authHeaders = getHeaders
@@ -156,6 +164,7 @@ export function RoadmapGeneratorForm({
               if (event.type === 'phase' && event.name) {
                 setStreamPhases(prev => [...prev, String(event.name)]);
               } else if (event.type === 'done' && event.roadmap) {
+                clearTimeout(timeoutId);
                 setIsStreaming(false);
                 setStreamPhases([]);
                 setGoal('');
@@ -170,7 +179,18 @@ export function RoadmapGeneratorForm({
         // Stream ended without a done event — fall through to legacy path.
         throw new Error('Stream ended without a roadmap');
       } catch (err: any) {
-        if (err.name === 'AbortError') return; // user cancelled — do nothing
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          // Distinguish user-cancel (abortRef cleared) from timeout (still set).
+          if (abortRef.current !== null) {
+            // Timeout fired — show error rather than silently disappearing.
+            setGenerationError('Generation timed out after 60 seconds. Please check your connection and try again.');
+          }
+          setIsStreaming(false);
+          setStreamPhases([]);
+          abortRef.current = null;
+          return;
+        }
         if (import.meta.env.DEV) { console.warn('[RoadmapGeneratorForm] SSE stream failed, falling back:', err.message); }
         setIsStreaming(false);
         setStreamPhases([]);
@@ -325,9 +345,18 @@ export function RoadmapGeneratorForm({
       {/* ── Generation error panel ── */}
       {generationError && (
         <div className="px-5 pb-4">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
-            <AlertCircle size={14} className="flex-shrink-0" />
-            <span>{generationError}</span>
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-600 dark:text-red-400">
+            <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium">{generationError}</p>
+              <button
+                type="button"
+                onClick={() => setGenerationError(null)}
+                className="mt-1 text-xs font-semibold text-red-500 hover:text-red-700 dark:hover:text-red-300 underline underline-offset-2 transition-colors cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         </div>
       )}

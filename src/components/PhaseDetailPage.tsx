@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   ArrowLeft, Lock, CheckCircle2, Clock, BookOpen, Zap, Rocket,
   ExternalLink, Brain, Play, Award, Trophy, XCircle, BarChart2, Calendar,
@@ -58,6 +59,7 @@ export function PhaseDetailPage({
   onRoadmapUpdated,
   getAuthHeaders,
 }: PhaseDetailPageProps) {
+  const reduced = useReducedMotion();
   const [activeTab, setActiveTab] = useState<DetailTab>('modules');
   // Lifted quiz score so GateStat can reflect the last attempt (H-04 fix)
   const [phaseQuizScore, setPhaseQuizScore] = useState<number | null>(null);
@@ -212,8 +214,15 @@ export function PhaseDetailPage({
 
           {/* phase progress ring */}
           <div className="flex-shrink-0 self-start sm:self-center">
-            <div className="relative w-16 h-16">
-              <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+            <div
+              className="relative w-16 h-16"
+              role="progressbar"
+              aria-valuenow={progress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${phase.name} phase progress`}
+            >
+              <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64" aria-hidden="true">
                 <circle cx="32" cy="32" r="26" stroke="#e5e7eb" strokeWidth="6" fill="none" className="dark:stroke-white/10" />
                 <circle
                   cx="32" cy="32" r="26"
@@ -260,32 +269,38 @@ export function PhaseDetailPage({
         </div>
       </motion.div>
 
-      {/* ── Content tab bar ── */}
-      <div className="flex gap-1 overflow-x-auto scrollbar-hide -mb-1">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0
-              ${activeTab === tab.id
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10'
-              }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
+      {/* ── Content tab bar ──
+          The relative + after pseudo-element creates a right-edge fade that
+          signals horizontal overflow is scrollable on small screens. */}
+      <div className="relative">
+        <div className="flex gap-1 overflow-x-auto scrollbar-hide -mb-1 pr-8">
+          {TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex-shrink-0
+                ${activeTab === tab.id
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10'
+                }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {/* Fade gradient — opaque on both themes so overflow is clearly visible */}
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white dark:from-zinc-950 to-transparent" aria-hidden="true" />
       </div>
 
       {/* ── Tab content ── */}
       <AnimatePresence mode="wait">
         <motion.div
           key={activeTab}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
+          initial={reduced ? false : { opacity: 0, y: 10 }}
+          animate={reduced ? {} : { opacity: 1, y: 0 }}
+          exit={reduced ? {} : { opacity: 0, y: -10 }}
+          transition={{ duration: reduced ? 0 : 0.2 }}
         >
           {activeTab === 'modules' && (
             <ModulesSection
@@ -298,7 +313,7 @@ export function PhaseDetailPage({
             />
           )}
           {activeTab === 'resources' && (
-            <ResourcesSection resources={phaseResources} />
+            <ResourcesSection resources={phaseResources} reduced={reduced} />
           )}
           {activeTab === 'quiz' && (
             <QuizSection
@@ -332,18 +347,23 @@ export function PhaseDetailPage({
 
 function GateStat({ label, value, done, icon }: { label: string; value: string; done: boolean; icon: React.ReactNode }) {
   return (
-    <div className={`flex flex-col items-center justify-center gap-1 p-3 rounded-xl border transition-colors
+    // Horizontal layout: icon on the left, value + label stacked on the right.
+    // This uses the ~108 px cell width on 360 px phones far more efficiently
+    // than a vertical stack where value and label fight for the same narrow column.
+    <div className={`flex items-center gap-2 p-3 rounded-xl border transition-colors
       ${done
         ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
         : 'bg-white dark:bg-white/[0.02] border-zinc-200 dark:border-white/10'
       }`}>
-      <div className={`${done ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-500'}`}>
+      <div className={`flex-shrink-0 ${done ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400 dark:text-zinc-500'}`}>
         {done ? <CheckCircle2 className="w-4 h-4" /> : icon}
       </div>
-      <span className={`text-xs font-bold ${done ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
-        {value}
-      </span>
-      <span className="text-xs text-zinc-400 uppercase tracking-wide">{label}</span>
+      <div className="min-w-0">
+        <p className={`text-xs font-bold leading-tight truncate ${done ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
+          {value}
+        </p>
+        <p className="text-[10px] text-zinc-400 uppercase tracking-wide leading-tight">{label}</p>
+      </div>
     </div>
   );
 }
@@ -395,7 +415,7 @@ function ModulesSection({ phase, expandedModules, onToggleModule, onLessonClick,
 // ResourcesSection
 // ---------------------------------------------------------------------------
 
-function ResourcesSection({ resources }: { resources: any[] }) {
+function ResourcesSection({ resources, reduced }: { resources: any[]; reduced: boolean }) {
   if (resources.length === 0) {
     return (
       <div className="text-center py-12 px-6 rounded-2xl bg-zinc-50 dark:bg-white/[0.02] border border-zinc-200 dark:border-white/10">
@@ -422,9 +442,9 @@ function ResourcesSection({ resources }: { resources: any[] }) {
           href={res.url || '#'}
           target="_blank"
           rel="noopener noreferrer"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05 }}
+          initial={reduced ? false : { opacity: 0, y: 8 }}
+          animate={reduced ? {} : { opacity: 1, y: 0 }}
+          transition={{ delay: reduced ? 0 : i * 0.05 }}
           className="flex items-start justify-between gap-3 p-4 rounded-xl bg-white dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 hover:border-purple-300 dark:hover:border-purple-500/40 hover:shadow-sm transition-all group"
         >
           <div className="flex items-start gap-3 flex-1 min-w-0">

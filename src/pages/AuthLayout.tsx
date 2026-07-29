@@ -17,5 +17,11 @@ export function AuthLayout({ title, subtitle, children }: { title: string; subti
   );
 }
 
+export const labelClass = 'block text-sm font-medium text-violet-950';
 export const inputClass = 'mt-1 w-full rounded-xl border border-violet-200/80 bg-white/65 px-3 py-3 text-sm text-violet-950 shadow-sm outline-none transition placeholder:text-violet-400/70 hover:border-violet-300 focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-300/25';
 export const buttonClass = 'mt-5 w-full rounded-xl bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-500 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-violet-300/45 transition hover:-translate-y-0.5 hover:brightness-105 focus:outline-none focus:ring-4 focus:ring-violet-300/50 disabled:cursor-not-allowed disabled:opacity-60';
+/** Shared style for secondary text-only navigation links (Forgot password, Back to sign in, etc.).
+ *  min-h-[44px] satisfies the WCAG 2.5.5 minimum touch target size.
+ *  underline decoration provides a visual affordance beyond colour alone.
+ */
+export const authLinkClass = 'inline-flex items-center min-h-[44px] px-1 text-sm font-medium text-violet-700 underline underline-offset-2 decoration-violet-300 hover:text-fuchsia-600 hover:decoration-fuchsia-400 focus:outline-none focus:ring-2 focus:ring-violet-400/50 rounded transition-colors';

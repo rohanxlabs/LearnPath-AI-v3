@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { User, CreditCard, Settings, FileText, LogOut } from 'lucide-react';
 import { UserProfile } from '../types';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /**
  * ProfileMenu — account dropdown for the mobile header avatar.
@@ -41,18 +42,20 @@ const panelVariants = {
   },
 };
 
-const itemVariants = {
-  hidden: { opacity: 0, x: 10 },
+const makeItemVariants = (reduced: boolean) => ({
+  hidden: { opacity: 0, x: reduced ? 0 : 10 },
   visible: (i: number) => ({
     opacity: 1,
     x: 0,
-    transition: { delay: i * 0.04, duration: 0.22, ease: 'easeOut' as const },
+    transition: { delay: reduced ? 0 : i * 0.04, duration: reduced ? 0 : 0.22, ease: 'easeOut' as const },
   }),
-};
+});
 
 export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsClick, onLegalClick, onLogout }: ProfileMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
+  const itemVariants = makeItemVariants(reduced);
 
   const close = () => setIsOpen(false);
 
@@ -103,11 +106,11 @@ export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsCl
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="absolute right-0 top-full mt-2 w-64 origin-top-right rounded-2xl border border-white/10 bg-[#161616]/95 backdrop-blur-md p-2 shadow-[0_8px_24px_rgba(0,0,0,0.14)] z-50"
+            className="absolute right-0 top-full mt-2 w-64 origin-top-right rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-[#161616]/95 backdrop-blur-md p-2 shadow-[0_8px_24px_rgba(0,0,0,0.14)] z-50"
           >
-            <div className="px-3 py-2 mb-1 border-b border-white/10">
-              <div className="text-sm font-semibold text-white truncate">{profile.name}</div>
-              <div className="text-xs text-zinc-400 truncate">{profile.email}</div>
+            <div className="px-3 py-2 mb-1 border-b border-zinc-100 dark:border-white/10">
+              <div className="text-sm font-semibold text-zinc-900 dark:text-white truncate">{profile.name}</div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{profile.email}</div>
             </div>
 
             <div className="space-y-1">
@@ -120,9 +123,9 @@ export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsCl
                   animate="visible"
                   onClick={item.onClick}
                   role="menuitem"
-                  className="group w-full flex items-center rounded-xl border border-transparent p-2.5 transition-all duration-200 hover:border-white/10 hover:bg-white/5 cursor-pointer"
+                  className="group w-full flex items-center rounded-xl border border-transparent p-2.5 transition-all duration-200 hover:border-zinc-200 dark:hover:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5 cursor-pointer"
                 >
-                  <div className="flex flex-1 items-center gap-2 text-zinc-300 group-hover:text-white">
+                  <div className="flex flex-1 items-center gap-2 text-zinc-600 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-white">
                     {item.icon}
                     <span className="text-sm font-medium">{item.label}</span>
                   </div>
@@ -132,7 +135,7 @@ export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsCl
                         item.label === 'Plan'
                           ? item.value === 'PRO'
                             ? 'bg-gradient-to-r from-purple-500 to-blue-600 text-white'
-                            : 'bg-white/5 text-zinc-400 border border-white/10'
+                            : 'bg-zinc-100 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 border border-zinc-200 dark:border-white/10'
                           : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
                       }`}
                     >
@@ -143,7 +146,7 @@ export function ProfileMenu({ profile, onTabChange, onUpgradeClick, onSettingsCl
               ))}
             </div>
 
-            <div className="my-2 h-px bg-white/10" />
+            <div className="my-2 h-px bg-zinc-100 dark:bg-white/10" />
 
             <motion.button
               custom={menuItems.length}

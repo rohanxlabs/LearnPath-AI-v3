@@ -69,7 +69,7 @@ export function ConfirmDialog({
             <div
               ref={dialogRef}
               tabIndex={-1}
-              className="pointer-events-auto w-full max-w-sm rounded-2xl border border-white/10 bg-[#161616]/95 backdrop-blur-md p-6 shadow-[0_16px_48px_rgba(0,0,0,0.4)] outline-none"
+              className="pointer-events-auto w-full max-w-sm rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-[#161616]/95 backdrop-blur-md p-6 shadow-[0_16px_48px_rgba(0,0,0,0.18)] dark:shadow-[0_16px_48px_rgba(0,0,0,0.4)] outline-none"
             >
               {/* Header */}
               <div className="flex items-start justify-between gap-3 mb-4">
@@ -77,25 +77,25 @@ export function ConfirmDialog({
                   <div className="w-10 h-10 rounded-xl bg-red-500/15 flex items-center justify-center flex-shrink-0">
                     <Trash2 className="w-5 h-5 text-red-400" />
                   </div>
-                  <h3 id="confirm-title" className="text-sm font-bold text-white">{title}</h3>
+                  <h3 id="confirm-title" className="text-base font-bold text-zinc-900 dark:text-white">{title}</h3>
                 </div>
                 <button
                   onClick={onCancel}
                   aria-label="Cancel"
-                  className="text-zinc-500 hover:text-white transition-colors cursor-pointer mt-0.5"
+                  className="p-1.5 -mr-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Body */}
-              <p id="confirm-message" className="text-sm text-zinc-400 leading-relaxed mb-6">{message}</p>
+              <p id="confirm-message" className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed mb-6">{message}</p>
 
               {/* Actions */}
               <div className="flex gap-3">
                 <button
                   onClick={onCancel}
-                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-sm font-semibold text-zinc-300 hover:bg-white/5 transition-colors cursor-pointer"
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-200 dark:border-white/10 text-sm font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>

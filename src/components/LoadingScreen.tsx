@@ -59,7 +59,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
             {[0, 1, 2].map((i) => (
               <motion.div
                 key={i}
-                className="w-6 h-20 bg-white/5 border border-white/10 rounded-sm"
+                className="w-6 h-20 bg-zinc-200 dark:bg-white/5 border border-zinc-300 dark:border-white/10 rounded-sm"
                 initial={{ rotate: 0 }}
                 animate={{ rotate: [-5, 5, -5] }}
                 transition={{ 
@@ -76,7 +76,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
 
       <motion.p
         aria-live="polite"
-        className="text-zinc-600 dark:text-zinc-400 text-xs font-medium"
+        className="text-zinc-600 dark:text-zinc-400 text-sm font-medium"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}

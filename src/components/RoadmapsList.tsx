@@ -42,10 +42,10 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
         <div className="text-center py-12 px-6">
           <div className="max-w-md mx-auto">
             <div className="w-16 h-16 glass-card rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <TrendingUp className="w-7 h-7 text-purple-400" />
+              <TrendingUp className="w-7 h-7 text-purple-500" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">No Roadmaps Yet</h3>
-            <p className="text-sm text-zinc-400">
+            <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">No Roadmaps Yet</h3>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Create your first learning roadmap to get started on your journey!
             </p>
           </div>
@@ -84,29 +84,31 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {roadmaps.map((roadmap) => (
-        <div
+        <button
           key={roadmap.id}
-          role="button"
-          tabIndex={0}
+          type="button"
           aria-label={`Open roadmap: ${roadmap.goal}`}
-          className="group glass-card rounded-2xl p-5 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] transition-all duration-200 cursor-pointer relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+          className="group glass-card rounded-2xl p-5 text-left hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] transition-all duration-200 cursor-pointer relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
           onClick={() => onSelectRoadmap(roadmap.id)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectRoadmap(roadmap.id); } }}
         >
-          {/* Delete Button */}
+          {/* Delete button — hidden until the card is hovered (pointer) or focused
+              (keyboard/touch) so it doesn't clutter the card visually.
+              opacity-0 + group-hover/focus-within ensures it's always reachable. */}
           <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
               onDeleteRoadmap(roadmap.id);
             }}
-            className="absolute top-4 right-4 opacity-40 group-hover:opacity-100 transition-opacity p-2 rounded-lg hover:bg-rose-500/10 focus-visible:opacity-100"
-            aria-label="Delete roadmap"
+            className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/50"
+            aria-label={`Delete roadmap: ${roadmap.goal}`}
+            tabIndex={-1}
           >
             <Trash2 className="w-4 h-4 text-rose-400" />
           </button>
 
-          {/* Content */}
-          <div className="pr-8">
+          {/* Content — right padding reserves space for the delete button */}
+          <div className="pr-10">
             <div className="flex items-start justify-between gap-3 mb-3">
               <h3 className="font-bold text-base text-white line-clamp-2 flex-1">
                 {roadmap.goal}
@@ -128,7 +130,14 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
                 <span>Progress</span>
                 <span className="font-semibold text-white">{roadmap.progressPercent}%</span>
               </div>
-              <div className="w-full bg-white/10 rounded-full h-2">
+              <div
+                className="w-full bg-white/10 rounded-full h-2"
+                role="progressbar"
+                aria-valuenow={roadmap.progressPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${roadmap.goal} progress`}
+              >
                 <div
                   className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${roadmap.progressPercent}%` }}
@@ -148,18 +157,17 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
               </div>
             </div>
 
-            {/* Creation Date */}
-            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Created {formatDate(roadmap.createdAt)}</span>
+            {/* Creation Date + open hint */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Created {formatDate(roadmap.createdAt)}</span>
+              </div>
+              {/* Inline chevron — visible on all devices, not hidden behind hover */}
+              <ChevronRight className="w-4 h-4 text-purple-400 opacity-50 group-hover:opacity-100 transition-opacity flex-shrink-0" aria-hidden="true" />
             </div>
           </div>
-
-          {/* Arrow Icon */}
-          <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity" aria-hidden="true">
-            <ChevronRight className="w-5 h-5 text-purple-400" />
-          </div>
-        </div>
+        </button>
       ))}
     </div>
   );

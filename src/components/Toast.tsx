@@ -15,15 +15,15 @@ interface ToastProps {
 }
 
 const ICONS: Record<ToastType, React.ReactNode> = {
-  error:   <AlertCircle  className="w-4 h-4 flex-shrink-0 text-red-400" />,
-  success: <CheckCircle  className="w-4 h-4 flex-shrink-0 text-emerald-400" />,
-  info:    <Info         className="w-4 h-4 flex-shrink-0 text-blue-400" />,
+  error:   <AlertCircle  className="w-4 h-4 flex-shrink-0 text-red-600" />,
+  success: <CheckCircle  className="w-4 h-4 flex-shrink-0 text-emerald-600" />,
+  info:    <Info         className="w-4 h-4 flex-shrink-0 text-blue-600" />,
 };
 
 const BG: Record<ToastType, string> = {
-  error:   'bg-red-50 dark:bg-[#1c0505] border-red-300 dark:border-red-500/40 text-red-900 dark:text-white',
-  success: 'bg-emerald-50 dark:bg-[#031a0a] border-emerald-300 dark:border-emerald-500/40 text-emerald-900 dark:text-white',
-  info:    'bg-blue-50 dark:bg-[#030d1c] border-blue-300 dark:border-blue-500/40 text-blue-900 dark:text-white',
+  error:   'bg-red-50 border-red-300 text-red-900',
+  success: 'bg-emerald-50 border-emerald-300 text-emerald-900',
+  info:    'bg-blue-50 border-blue-300 text-blue-900',
 };
 
 export function Toast({ toast, onDismiss }: ToastProps) {
@@ -42,7 +42,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
           animate={{ opacity: 1, y: 0,  scale: 1 }}
           exit={{    opacity: 0, y: 20, scale: 0.95 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className={`fixed bottom-[5.5rem] left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2.5 px-4 py-3 rounded-2xl border shadow-xl backdrop-blur-md max-w-sm w-[90vw] md:bottom-8 ${BG[toast.type]}`}
+          className={`fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+12px)] left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2.5 px-4 py-3 rounded-2xl border shadow-xl backdrop-blur-md max-w-sm w-[90vw] md:bottom-8 ${BG[toast.type]}`}
           role="alert"
           aria-live="assertive"
         >

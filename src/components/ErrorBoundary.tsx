@@ -54,29 +54,36 @@ export class ErrorBoundary extends Component<Props, State> {
       }
       return (
         <div className={`flex flex-col items-center justify-center py-20 px-6 ${glassCardClass()} rounded-2xl`}>
-          <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-center justify-center mb-4">
-            <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">Something went wrong</h3>
-          <p className="text-sm text-zinc-400 max-w-md mb-6 text-center">
-            A component crashed while rendering. This may be caused by a browser extension or network issue.
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={this.handleReset}
-              className={`px-6 py-3 ${buttonStyles.primary} rounded-xl font-bold text-sm inline-flex items-center gap-2`}
-            >
-              <RefreshCw className="w-4 h-4" />
-              Retry
-            </button>
-            <button
-              onClick={this.handleReportIssue}
-              disabled={this.state.reported}
-              className={`px-6 py-3 ${buttonStyles.secondary} rounded-xl font-bold text-sm inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
-            >
-              {this.state.reported ? <><Check className="w-4 h-4" /> Reported</> : <><Send className="w-4 h-4" /> Report Issue</>}
-            </button>
-          </div>
+        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-center justify-center mb-4">
+          <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
+        </div>
+        <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">Something went wrong</h3>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mb-6 text-center">
+          An unexpected error occurred. Try retrying, or reload the page if the problem persists.
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <button
+            onClick={this.handleReset}
+            className={`px-6 py-3 ${buttonStyles.primary} rounded-xl font-bold text-sm inline-flex items-center gap-2`}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Retry
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className={`px-6 py-3 ${buttonStyles.secondary} rounded-xl font-bold text-sm inline-flex items-center gap-2`}
+          >
+            <RefreshCw className="w-4 h-4" />
+            Reload Page
+          </button>
+          <button
+            onClick={this.handleReportIssue}
+            disabled={this.state.reported}
+            className={`px-6 py-3 ${buttonStyles.secondary} rounded-xl font-bold text-sm inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed`}
+          >
+            {this.state.reported ? <><Check className="w-4 h-4" /> Reported</> : <><Send className="w-4 h-4" /> Report Issue</>}
+          </button>
+        </div>
           {/* Stack trace is only shown in development — never in production builds. */}
           {import.meta.env.DEV && this.state.error && (
             <details className="mt-6 max-w-lg w-full">

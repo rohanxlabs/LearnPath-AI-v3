@@ -150,7 +150,9 @@ export function RoadmapProvider({
         });
         if (uniqueList.length === 0) { setSelectedRoadmapId(null); setSelectedPhaseId(null); }
       }
-    } catch (err) { console.error('Failed to sync roadmaps:', err); }
+    } catch (err) {
+      if (import.meta.env.DEV) { console.error('Failed to sync roadmaps:', err); }
+    }
   }, [isAuthenticated]);
 
   const getNextIncompleteLesson = useCallback((roadmap: Roadmap) => {
@@ -220,9 +222,13 @@ export function RoadmapProvider({
         const valRes = await fetch('/api/validate-progression', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify({ roadmap: newRoadmap }) });
         if (valRes.ok) {
           const val = await valRes.json();
-          if (val.hasGaps || !val.prerequisitesMet) console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites);
+          if (val.hasGaps || !val.prerequisitesMet) {
+            if (import.meta.env.DEV) { console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites); }
+          }
         }
-      } catch (e) { console.warn('Could not validate progression:', e); }
+      } catch (e) {
+        if (import.meta.env.DEV) { console.warn('Could not validate progression:', e); }
+      }
       setRoadmaps(prev => {
         if (prev.some(r => r.id === newRoadmap.id)) return prev;
         return [newRoadmap, ...prev];
@@ -232,7 +238,7 @@ export function RoadmapProvider({
       onNotification({ id: `notif-${Date.now()}`, title: 'New AI Syllabus Generated', message: `Your custom roadmap for "${newRoadmap.goal}" is ready. Start learning!`, category: 'roadmap', read: false, timestamp: new Date().toISOString() });
       onTabChange('roadmaps');
     } catch (err) {
-      console.error('Failed to persist streamed roadmap:', err);
+      if (import.meta.env.DEV) { console.error('Failed to persist streamed roadmap:', err); }
       Sentry.captureException(err, { tags: { feature: 'roadmap-generation' } });
       onShowToast('Roadmap was generated but could not be saved. Please try again.');
     } finally { setIsAiGeneratingRoadmap(false); }
@@ -242,7 +248,14 @@ export function RoadmapProvider({
     Sentry.setTag('feature', 'roadmap-generation');
     setIsAiGeneratingRoadmap(true);
     try {
-      const response = await fetch('/api/generate-roadmap', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify(params) });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60_000);
+      let response: Response;
+      try {
+        response = await fetch('/api/generate-roadmap', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify(params), signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const ct = response.headers.get('content-type') || '';
       if (!ct.includes('application/json')) throw new Error('Server returned non-JSON content.');
@@ -270,9 +283,13 @@ export function RoadmapProvider({
         const valRes = await fetch('/api/validate-progression', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify({ roadmap: newRoadmap }) });
         if (valRes.ok) {
           const val = await valRes.json();
-          if (val.hasGaps || !val.prerequisitesMet) console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites);
+          if (val.hasGaps || !val.prerequisitesMet) {
+            if (import.meta.env.DEV) { console.warn('Roadmap progression issues:', val.gaps, val.missingPrerequisites); }
+          }
         }
-      } catch (e) { console.warn('Could not validate progression:', e); }
+      } catch (e) {
+        if (import.meta.env.DEV) { console.warn('Could not validate progression:', e); }
+      }
       setRoadmaps(prev => {
         if (prev.some(r => r.id === newRoadmap.id)) return prev;
         return [newRoadmap, ...prev];
@@ -282,7 +299,7 @@ export function RoadmapProvider({
       onNotification({ id: `notif-${Date.now()}`, title: 'New AI Syllabus Generated', message: `Your custom roadmap for "${newRoadmap.goal}" is now active.`, category: 'roadmap', read: false, timestamp: new Date().toISOString() });
       onTabChange('roadmaps');
     } catch (err) {
-      console.error('Failed to generate roadmap:', err);
+      if (import.meta.env.DEV) { console.error('Failed to generate roadmap:', err); }
       Sentry.captureException(err, { tags: { feature: 'roadmap-generation' } });
       onShowToast('Failed to generate roadmap. Please try again.');
     } finally { setIsAiGeneratingRoadmap(false); }
@@ -305,7 +322,7 @@ export function RoadmapProvider({
         onShowToast('Failed to delete roadmap. Please try again.');
       }
     } catch (err) {
-      console.error('Failed to delete roadmap:', err);
+      if (import.meta.env.DEV) { console.error('Failed to delete roadmap:', err); }
       onShowToast('Failed to delete roadmap. Please check your connection.');
     }
   }, [syncRoadmapsFromDatabase, onNotification, onShowToast]);

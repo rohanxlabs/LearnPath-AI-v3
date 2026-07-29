@@ -61,7 +61,7 @@ function StepDots({ current }: { current: number }) {
           key={i}
           aria-hidden="true"
           className={`rounded-full transition-all duration-300 ${
-            i < current ? 'w-6 h-2 bg-purple-500' : i === current ? 'w-6 h-2 bg-purple-400' : 'w-2 h-2 bg-white/20'
+            i < current ? 'w-6 h-2 bg-purple-500' : i === current ? 'w-6 h-2 bg-purple-400' : 'w-2 h-2 bg-zinc-300 dark:bg-white/20'
           }`}
         />
       ))}
@@ -128,7 +128,7 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+    <div className="min-h-dvh bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="relative text-center mb-8">
@@ -136,22 +136,22 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
             type="button"
             onClick={handleSkip}
             aria-label="Skip onboarding setup"
-            className="absolute top-0 right-0 text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
+            className="absolute top-0 right-0 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
           >
             Skip for now →
           </button>
           <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center">
             <Sparkles className="w-7 h-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
             Welcome, {userName.split(' ')[0]}!
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">Let's personalise your learning experience in 3 quick steps.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Let's personalise your learning experience in 3 quick steps.</p>
         </div>
 
         <StepDots current={step} />
 
-        <div className="bg-zinc-900 border border-white/10 rounded-2xl p-8 min-h-[340px] relative overflow-hidden">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl p-8 min-h-[340px] relative overflow-hidden">
           <AnimatePresence mode="wait" custom={direction}>
             {/* Step 0 — Goal */}
             {step === 0 && (
@@ -165,23 +165,22 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
                 transition={{ duration: 0.25 }}
               >
                 <div className="flex items-center gap-2 mb-6">
-                  <Target className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-xl font-semibold text-white">What do you want to learn?</h2>
+                  <Target className="w-5 h-5 text-purple-500" />
+                  <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">What do you want to learn?</h2>
                 </div>
-                <p className="text-xs text-zinc-500 mb-4">
+                <p className="text-xs text-zinc-500 dark:text-zinc-500 mb-4">
                   Be specific — e.g. "Build a full-stack app with React & Node", "Master Python for Data Science", "Learn System Design for interviews".
                 </p>
                 <textarea
-                  autoFocus
                   value={goal}
                   onChange={e => setGoal(e.target.value)}
                   placeholder="Describe your learning goal…"
                   rows={4}
                   maxLength={500}
                   aria-label="Learning goal"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 resize-none focus:outline-none focus:border-purple-500 transition-colors"
+                  className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 resize-none focus:outline-none focus:border-purple-500 transition-colors"
                 />
-                <p className="text-xs text-zinc-600 mt-1 text-right">{goal.trim().length}/500</p>
+                <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-1 text-right">{goal.trim().length}/500</p>
               </motion.div>
             )}
 
@@ -197,8 +196,8 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
                 transition={{ duration: 0.25 }}
               >
                 <div className="flex items-center gap-2 mb-6">
-                  <BookOpen className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-xl font-semibold text-white">Your experience level?</h2>
+                  <BookOpen className="w-5 h-5 text-purple-500" />
+                  <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">Your experience level?</h2>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {EXPERIENCE_LEVELS.map(level => (
@@ -209,8 +208,8 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
                       aria-pressed={experienceLevel === level}
                       className={`relative p-4 rounded-xl border text-sm font-medium transition-all text-left ${
                         experienceLevel === level
-                          ? 'border-purple-500 bg-purple-500/15 text-white'
-                          : 'border-white/10 bg-white/3 text-zinc-400 hover:border-white/20 hover:text-white'
+                          ? 'border-purple-500 bg-purple-500/15 text-zinc-900 dark:text-white'
+                          : 'border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/3 text-zinc-600 dark:text-zinc-400 hover:border-purple-300 dark:hover:border-white/20 hover:text-zinc-900 dark:hover:text-white'
                       }`}
                     >
                       {experienceLevel === level && (
@@ -237,30 +236,33 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
                 transition={{ duration: 0.25 }}
               >
                 <div className="flex items-center gap-2 mb-5">
-                  <Clock className="w-5 h-5 text-purple-400" />
-                  <h2 className="text-xl font-semibold text-white">Your learning pace & style</h2>
+                  <Clock className="w-5 h-5 text-purple-500" />
+                  <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">Your learning pace & style</h2>
                 </div>
 
-                <p className="text-xs text-zinc-500 mb-2">Hours per week</p>
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-500">Hours per week</p>
+                  <span className="text-sm font-bold text-purple-600 dark:text-purple-400">{weeklyHours}h</span>
+                </div>
+                {/* range slider — works at any screen width including 320 px iPhone SE */}
+                <input
+                  type="range"
+                  min={WEEKLY_HOURS_OPTIONS[0]}
+                  max={WEEKLY_HOURS_OPTIONS[WEEKLY_HOURS_OPTIONS.length - 1]}
+                  step={1}
+                  value={weeklyHours}
+                  onChange={e => setWeeklyHours(Number(e.target.value))}
+                  aria-label="Weekly study hours"
+                  aria-valuetext={`${weeklyHours} hours per week`}
+                  className="w-full mb-1 accent-purple-500 cursor-pointer"
+                />
+                <div className="flex justify-between text-xs text-zinc-600 mb-6" aria-hidden="true">
                   {WEEKLY_HOURS_OPTIONS.map(h => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => setWeeklyHours(h)}
-                      aria-pressed={weeklyHours === h}
-                      className={`flex-1 py-2 rounded-xl border text-sm font-semibold transition-all ${
-                        weeklyHours === h
-                          ? 'border-purple-500 bg-purple-500/15 text-white'
-                          : 'border-white/10 text-zinc-400 hover:text-white hover:border-white/20'
-                      }`}
-                    >
-                      {h}h
-                    </button>
+                    <span key={h}>{h}h</span>
                   ))}
                 </div>
 
-                <p className="text-xs text-zinc-500 mb-2">Preferred learning style</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-500 mb-2">Preferred learning style</p>
                 <div className="grid grid-cols-2 gap-3">
                   {PREFERRED_STYLES.map(style => (
                     <button
@@ -270,8 +272,8 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
                       aria-pressed={preferredStyle === style}
                       className={`relative p-3 rounded-xl border text-xs font-medium transition-all text-left ${
                         preferredStyle === style
-                          ? 'border-purple-500 bg-purple-500/15 text-white'
-                          : 'border-white/10 text-zinc-400 hover:border-white/20 hover:text-white'
+                          ? 'border-purple-500 bg-purple-500/15 text-zinc-900 dark:text-white'
+                          : 'border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:border-purple-300 dark:hover:border-white/20 hover:text-zinc-900 dark:hover:text-white'
                       }`}
                     >
                       {preferredStyle === style && (
@@ -295,7 +297,7 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
             <button
               type="button"
               onClick={handleBack}
-              className="text-sm text-zinc-500 hover:text-white transition-colors"
+              className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
             >
               ← Back
             </button>

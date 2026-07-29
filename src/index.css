@@ -1,7 +1,8 @@
-/* TODO: Migrate the .light !important override cascade (lines ~174–885) to proper
-   Tailwind dark: variants on each component. This is a large refactor — do not mix
-   with feature work. See ux-sprint-plan.md § TODO Comments for Future Work. */
 @import "tailwindcss";
+
+/* Light theme override cascade — large !important rules below (lines ~180+) remap
+   dark utility classes to their light equivalents so the app looks correct without
+   a full component-by-component dark: variant refactor (planned for v2). */
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -31,6 +32,27 @@
   background-size: 64px 64px;
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.4), transparent 85%);
   pointer-events: none;
+}
+
+/*
+ * Landing page ambient glow blobs.
+ * will-change:transform promotes each element to its own GPU compositor layer
+ * so the blur filter is rasterised once and composited during scroll — avoiding
+ * a repaint on every frame on the main thread.
+ *
+ * On mobile (max-width: 767px) the blur radii are halved to ~60–70 px to prevent
+ * GPU overload on mid-range Android / older iPhones.
+ */
+.landing-blob {
+  will-change: transform;
+}
+
+@media (max-width: 767px) {
+  /* Override the Tailwind blur-[Npx] utilities applied inline on mobile */
+  .landing-blob:nth-child(1) { filter: blur(70px); }
+  .landing-blob:nth-child(2) { filter: blur(55px); }
+  .landing-blob:nth-child(3) { filter: blur(55px); }
+  .landing-blob:nth-child(4) { filter: blur(45px); }
 }
 
 html,
@@ -134,6 +156,20 @@ body {
 
 .light .shimmer {
   background: linear-gradient(90deg, rgba(15,23,42,0.08) 0%, rgba(15,23,42,0.15) 50%, rgba(15,23,42,0.08) 100%);
+}
+
+/* Safe-area padding utilities */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Scrollbar hide utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* Base custom scrollbars */

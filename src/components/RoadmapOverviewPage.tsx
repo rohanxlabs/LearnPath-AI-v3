@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   ArrowLeft, Sparkles, Play, Lock, CheckCircle2,
   Clock, Zap, BookOpen, ChevronRight, PlusCircle, MapPin,
@@ -55,8 +56,18 @@ export function RoadmapOverviewPage({
   resumeInfo,
   onViewInsights,
 }: RoadmapOverviewPageProps) {
+  const reduced = useReducedMotion();
   const [lockedToast, setLockedToast] = useState<string | null>(null);
   const [showGenerator, setShowGenerator] = useState(false);
+  const generatorRef = useRef<HTMLDivElement>(null);
+
+  // Scroll the generator form into view whenever it opens so mobile users
+  // don't miss the newly revealed content below the fold.
+  useEffect(() => {
+    if (showGenerator && generatorRef.current) {
+      generatorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [showGenerator]);
 
   const handlePhaseClick = (phaseId: string, status: PhaseUnlockStatus, phaseIndex: number) => {
     if (status === 'locked') {
@@ -129,18 +140,25 @@ export function RoadmapOverviewPage({
 
             {/* circular progress */}
             <div className="flex-shrink-0 self-start sm:self-center">
-              <div className="relative w-20 h-20">
-                <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                  <circle cx="40" cy="40" r="34" stroke="rgba(255,255,255,0.2)" strokeWidth="7" fill="none" />
-                  <circle
-                    cx="40" cy="40" r="34"
-                    stroke="white" strokeWidth="7" fill="none"
-                    strokeDasharray={`${2 * Math.PI * 34}`}
-                    strokeDashoffset={`${2 * Math.PI * 34 * (1 - liveProgressPercent / 100)}`}
-                    strokeLinecap="round"
-                    className="transition-all duration-700"
-                  />
-                </svg>
+              <div
+                className="relative w-20 h-20"
+                role="progressbar"
+                aria-valuenow={liveProgressPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Roadmap completion"
+              >
+                  <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80" aria-hidden="true">
+                    <circle cx="40" cy="40" r="34" stroke="rgba(255,255,255,0.2)" strokeWidth="7" fill="none" />
+                    <circle
+                      cx="40" cy="40" r="34"
+                      stroke="white" strokeWidth="7" fill="none"
+                      strokeDasharray={`${2 * Math.PI * 34}`}
+                      strokeDashoffset={`${2 * Math.PI * 34 * (1 - liveProgressPercent / 100)}`}
+                      strokeLinecap="round"
+                      className="transition-all duration-700"
+                    />
+                  </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <span className="text-lg font-extrabold text-white leading-none">{liveProgressPercent}%</span>
                   <span className="text-xs text-white/70 font-medium uppercase tracking-wide">done</span>
@@ -254,9 +272,9 @@ export function RoadmapOverviewPage({
               <motion.button
                 key={phase.id}
                 type="button"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: idx * 0.06 }}
+                initial={reduced ? false : { opacity: 0, y: 16 }}
+                animate={reduced ? {} : { opacity: 1, y: 0 }}
+                transition={reduced ? { duration: 0 } : { duration: 0.3, delay: idx * 0.06 }}
                 onClick={() => handlePhaseClick(phase.id, status, idx)}
                 disabled={status === 'locked'}
                 aria-label={`${status === 'locked' ? 'Locked: ' : ''}Phase ${idx + 1}: ${phase.name}`}
@@ -380,9 +398,11 @@ export function RoadmapOverviewPage({
       </div>
 
       {/* ── Generate New Roadmap ── */}
-      <div className="pt-2 space-y-3">
+      <div ref={generatorRef} className="pt-2 space-y-3 scroll-mt-4">
         <button
           onClick={() => setShowGenerator(v => !v)}
+          aria-expanded={showGenerator}
+          aria-controls="roadmap-generator-form"
           className="w-full py-3.5 px-6 rounded-xl font-bold text-sm bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 hover:brightness-110 text-white shadow-[0_4px_14px_rgba(124,58,237,0.3)] flex items-center justify-center gap-2 transition-all"
         >
           <Sparkles className="w-4 h-4" />
@@ -390,17 +410,19 @@ export function RoadmapOverviewPage({
           <PlusCircle className="w-4 h-4" />
         </button>
         {showGenerator && (
-          <RoadmapGeneratorForm
-            onRoadmapReady={onRoadmapReady ? async (roadmap) => {
-              await onRoadmapReady(roadmap);
-              setShowGenerator(false);
-            } : undefined}
-            onSubmit={async (params) => {
-              await onGenerateRoadmap(params);
-              setShowGenerator(false);
-            }}
-            isGenerating={isGenerating}
-          />
+          <div id="roadmap-generator-form">
+            <RoadmapGeneratorForm
+              onRoadmapReady={onRoadmapReady ? async (roadmap) => {
+                await onRoadmapReady(roadmap);
+                setShowGenerator(false);
+              } : undefined}
+              onSubmit={async (params) => {
+                await onGenerateRoadmap(params);
+                setShowGenerator(false);
+              }}
+              isGenerating={isGenerating}
+            />
+          </div>
         )}
       </div>
     </div>

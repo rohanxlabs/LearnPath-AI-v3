@@ -49,7 +49,7 @@ export function usePWA() {
         .register('/sw.js')
         .then((reg) => {
           setSwRegistration(reg);
-          console.log('[PWA] Service Worker registered successfully:', reg.scope);
+          if (import.meta.env.DEV) { console.log('[PWA] Service Worker registered successfully:', reg.scope); }
 
           // Check if there is already a waiting worker on load
           if (reg.waiting) {
@@ -70,7 +70,7 @@ export function usePWA() {
           });
         })
         .catch((err) => {
-          console.error('[PWA] Service worker registration failed:', err);
+          if (import.meta.env.DEV) { console.error('[PWA] Service worker registration failed:', err); }
         });
 
       // Handle controller changes (reloading page immediately when skipWaiting is activated)
@@ -100,7 +100,7 @@ export function usePWA() {
     
     // Wait for the response choice
     const choiceResult = await deferredPrompt.userChoice;
-    console.log('[PWA] User choice installed result:', choiceResult.outcome);
+    if (import.meta.env.DEV) { console.log('[PWA] User choice installed result:', choiceResult.outcome); }
     
     if (choiceResult.outcome === 'accepted') {
       setIsInstalled(true);
@@ -114,7 +114,7 @@ export function usePWA() {
   // Method to activate service worker update and refresh
   const triggerUpdateApp = () => {
     if (swRegistration?.waiting) {
-      console.log('[PWA] Sending skipWaiting to active waiting service worker...');
+      if (import.meta.env.DEV) { console.log('[PWA] Sending skipWaiting to active waiting service worker...'); }
       swRegistration.waiting.postMessage('skipWaiting');
     } else {
       // Manual backup reload
@@ -131,7 +131,7 @@ export function usePWA() {
       setNotificationPermission(permission);
       return permission;
     } catch (err) {
-      console.error('[PWA] Error requesting notification permissions:', err);
+      if (import.meta.env.DEV) { console.error('[PWA] Error requesting notification permissions:', err); }
       return 'default';
     }
   };

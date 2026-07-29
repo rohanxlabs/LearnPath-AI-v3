@@ -8,10 +8,15 @@ interface SkeletonProps {
   style?: React.CSSProperties;
 }
 
+// sk-base: visible in both dark (white/8) and light (zinc-200) modes
+const SK_BASE = 'rounded-xl bg-zinc-200 dark:bg-white/8 animate-pulse';
+// sk-card: container background for card-level skeletons
+const SK_CARD = 'bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10';
+
 export function Skeleton({ className = '', width, height, style }: SkeletonProps) {
   return (
     <div
-      className={`rounded-xl bg-white/5 animate-pulse ${className}`}
+      className={`${SK_BASE} ${className}`}
       style={{ ...style, width, height }}
     />
   );
@@ -28,7 +33,7 @@ export function SkeletonCard({ className = '' }: SkeletonCardProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className={`p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3 ${className}`}
+      className={`p-5 rounded-2xl ${SK_CARD} space-y-3 ${className}`}
     >
       <Skeleton className="h-4 w-3/4" />
       <Skeleton className="h-5 w-1/2" />
@@ -49,7 +54,7 @@ export function SkeletonChart({ className = '' }: SkeletonChartProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className={`p-6 rounded-2xl bg-white/5 border border-white/10 ${className}`}
+      className={`p-6 rounded-2xl ${SK_CARD} ${className}`}
     >
       <Skeleton className="h-5 w-48 mb-4" />
       <div className="space-y-3">
@@ -77,7 +82,7 @@ export function SkeletonStatGrid({ count = 4 }: SkeletonStatGridProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: i * 0.1 }}
-          className="bg-white/5 border border-white/10 rounded-xl p-4"
+          className={`${SK_CARD} rounded-xl p-4`}
         >
           <Skeleton className="h-4 w-24 mb-2" />
           <Skeleton className="h-8 w-16 mb-1" />
@@ -107,7 +112,7 @@ export function LoadingSpinner({ size = 'md', label }: LoadingSpinnerProps) {
         animate={{ rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
       />
-      {label && <p className="text-xs text-zinc-400 mt-3 font-medium">{label}</p>}
+      {label && <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-3 font-medium">{label}</p>}
     </div>
   );
 }
@@ -118,7 +123,7 @@ interface SkeletonHeaderProps {
 
 export function SkeletonHeader({ className = '' }: SkeletonHeaderProps) {
   return (
-    <div className={`p-5 sm:p-6 rounded-3xl bg-white/5 border border-white/10 relative overflow-hidden ${className}`}>
+    <div className={`p-5 sm:p-6 rounded-3xl ${SK_CARD} relative overflow-hidden ${className}`}>
       <div className="space-y-3">
         <Skeleton className="h-3 w-32" />
         <Skeleton className="h-6 w-64 sm:w-96" />
@@ -145,7 +150,7 @@ export function SkeletonRoadmapCard({ className = '' }: SkeletonRoadmapCardProps
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className={`p-4 rounded-2xl bg-white/5 border border-white/10 space-y-3 ${className}`}
+      className={`p-4 rounded-2xl ${SK_CARD} space-y-3 ${className}`}
     >
       <Skeleton className="h-4 w-3/4" />
       <Skeleton className="h-5 w-1/2" />
@@ -170,7 +175,7 @@ export function SkeletonNotificationCard({ className = '' }: SkeletonNotificatio
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className={`p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3 ${className}`}
+      className={`p-4 rounded-2xl ${SK_CARD} flex items-start gap-3 ${className}`}
     >
       <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
       <div className="flex-1 space-y-2">
@@ -185,7 +190,7 @@ export function SkeletonNotificationCard({ className = '' }: SkeletonNotificatio
 // Matches the exact layout of HomeView's hero GlassCard to eliminate CLS
 export function SkeletonHomeHero() {
   return (
-    <div className="p-5 sm:p-6 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden">
+    <div className={`p-5 sm:p-6 rounded-2xl ${SK_CARD} relative overflow-hidden`}>
       {/* label + heading */}
       <Skeleton className="h-3 w-28 mb-2" />
       <Skeleton className="h-7 w-64 sm:w-80 mb-4" />
@@ -214,7 +219,7 @@ export function SkeletonChatPreview({ className = '' }: SkeletonChatPreviewProps
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className={`p-4 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3 ${className}`}
+      className={`p-4 rounded-2xl ${SK_CARD} flex items-start gap-3 ${className}`}
     >
       <Skeleton className="w-8 h-8 rounded-full shrink-0" />
       <div className="flex-1 space-y-2">

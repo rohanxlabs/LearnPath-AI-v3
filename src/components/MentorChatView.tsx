@@ -3,11 +3,12 @@ import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import { Send, Sparkles, MessageSquare, Bot, HelpCircle, Code2, BookOpen, Lightbulb, Mic, MicOff, Paperclip, CheckCircle, Search, Terminal, AlertTriangle } from 'lucide-react';
+import { Send, Sparkles, MessageSquare, Bot, HelpCircle, Code2, BookOpen, Lightbulb, Mic, MicOff, Paperclip, CheckCircle, Search, Terminal, AlertTriangle, Check } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { XPBadge } from './Badges';
 import { motion } from 'motion/react';
 import { easeInOut } from 'motion';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 // Memoized message component to prevent unnecessary re-renders
 const ChatMessageItem = memo(({ ch, isGenerating }: { ch: ChatMessage; isGenerating: boolean }) => {
@@ -78,6 +79,7 @@ const ChatMessageItem = memo(({ ch, isGenerating }: { ch: ChatMessage; isGenerat
     </div>
   );
 });
+ChatMessageItem.displayName = 'ChatMessageItem';
 
 interface MentorChatViewProps {
   chats: ChatMessage[];
@@ -89,9 +91,14 @@ interface MentorChatViewProps {
 }
 
 export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAction, aiActive, roadmapGoal }: MentorChatViewProps) {
+  const useReducedMotionValue = useReducedMotion();
   const [inputText, setInputText] = useState('');
   const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const [voiceSupported, setVoiceSupported] = useState(true);
+  // Proactively check on mount rather than only when the user taps the button.
+  const [voiceSupported, setVoiceSupported] = useState(() =>
+    typeof window !== 'undefined' &&
+    !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition
+  );
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
   const [attachmentContent, setAttachmentContent] = useState<string | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -99,6 +106,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -126,7 +134,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognitionCtor) {
-      setVoiceSupported(false);
+      // Should not be reachable — button is hidden when unsupported — but guard anyway.
       return;
     }
 
@@ -198,14 +206,19 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
   ];
 
   return (
-    <div className="flex flex-col h-full w-full relative overflow-hidden">
+    // h-[100dvh] uses the dynamic viewport height CSS unit — supported in all
+    // modern mobile browsers. It correctly shrinks when the software keyboard
+    // appears without requiring any JavaScript measurement.
+    <div className="flex flex-col w-full relative overflow-hidden h-[100dvh]">
       {/* Upper info panel */}
       <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between bg-zinc-950/25 backdrop-blur-md">
         <div className="flex items-center gap-2.5">
-          <motion.div 
+          {/* Avatar only pulses while the AI is actively generating a reply,
+              and respects the user's reduced-motion preference. */}
+          <motion.div
             className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-500 to-blue-600 text-white flex items-center justify-center shadow-[0_4px_12px_rgba(168,85,247,0.35)]"
-            animate={{ scale: [1, 1.05, 1] }}
-            transition={{ duration: 3, repeat: Infinity, ease: easeInOut }}
+            animate={isGenerating && !useReducedMotionValue ? { scale: [1, 1.05, 1] } : {}}
+            transition={{ duration: 1.5, repeat: Infinity, ease: easeInOut }}
           >
             <Bot className="w-4 h-4" />
           </motion.div>
@@ -215,13 +228,13 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
               <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${aiActive === false ? 'bg-amber-500' : 'bg-emerald-500'}`} />
             </h4>
             <p className="text-xs text-zinc-400">
-              {aiActive === false ? 'Offline mode — fallback replies' : 'OpenRouter model active'}
+              {aiActive === false ? 'Offline — using fallback replies' : 'AI Mentor online'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-zinc-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded font-bold uppercase tracking-wider hidden sm:block">Offline Proxy Safety Enabled</span>
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${aiActive === false ? 'bg-amber-400' : 'bg-emerald-400'}`} aria-hidden="true" />
         </div>
       </div>
 
@@ -249,7 +262,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
 
       {/* Suggested fast click starting prompt bubbles */}
       {chats.length <= 1 && (
-        <div className="p-4 border-t border-white/10 bg-zinc-950/20 backdrop-blur-md">
+        <div className="p-4 border-t border-white/10 bg-zinc-950/20 backdrop-blur-sm">
           <label className="block text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 px-1">Suggested discussions</label>
           <div className="grid grid-cols-2 gap-2">
             {suggestedPrompts.map((p) => {
@@ -287,7 +300,7 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
       </div>
 
       {/* Active input form bar with frosted background */}
-      <form onSubmit={handleSubmit} className="px-4 py-3 bg-zinc-950/45 border-t border-white/10 backdrop-blur-md">
+      <form onSubmit={handleSubmit} className="px-4 py-3 bg-zinc-950/45 border-t border-white/10 backdrop-blur-sm">
         {attachmentName && (
           <div className="mb-2 py-1 px-2.5 rounded border border-purple-500/30 bg-purple-500/10 flex items-center justify-between max-w-sm">
             <span className="text-xs text-zinc-300 select-none flex items-center gap-1.5">
@@ -310,11 +323,6 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
           </div>
         )}
 
-        {!voiceSupported && (
-          <div className="mb-2 py-1 px-2.5 rounded border border-amber-500/30 bg-amber-500/10 max-w-sm">
-            <span className="text-xs text-amber-300">Voice dictation isn't supported in this browser.</span>
-          </div>
-        )}
 
         <div className="flex items-center gap-2">
           <input
@@ -324,20 +332,23 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
             onChange={handleFileSelected}
             className="hidden"
           />
+          {/* min-w/h-[44px] ensures WCAG 2.5.5 touch target on mobile */}
           <button
             type="button"
             onClick={handleFileButtonClick}
-            className="p-2.5 text-zinc-400 hover:text-white hover:bg-white/[0.05] rounded-xl transition-colors cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.05] rounded-xl transition-colors cursor-pointer"
             aria-label="Attach a code or text file"
             id="btn-chat-attach"
           >
             <Paperclip className="w-4 h-4" />
           </button>
 
+          {/* Mic button is only rendered when the browser supports SpeechRecognition */}
+          {voiceSupported && (
           <button
             type="button"
             onClick={toggleVoice}
-            className={`p-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+            className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl transition-all duration-200 cursor-pointer ${
               isVoiceActive
                 ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
                 : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
@@ -347,9 +358,11 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
           >
             {isVoiceActive ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </button>
+          )}
 
           <input
             type="text"
+            aria-label="Message to AI Mentor"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder={isVoiceActive ? "Listening..." : "Ask Mentor anything about your roadmap..."}

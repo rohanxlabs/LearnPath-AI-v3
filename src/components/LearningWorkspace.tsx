@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import {
@@ -15,26 +17,26 @@ type ContentTab = 'learn' | 'resources' | 'quiz' | 'project';
 // ---------------------------------------------------------------------------
 // Markdown renderer — light-mode prose
 // ---------------------------------------------------------------------------
-const markdownComponents = {
-  h1: ({ node, ...props }: any) => <h1 className="font-bold text-base text-slate-900 mt-5 mb-2" {...props} />,
-  h2: ({ node, ...props }: any) => <h2 className="font-bold text-sm text-slate-800 mt-4 mb-1.5" {...props} />,
-  h3: ({ node, ...props }: any) => <h3 className="font-semibold text-sm text-slate-700 mt-3 mb-1" {...props} />,
-  p:  ({ node, ...props }: any) => <p className="mt-2 text-sm text-slate-600 leading-relaxed" {...props} />,
-  ul: ({ node, ...props }: any) => <ul className="list-disc ml-4 mt-2 mb-2 text-sm text-slate-600 space-y-1" {...props} />,
-  ol: ({ node, ...props }: any) => <ol className="list-decimal ml-4 mt-2 mb-2 text-sm text-slate-600 space-y-1" {...props} />,
-  li: ({ node, ...props }: any) => <li {...props} />,
-  strong: ({ node, ...props }: any) => <strong className="text-slate-900 font-semibold" {...props} />,
-  code: ({ node, className, children, ...props }: any) => {
-    const isBlock = /language-/.test(className || '');
+const markdownComponents: Components = {
+  h1: ({ children }) => <h1 className="font-bold text-base text-slate-900 mt-5 mb-2">{children}</h1>,
+  h2: ({ children }) => <h2 className="font-bold text-sm text-slate-800 mt-4 mb-1.5">{children}</h2>,
+  h3: ({ children }) => <h3 className="font-semibold text-sm text-slate-700 mt-3 mb-1">{children}</h3>,
+  p:  ({ children }) => <p className="mt-2 text-sm text-slate-600 leading-relaxed">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc ml-4 mt-2 mb-2 text-sm text-slate-600 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal ml-4 mt-2 mb-2 text-sm text-slate-600 space-y-1">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+  strong: ({ children }) => <strong className="text-slate-900 font-semibold">{children}</strong>,
+  code: (({ className, children }) => {
+    const isBlock = /language-/.test((className as string) || '');
     if (!isBlock) {
-      return <code className="px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700 text-xs font-mono border border-violet-100" {...props}>{children}</code>;
+      return <code className="px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700 text-xs font-mono border border-violet-100">{children}</code>;
     }
     return (
       <pre className="my-3 p-4 rounded-xl bg-slate-50 border border-slate-200 overflow-x-auto text-xs text-slate-700 leading-relaxed">
-        <code {...props}>{children}</code>
+        <code>{children}</code>
       </pre>
     );
-  },
+  }) as Components['code'],
 };
 
 // ---------------------------------------------------------------------------
@@ -129,6 +131,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   onNavigateToLesson,
   getHeaders,
 }) => {
+  const reduced = useReducedMotion();
   const [selectedTopicId, setSelectedTopicId] = useState<string>(activeLesson?.lessonId || '');
   const [topicData, setTopicData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -433,9 +436,9 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                           <motion.div
                             key={i}
                             className="flex items-start gap-2.5"
-                            initial={{ opacity: 0, x: -8 }}
+                            initial={reduced ? false : { opacity: 0, x: -8 }}
                             animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: i * 0.07 }}
+                            transition={{ delay: reduced ? 0 : i * 0.07 }}
                           >
                             <Target className="w-3.5 h-3.5 text-violet-500 flex-shrink-0 mt-0.5" />
                             <span className="text-sm text-slate-700 leading-relaxed">{obj}</span>

@@ -1,10 +1,15 @@
-// TODO: Consolidate mobile hamburger sidebar + bottom tab bar into a single unified
-// nav paradigm. Currently both exist in parallel. See ux-sprint-plan.md § TODO Comments.
-import React, { useState, useEffect } from 'react';
-import { Home, Compass, MessageSquare, BarChart3, User, Menu, X, Bell, Flame, Crown, LogOut, Settings, Award, ShieldAlert, Sparkles, BookOpen } from 'lucide-react';
+// Navigation architecture:
+//   BottomNavigation — primary nav (5 core tabs always visible).
+//   SideDrawer       — secondary nav (Achievements, Notifications) + profile/settings/logout.
+//   The two surfaces are intentionally complementary, not duplicates:
+//   the bottom bar covers the 5 main destinations; the drawer exposes the remaining
+//   secondary sections that do not need a persistent tab.
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Home, Compass, MessageSquare, BarChart3, User, Menu, X, Bell, Flame, Crown, LogOut, Settings, Award, Sparkles } from 'lucide-react';
 import { UserProfile, SystemNotification } from '../types';
 import { StreakBadge, TierBadge } from './Badges';
 import { buttonStyles } from '../styles/theme';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 interface MobileHeaderProps {
   profile: UserProfile;
@@ -52,9 +57,8 @@ export function MobileHeader({
       </div>
 
       <div className="flex items-center gap-2.5">
-        <div className="hidden sm:inline-flex">
-          <StreakBadge days={profile.streak} />
-        </div>
+        {/* Streak badge visible on all screen widths */}
+        <StreakBadge days={profile.streak} />
 
         <button
           onClick={onNotificationsClick}
@@ -64,7 +68,7 @@ export function MobileHeader({
         >
           <Bell className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
           {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 animate-pulse" />
+            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-purple-500" aria-label={`${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`} />
           )}
         </button>
 
@@ -91,18 +95,18 @@ interface BottomNavigationProps {
 }
 
 export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
-  // Display labels are kept to ≤6 chars for consistent grid sizing across all screen widths.
+  // Display labels are kept short for consistent grid sizing across all screen widths.
   // aria-label always carries the full accessible name.
   const tabs = [
-    { id: 'home',     label: 'Home',    ariaLabel: 'Home',              icon: Home },
-    { id: 'roadmaps', label: 'Paths',   ariaLabel: 'Roadmaps',          icon: Compass },
-    { id: 'mentor',   label: 'Mentor',  ariaLabel: 'AI Mentor',         icon: MessageSquare },
-    { id: 'progress', label: 'Stats',   ariaLabel: 'Progress',          icon: BarChart3 },
-    { id: 'profile',  label: 'Profile', ariaLabel: 'Profile',           icon: User },
+    { id: 'home',     label: 'Home',     ariaLabel: 'Home',          icon: Home },
+    { id: 'roadmaps', label: 'Paths',    ariaLabel: 'Roadmaps',      icon: Compass },
+    { id: 'mentor',   label: 'Mentor',   ariaLabel: 'AI Mentor',     icon: MessageSquare },
+    { id: 'progress', label: 'Progress', ariaLabel: 'Progress',      icon: BarChart3 },
+    { id: 'profile',  label: 'Profile',  ariaLabel: 'Profile',       icon: User },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-zinc-950/85 border-t border-zinc-200 dark:border-transparent pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-12px_32px_rgba(0,0,0,0.5)] backdrop-blur-lg transition-all duration-300">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-zinc-950/85 border-t border-zinc-200 dark:border-transparent pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-12px_32px_rgba(0,0,0,0.5)] backdrop-blur-sm transition-all duration-300">
       <div className="grid grid-cols-5 items-center h-16 max-w-xl mx-auto px-2">
         {tabs.map((tab) => {
           const IconComponent = tab.icon;
@@ -115,7 +119,7 @@ export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationPro
               aria-current={isActive ? 'page' : undefined}
               className={`relative flex flex-col items-center justify-center flex-1 min-w-0 py-1 px-1 sm:px-3.5 rounded-xl transition-all duration-300 cursor-pointer ${
                 isActive
-                  ? 'text-zinc-900 dark:text-white font-bold scale-105'
+                  ? 'text-zinc-900 dark:text-white font-bold'
                   : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
               }`}
               id={`nav-tab-${tab.id}`}
@@ -159,29 +163,39 @@ export function SideDrawer({
    onUpgradeClick,
    onLogoutClick
 }: SideDrawerProps) {
+  // Secondary sections only — the 5 primary tabs live in BottomNavigation.
   const sections = [
-    { id: 'home', label: 'Dashboard', icon: Home },
-    { id: 'roadmaps', label: 'Roadmaps', icon: Compass },
-    { id: 'mentor', label: 'AI Mentor', icon: MessageSquare },
-    { id: 'progress', label: 'Progress & Analytics', icon: BarChart3 },
     { id: 'achievements', label: 'Achievements', icon: Award },
     { id: 'notifications', label: 'Notifications', icon: Bell },
   ];
 
   const [mounted, setMounted] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap — keeps keyboard/AT users inside the drawer while it's open.
+  useFocusTrap(drawerRef, isOpen);
+
+  // Close on Escape key.
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
   useEffect(() => {
     if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
       // Force a paint before starting the slide-in
       requestAnimationFrame(() => setMounted(true));
     } else {
       setMounted(false);
+      document.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen]);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleKeyDown]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden md:hidden">
+    <div className="fixed inset-0 z-50 overflow-hidden md:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
       {/* Backdrop */}
       <div
         role="button"
@@ -192,7 +206,10 @@ export function SideDrawer({
       />
 
       {/* Drawer Panel */}
-      <div className={`absolute inset-y-0 left-0 max-w-xs w-full bg-[#f8fafc] dark:bg-[#111111] text-zinc-900 dark:text-white shadow-[0_8px_40px_rgba(0,0,0,0.18)] flex flex-col border-r border-zinc-200 dark:border-white/10 transition-transform duration-300 ease-out ${mounted ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div
+        ref={drawerRef}
+        className={`absolute inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-[#111111] text-zinc-900 dark:text-white shadow-[0_8px_40px_rgba(0,0,0,0.18)] flex flex-col border-r border-zinc-200 dark:border-white/10 transition-transform duration-300 ease-out ${mounted ? 'translate-x-0' : '-translate-x-full'}`}
+      >
         {/* Drawer Header */}
         <div className="p-5 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -231,8 +248,11 @@ export function SideDrawer({
           </div>
         </div>
 
-        {/* Navigation list */}
+        {/* Secondary navigation list */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          <p className="px-4 pb-2 text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+            More
+          </p>
           {sections.map((sec) => {
             const Icon = sec.icon;
             const isActive = activeTab === sec.id;

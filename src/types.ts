@@ -12,6 +12,7 @@ export interface UserProfile {
   roadmapsCompleted: number;
   hoursStudied: number;
   aiSessionsCount: number;
+  lessonsCompleted: number;
   completedLessonIds?: string[];
   topicWiseQuizzes?: Array<{ quizId: string; score: number; totalQuestions: number; [key: string]: any }>;
   createdAt: string;

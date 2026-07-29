@@ -134,7 +134,8 @@ function AppShell() {
       const data = await response.json();
       setAiRecommendations(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Recommendation request failed:', err);
+      if (import.meta.env.DEV) { console.error('Recommendation request failed:', err); }
+      Sentry.captureException(err, { tags: { feature: 'ai-recommendations' } });
     } finally { setIsRecsLoading(false); }
   }, [isAuthenticated, roadmaps, activeRoadmapId, profile, mutatingHeaders, getStoredUserEmail]);
 
@@ -219,7 +220,7 @@ function AppShell() {
       });
       const data = response.ok ? await response.json().catch(() => null) : null;
       if (!response.ok || !data) {
-        console.error('[completeLesson] save failed, status:', response.status);
+        if (import.meta.env.DEV) { console.error('[completeLesson] save failed, status:', response.status); }
         showToast('Could not save your progress. Please check your connection and try again.');
         // revert the optimistic local update instead of leaving it dangling
         await syncRoadmapsFromDatabase();
@@ -257,7 +258,8 @@ function AppShell() {
     try {
       await savePromise;
     } catch (err) {
-      console.warn('Failed to complete lesson:', err);
+      if (import.meta.env.DEV) { console.warn('Failed to complete lesson:', err); }
+      Sentry.captureException(err, { tags: { feature: 'lesson-complete' } });
     } finally {
       if (pendingProgressSaveRef.current === savePromise) {
         pendingProgressSaveRef.current = null;
@@ -307,7 +309,7 @@ function AppShell() {
         setChats(prev => prev.map(c => c.id === aiMsgId ? aiMsg : c));
       }
     } catch (err) {
-      console.error(err);
+      if (import.meta.env.DEV) { console.error('[ai-mentor] stream error:', err); }
       Sentry.captureException(err, { tags: { feature: 'ai-mentor' } });
     } finally { setIsAiChatGenerating(false); }
   }, [chats, mutatingHeaders, getStoredUserEmail]);
@@ -390,7 +392,7 @@ function AppShell() {
 
   return (
     <ErrorBoundary>
-      <div className={`min-h-screen pb-20 ${themeClass} transition-colors duration-300 relative select-none`} style={customBackground}>
+      <div className={`min-h-screen pb-20 ${themeClass} transition-colors duration-300 relative`} style={customBackground}>
 
         <MobileHeader
           profile={profile} notifications={notifications}
@@ -416,14 +418,14 @@ function AppShell() {
         )}
 
         {activeTab === 'roadmaps' && !selectedLevelObj && (
-          <div className="sticky top-16 z-30 bg-zinc-950/85 backdrop-blur-md border-b border-white/5">
+          <div className="sticky top-16 z-30 bg-white/90 dark:bg-zinc-950/85 backdrop-blur-md border-b border-zinc-200 dark:border-white/5">
             <div className="max-w-4xl mx-auto px-4">
               <div className="flex gap-6 overflow-x-auto scrollbar-none py-3.5 -mb-[1px]">
                 {[{ id: 'roadmap', label: 'Roadmap' }, { id: 'resources', label: 'Resources' }, { id: 'quiz', label: 'Quiz' }, { id: 'projects', label: 'Projects' }, { id: 'insights', label: 'AI Insights' }].map((t) => {
                   const isActive = roadmapDetailTab === t.id;
                   return (
                     <button key={t.id} onClick={() => setRoadmapDetailTab(t.id as any)}
-                      className={`relative pb-1 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer flex-shrink-0 ${isActive ? 'text-purple-400 font-extrabold scale-102' : 'text-zinc-400 hover:text-zinc-200'}`}
+                      className={`relative pb-1 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer flex-shrink-0 ${isActive ? 'text-purple-600 dark:text-purple-400 font-extrabold' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'}`}
                     >
                       {t.label}
                       {isActive && <motion.div layoutId="activeRoadmapTabBar" className="absolute bottom-[-14px] left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-blue-500" transition={{ type: 'spring', stiffness: 350, damping: 30 }} />}
@@ -436,7 +438,7 @@ function AppShell() {
         )}
 
         <main
-          className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100vh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100vh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100vh-10rem)]'}`}
+          className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100dvh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100dvh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100dvh-10rem)]'}`}
           style={activeLesson ? undefined : { contain: 'layout style' }}
         >
           <ErrorBoundary key={activeLesson ? `lesson-${activeLesson.lessonId}` : activeTab}>
@@ -463,28 +465,30 @@ function AppShell() {
         </main>
 
         {!pwa.isOnline && (
-          <div className="fixed bottom-22 left-4 right-4 z-50 p-3 rounded-2xl glass-card glass-card-orange border border-amber-500/20 text-amber-300 text-xs shadow-2xl flex items-center gap-3 max-w-sm mx-auto animate-pulse-glow">
+          <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-4 right-4 z-50 p-3 rounded-2xl glass-card glass-card-orange border border-amber-500/20 text-amber-300 text-xs shadow-2xl flex items-center gap-3 max-w-sm mx-auto animate-pulse-glow">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
-            <div><p className="font-bold">Offline Learning Active Mode</p><p className="text-xs text-zinc-400">Viewing cached roadmaps & study paths</p></div>
+            <div><p className="font-bold">Offline Learning Active</p><p className="text-xs text-zinc-400">Viewing cached roadmaps &amp; study paths</p></div>
           </div>
         )}
 
         {showOnlineToast && (
-          <div className="fixed bottom-22 left-4 right-4 z-50 p-3 rounded-2xl glass-card glass-card-emerald border border-emerald-500/20 text-emerald-400 text-xs shadow-2xl flex items-center gap-3 max-w-sm mx-auto">
+          <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-4 right-4 z-50 p-3 rounded-2xl glass-card glass-card-emerald border border-emerald-500/20 text-emerald-400 text-xs shadow-2xl flex items-center gap-3 max-w-sm mx-auto">
             <CheckCircle className="w-4 h-4 shrink-0" />
             <div><p className="font-bold">Connection Restored</p><p className="text-xs text-zinc-400">AI features re-activated</p></div>
           </div>
         )}
 
         {verifiedStatus && (
-          <div className={`fixed top-4 left-4 right-4 z-50 p-3 rounded-2xl border text-xs shadow-2xl flex items-center justify-between gap-3 max-w-sm mx-auto ${verifiedStatus === 'success' ? 'bg-emerald-950/90 border-emerald-500/30 text-emerald-300' : 'bg-amber-950/90 border-amber-500/30 text-amber-300'}`}>
-            <span>{verifiedStatus === 'success' ? '✅ Email verified! Welcome to LearnPath AI.' : '⚠️ Verification link is invalid or expired.'}</span>
-            <button onClick={() => setVerifiedStatus(null)} className="text-zinc-400 hover:text-white cursor-pointer ml-2 shrink-0">✕</button>
+          <div className={`fixed top-4 left-4 right-4 z-50 p-3 rounded-2xl border text-sm shadow-2xl flex items-center justify-between gap-3 max-w-sm mx-auto ${verifiedStatus === 'success' ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-amber-50 border-amber-300 text-amber-800'}`}>
+            <span className="font-medium">{verifiedStatus === 'success' ? 'Email verified! Welcome to LearnPath AI.' : 'Verification link is invalid or expired.'}</span>
+            <button onClick={() => setVerifiedStatus(null)} aria-label="Dismiss" className="text-zinc-500 hover:text-zinc-900 cursor-pointer ml-2 shrink-0 p-1 rounded-lg hover:bg-black/5 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
         )}
 
         {pwa.updateAvailable && (
-          <div className="fixed bottom-22 left-4 right-4 z-50 p-3.5 rounded-2xl glass-card glass-card-purple border border-purple-500/35 text-white text-xs shadow-2xl flex items-center justify-between gap-3 max-w-sm mx-auto animate-pulse-glow">
+          <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-4 right-4 z-50 p-3.5 rounded-2xl glass-card glass-card-purple border border-purple-500/35 text-white text-xs shadow-2xl flex items-center justify-between gap-3 max-w-sm mx-auto animate-pulse-glow">
             <div className="flex-1"><p className="font-bold">App Update Available ✨</p><p className="text-xs text-zinc-300">Reload to activate latest features</p></div>
             <button onClick={pwa.triggerUpdateApp} className="px-3 py-1.5 font-bold text-xs text-white bg-gradient-to-r from-purple-500 to-blue-600 rounded-lg cursor-pointer hover:brightness-110 shrink-0">Reload Now</button>
           </div>
@@ -520,8 +524,8 @@ function AppShell() {
 
         <FeedbackWidget context={activeTab} getAuthHeaders={mutatingHeaders} />
 
-        {legalPage === 'terms' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-[#0A0A0A]"><TermsPage onBack={() => setLegalPage(null)} /></div>}
-        {legalPage === 'privacy' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-[#0A0A0A]"><PrivacyPage onBack={() => setLegalPage(null)} /></div>}
+        {legalPage === 'terms' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-zinc-50 dark:bg-[#0A0A0A]"><TermsPage onBack={() => setLegalPage(null)} /></div>}
+        {legalPage === 'privacy' && <div className="fixed inset-0 z-[200] overflow-y-auto bg-zinc-50 dark:bg-[#0A0A0A]"><PrivacyPage onBack={() => setLegalPage(null)} /></div>}
 
         <Toast toast={activeToast} onDismiss={() => setActiveToast(null)} />
 

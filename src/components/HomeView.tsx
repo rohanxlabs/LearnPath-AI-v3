@@ -43,6 +43,7 @@ import {
   ProgressInsight,
 } from '../lib/homeData';
 import { spacing, fontSize, borderRadius, buttonStyles, typography, glassCardClass } from '../styles/theme';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 interface AIRecommendation {
   id: string;
@@ -83,11 +84,17 @@ function getTimeGreeting(): string {
   return 'Good Evening';
 }
 
-const fadeUp = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.32, ease: [0.25, 0.46, 0.45, 0.94] as const },
-};
+// fadeUp is called as a function so each section picks up the current
+// reduced-motion preference at render time.
+function makeFadeUp(reduced: boolean) {
+  return reduced
+    ? { initial: false as const, animate: {}, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, y: 12 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.32, ease: [0.25, 0.46, 0.45, 0.94] as const },
+      };
+}
 
 function SkeletonBlock({ className = '' }: { className?: string }) {
   return <div className={`rounded-xl home-skeleton animate-pulse ${className}`} />;
@@ -108,7 +115,7 @@ function SectionHeader({
         <div className={`p-1.5 rounded-lg text-purple-400 bg-purple-500/10`}>
           <Icon className="w-4 h-4" />
         </div>
-        <h3 className={`font-display font-bold text-lg text-white`}>{title}</h3>
+        <h3 className={`font-display font-bold text-lg text-zinc-900 dark:text-white`}>{title}</h3>
       </div>
       {subtitle && <p className={`text-sm text-zinc-400 mt-1 ml-9`}>{subtitle}</p>}
     </div>
@@ -163,17 +170,23 @@ export function HomeView({
   onViewProgress,
   getAuthHeaders,
 }: HomeViewProps) {
+  const reduced = useReducedMotion();
+  const fadeUp = makeFadeUp(reduced);
   const firstName = profile.name.split(' ')[0] || profile.name;
 
   // Fetch live stats for welcome-back banner (daysSinceLastVisit)
   const [liveStats, setLiveStats] = useState<UserStatsWithVisit | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
-  // Secondary sections (AI Insights, Tasks, Activity, Achievements, Quick Actions)
-  // are collapsed by default for new users. Expanding once is remembered forever.
+  // Secondary sections are expanded by default if the user has any completed lessons
+  // (returning learner). New users see them collapsed to keep the first-run view clean.
+  // Once manually toggled, that preference is remembered via localStorage forever.
   const [showSecondary, setShowSecondary] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('lp_home_secondary_expanded') === 'true';
+      const stored = localStorage.getItem('lp_home_secondary_expanded');
+      if (stored !== null) return stored === 'true';
+      // Default: expand for users who have already completed at least one lesson.
+      return (profile.lessonsCompleted ?? 0) > 0;
     } catch {
       return false;
     }
@@ -416,9 +429,9 @@ export function HomeView({
             <span className="text-sm font-bold text-purple-400 uppercase tracking-wider">
               {getTimeGreeting()}, {firstName}
             </span>
-            <h1 className="font-display text-2xl sm:text-3xl font-bold text-white mt-1 leading-tight">
-              Continue your learning journey
-            </h1>
+            <h2 className="font-display text-2xl sm:text-3xl font-bold text-white mt-1 leading-tight">
+              {activeRoadmap ? 'Continue your learning journey' : 'Start your learning journey'}
+            </h2>
 
             {activeRoadmap ? (
               <>
@@ -894,12 +907,13 @@ export function HomeView({
                 key={action.id}
                 onClick={action.onClick}
                 disabled={action.disabled}
-                className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-2xl p-4 text-left transition-all duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[80px]`}
+                className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-2xl p-4 text-left transition-all duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[88px]`}
               >
                 <div className="p-2 rounded-xl border text-purple-400 bg-purple-500/10 border-purple-500/20 w-fit mb-2.5">
                   <Icon className="w-4 h-4" />
                 </div>
-                <p className={`font-display font-semibold text-sm text-white`}>{action.label}</p>
+                {/* Allow wrapping so long labels never truncate on narrow phones */}
+                <p className="font-display font-semibold text-sm text-white leading-snug">{action.label}</p>
               </button>
             );
           })}

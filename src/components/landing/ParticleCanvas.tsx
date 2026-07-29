@@ -34,14 +34,17 @@ const ParticleCanvas: React.FC = () => {
     }));
 
     let raf = 0;
-    let paused = false;
+    // pausedByVisibility tracks document.visibilitychange; pausedByScroll tracks
+    // IntersectionObserver. Both must be false for the animation to run.
+    let pausedByVisibility = document.hidden;
+    let pausedByScroll = false;
     // Cap to ~30 fps to halve GPU load while keeping the animation smooth.
     const FRAME_INTERVAL = 1000 / 30;
     let lastTime = 0;
 
     const draw = (ts: number) => {
       raf = requestAnimationFrame(draw);
-      if (paused) return;
+      if (pausedByVisibility || pausedByScroll) return;
       if (ts - lastTime < FRAME_INTERVAL) return;
       lastTime = ts;
 
@@ -61,9 +64,13 @@ const ParticleCanvas: React.FC = () => {
     };
     raf = requestAnimationFrame(draw);
 
+    // Pause when the tab is hidden (e.g. user switches apps on mobile).
+    const onVisibilityChange = () => { pausedByVisibility = document.hidden; };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     // Pause when the canvas scrolls out of view to save CPU entirely.
     const observer = new IntersectionObserver(
-      ([entry]) => { paused = !entry.isIntersecting; },
+      ([entry]) => { pausedByScroll = !entry.isIntersecting; },
       { threshold: 0 },
     );
     observer.observe(canvas);
@@ -71,6 +78,7 @@ const ParticleCanvas: React.FC = () => {
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       observer.disconnect();
     };
   }, []);

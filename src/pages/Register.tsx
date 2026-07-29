@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { authService } from '../auth/authService';
-import { AuthLayout, buttonClass, inputClass } from './AuthLayout';
+import { AuthLayout, buttonClass, inputClass, authLinkClass, labelClass } from './AuthLayout';
 
 const COMMON_PASSWORDS = new Set([
   'password1', 'Password1', 'password12', 'Password12',
@@ -52,33 +52,35 @@ export function Register({ navigate }: { navigate: (path: string) => void }) {
 
   return (
     <AuthLayout title="Create your account" subtitle="Start building your learning path.">
-      <form onSubmit={submit} className="mt-7 space-y-4">
-        <label className="block text-sm font-medium text-violet-950">
-          Full name
-          <input className={inputClass} name="name" autoComplete="name" required />
-        </label>
-        <label className="block text-sm font-medium text-violet-950">
-          Email
-          <input className={inputClass} name="email" type="email" autoComplete="email" required />
-        </label>
-        <label className="block text-sm font-medium text-violet-950">
-          Password
-          <span className="ml-1 text-violet-700/65">(10+ chars, letters &amp; numbers)</span>
-          <input className={inputClass} name="password" type="password" minLength={10} autoComplete="new-password" required />
-        </label>
-        <label className="block text-sm font-medium text-violet-950">
-          Confirm password
-          <input className={inputClass} name="confirm" type="password" autoComplete="new-password" required />
-        </label>
+      <form onSubmit={submit} noValidate className="mt-7 space-y-4">
+        <div>
+          <label htmlFor="reg-name" className={labelClass}>Full name</label>
+          <input id="reg-name" className={inputClass} name="name" autoComplete="name" required />
+        </div>
+        <div>
+          <label htmlFor="reg-email" className={labelClass}>Email</label>
+          <input id="reg-email" className={inputClass} name="email" type="email" autoComplete="email" required />
+        </div>
+        <div>
+          <label htmlFor="reg-password" className={labelClass}>
+            Password{' '}
+            <span className="text-violet-700/65">(10+ chars, letters &amp; numbers)</span>
+          </label>
+          <input id="reg-password" className={inputClass} name="password" type="password" minLength={10} autoComplete="new-password" required />
+        </div>
+        <div>
+          <label htmlFor="reg-confirm" className={labelClass}>Confirm password</label>
+          <input id="reg-confirm" className={inputClass} name="confirm" type="password" autoComplete="off" required />
+        </div>
         {error && <p role="alert" className="rounded-xl bg-rose-100/80 px-3 py-2 text-sm text-rose-700">{error}</p>}
         {message && <p role="status" className="rounded-xl bg-emerald-100/80 px-3 py-2 text-sm text-emerald-700">{message}</p>}
         <button className={buttonClass} disabled={loading}>
           {loading ? 'Creating account…' : 'Continue'}
         </button>
       </form>
-      <p className="mt-5 text-center text-sm text-violet-800/70">
+      <p className="mt-2 text-center text-sm text-violet-800/70">
         Already have an account?{' '}
-        <button className="font-medium text-violet-700 hover:text-fuchsia-600" onClick={() => navigate('/login')}>Sign in</button>
+        <button className={authLinkClass} onClick={() => navigate('/login')}>Sign in</button>
       </p>
     </AuthLayout>
   );
