@@ -86,6 +86,8 @@ function AppShell() {
   const [phaseCompletionData, setPhaseCompletionData] = useState<{ phase: Phase; nextPhase: Phase | null; xpEarned: number } | null>(null);
   const celebratedPhasesRef = useRef<Set<string>>(new Set());
   const pendingProgressSaveRef = useRef<Promise<void> | null>(null);
+  // Notification undo — IDs scheduled for deletion, cancelled if user clicks Undo
+  const pendingDeleteTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const {
     isAuthenticated, isLoadingAuth, profile, setProfile, settings, setSettings,
     achievements, setAchievements, notifications, setNotifications,
@@ -106,7 +108,7 @@ function AppShell() {
     activeTab, setActiveTab, isSidebarOpen, setIsSidebarOpen,
     activeLesson, setActiveLesson, activeToast, setActiveToast, showToast,
     confirmDeleteId, setConfirmDeleteId, unlockedAchievement, setUnlockedAchievement,
-    aiActive, showAiOfflineBanner, setShowAiOfflineBanner,
+    aiActive, recheckAiStatus, showAiOfflineBanner, setShowAiOfflineBanner,
     stripeCheckoutStatus, setStripeCheckoutStatus,
     isAiChatGenerating, setIsAiChatGenerating,
     aiRecommendations, setAiRecommendations, isRecsLoading, setIsRecsLoading,
@@ -126,7 +128,7 @@ function AppShell() {
       const activeGoal = roadmaps.find(r => r.id === activeRoadmapId)?.goal || '';
       const response = await fetch('/api/ai-recommendations', {
         method: 'POST', headers: await mutatingHeaders(),
-        body: JSON.stringify({ currentXp: profile.xp, level: profile.level, streak: profile.streak, activeGoal, userEmail: getStoredUserEmail() }),
+        body: JSON.stringify({ currentXp: profile.xp, level: profile.level, streak: profile.streak, activeGoal, lessonsCompleted: profile.lessonsCompleted, userEmail: getStoredUserEmail() }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const ct = response.headers.get('content-type') || '';
@@ -413,7 +415,15 @@ function AppShell() {
             <p className="text-xs text-amber-300 leading-snug">
               <strong className="font-bold">AI features are offline.</strong> Mentor replies, roadmaps, quizzes, recommendations, and insights are showing generic fallback content.
             </p>
-            <button onClick={() => setShowAiOfflineBanner(false)} className="text-amber-300/70 hover:text-amber-200 text-xs font-bold shrink-0 cursor-pointer">Dismiss</button>
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                onClick={recheckAiStatus}
+                className="text-amber-300/70 hover:text-amber-200 text-xs font-semibold cursor-pointer underline underline-offset-2"
+              >
+                Check again
+              </button>
+              <button onClick={() => setShowAiOfflineBanner(false)} className="text-amber-300/70 hover:text-amber-200 text-xs font-bold cursor-pointer">Dismiss</button>
+            </div>
           </div>
         )}
 
@@ -455,7 +465,26 @@ function AppShell() {
                 handleSelectRecommendationTask={handleSelectRecommendationTask}
                 notifications={notifications}
                 onNotificationsMarkAllRead={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
-                onDeleteNotification={(id) => setNotifications(prev => prev.filter(n => n.id !== id))}
+                onDeleteNotification={(id) => {
+                  // Optimistically mark as pending-delete (dim via read flag trick),
+                  // then hard-delete after 4 s. If the user triggers undo the timer
+                  // is cleared and the notification is restored as-is.
+                  setNotifications(prev => prev.map(n => n.id === id ? { ...n, _pendingDelete: true } as any : n));
+                  const timer = setTimeout(() => {
+                    setNotifications(prev => prev.filter(n => n.id !== id));
+                    pendingDeleteTimers.current.delete(id);
+                  }, 4000);
+                  pendingDeleteTimers.current.set(id, timer);
+                  setActiveToast({
+                    message: 'Notification deleted.',
+                    type: 'info',
+                    onUndo: () => {
+                      clearTimeout(pendingDeleteTimers.current.get(id));
+                      pendingDeleteTimers.current.delete(id);
+                      setNotifications(prev => prev.map(n => n.id === id ? { ...n, _pendingDelete: false } as any : n));
+                    },
+                  });
+                }}
                 onToggleReadNotification={(id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: !n.read } : n))}
                 onSetSettings={(s) => setSettings(prev => ({ ...prev, ...s }))}
                 onSetProfile={(p) => setProfile(prev => ({ ...prev, name: p.name }))}

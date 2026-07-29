@@ -207,6 +207,22 @@ body {
 /* ==========================================================================
    App-wide Light SaaS Theme
    Keeps legacy dark utility classes visually light without changing layout.
+
+   DEVELOPER GUIDE — new components in light mode:
+   ─────────────────────────────────────────────────────────────────────────
+   This block uses !important overrides because components were originally
+   authored dark-only (hardcoded bg-zinc-900, text-white, etc.).  The proper
+   long-term fix is to use Tailwind's `dark:` variant on each component.
+   Until that migration is complete (planned v2), follow this convention:
+
+   1. Use semantic classes from theme.ts (glass-card, state-completed, etc.)
+      where possible — they already have .light overrides below.
+   2. If you add a new hardcoded dark background utility (e.g. bg-[#1a1a1e]),
+      add a matching override in the CONSOLIDATING BLOCK at line ~615.
+   3. Never add component-specific background colours outside this file.
+   4. Gradient buttons (from-purple-600 to-indigo-600 etc.) automatically
+      keep white text via the .light button[class*="bg-gradient-to"] rule.
+   ─────────────────────────────────────────────────────────────────────────
    ========================================================================== */
 
 .light {
@@ -925,3 +941,55 @@ body {
 .lp-dark .text-lg   { font-size: 1.125rem !important; line-height: 1.75rem   !important; }
 .lp-dark .text-xl   { font-size: 1.25rem  !important; line-height: 1.75rem   !important; }
 .lp-dark [class*="text-["] { font-size: revert !important; line-height: revert !important; }
+
+/* ==========================================================================
+   Light-mode safety net — catches dark utility patterns not covered above.
+   Add new overrides here when a component uses a dark bg/text that renders
+   incorrectly in light mode (see DEVELOPER GUIDE at top of light-mode block).
+   ========================================================================== */
+
+/* Gradient buttons must ALWAYS have white text in both themes.
+   The .light button[class*="bg-gradient-to"] rule above covers most cases,
+   but anchor tags and divs used as buttons need the same treatment. */
+.light :is(button, a)[class*="from-purple"][class*="text-white"],
+.light :is(button, a)[class*="from-violet"][class*="text-white"],
+.light :is(button, a)[class*="from-indigo"][class*="text-white"] {
+  color: #ffffff !important;
+}
+
+/* focus-visible ring on dark gradient buttons — the default purple ring is
+   nearly invisible against the purple gradient background.  Use white offset. */
+.light :is(button, a)[class*="bg-gradient-to"]:focus-visible,
+.light :is(button, a)[class*="from-purple"]:focus-visible,
+.light :is(button, a)[class*="from-violet"]:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.18);
+}
+
+/* Disabled state — ensure disabled buttons have muted appearance in light mode */
+.light :is(button, a)[disabled],
+.light :is(button, a).disabled,
+.light button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}
+
+/* Tooltip / popover backgrounds — if any component uses bg-zinc-800 for tooltips */
+.light [role="tooltip"] {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+/* Badge / pill overrides — bg-zinc-800 badges become light surface */
+.light :is(.badge, [class*="rounded-full"])[class*="bg-zinc-800"],
+.light :is(.badge, [class*="rounded-full"])[class*="bg-zinc-900"] {
+  background-color: rgba(148, 163, 184, 0.15) !important;
+  color: #334155 !important;
+}
+
+/* Skeleton / pulse — ensure shimmer is visible in light mode on new components */
+.light [class*="animate-pulse"]:not([class*="text-"]):not(button):not(a) {
+  background-color: rgba(148, 163, 184, 0.22) !important;
+}

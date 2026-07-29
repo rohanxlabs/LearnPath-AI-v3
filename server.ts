@@ -189,7 +189,17 @@ async function buildAuthLimiters() {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) {
     if (isProduction) {
-      logger.warn('[RateLimit] REDIS_URL not set in production — auth rate-limits are per-process only. Brute-force protection will not be shared across instances.');
+      // P0: Without a shared Redis store, every instance carries independent
+      // rate-limit counters.  An attacker with one IP can fire N×limit requests
+      // when N instances are running.  Set REDIS_URL (Upstash or compatible) to
+      // enable a shared store.  On a single-instance deployment this is acceptable
+      // but must be resolved before horizontal scaling.
+      logger.warn(
+        '[RateLimit] ⚠️  REDIS_URL is not set in production. ' +
+        'Auth brute-force limits (login: 5/15min, register: 10/15min) are per-process only — ' +
+        'they will NOT be shared across multiple instances. ' +
+        'Set REDIS_URL to an Upstash Redis URL to enable shared rate-limiting.'
+      );
     }
     return;
   }

@@ -7,6 +7,8 @@ export type ToastType = 'error' | 'success' | 'info';
 export interface ToastMessage {
   message: string;
   type: ToastType;
+  /** Optional undo callback — renders an "Undo" button in the toast. */
+  onUndo?: () => void;
 }
 
 interface ToastProps {
@@ -48,6 +50,15 @@ export function Toast({ toast, onDismiss }: ToastProps) {
         >
           {ICONS[toast.type]}
           <span className="text-sm font-medium flex-1 leading-snug">{toast.message}</span>
+          {toast.onUndo && (
+            <button
+              onClick={() => { toast.onUndo!(); onDismiss(); }}
+              aria-label="Undo"
+              className="text-sm font-bold underline underline-offset-2 opacity-80 hover:opacity-100 transition-opacity cursor-pointer shrink-0"
+            >
+              Undo
+            </button>
+          )}
           <button
             onClick={onDismiss}
             aria-label="Dismiss notification"

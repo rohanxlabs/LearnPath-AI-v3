@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
-import { requireAuth, aiLimiter, roadmapGenLimiter } from '../lib/middleware';
+import { requireAuth, aiLimiter, aiDailyQuota, roadmapGenLimiter } from '../lib/middleware';
 import { unlockAchievement } from '../lib/db';
 import { logger } from '../lib/logger';
 import { Sentry } from '../lib/sentry';
@@ -26,7 +26,7 @@ import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt } from '..
 const router = Router();
 
 // Generate roadmap
-router.post('/generate-roadmap', requireAuth, roadmapGenLimiter, aiLimiter, async (req, res) => {
+router.post('/generate-roadmap', requireAuth, aiDailyQuota, roadmapGenLimiter, aiLimiter, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;
   if (!goal) return res.status(400).json({ error: 'Goal is required', code: 'MISSING_GOAL' });
 
@@ -108,9 +108,10 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
     }
 
     throw new Error('All generation attempts failed the quality gate');
-  } catch (error: any) {
-    let readableError = error.message || String(error);
-    try { const pe = JSON.parse(error.message); if (pe?.error?.message) readableError = pe.error.message; } catch (_) {}
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    let readableError = errMsg;
+    try { const pe = JSON.parse(errMsg); if (pe?.error?.message) readableError = pe.error.message; } catch (_) {}
     logger.error({ err: readableError }, '[Roadmap] Generation failed, using offline fallback');
     Sentry.captureException(error);
     // Pass meta (which includes roadmapId) so fallback IDs are also scoped.
@@ -127,7 +128,7 @@ Keep the SAME JSON shape and all prior rules: ${CURRICULUM_LIMITS.minPhases}-${C
 //                  data: {"type":"done","roadmap":{...}}\n\n
 //                  data: {"type":"error","message":"..."}\n\n  (on hard fail)
 // ---------------------------------------------------------------------------
-router.post('/generate-roadmap-stream', requireAuth, roadmapGenLimiter, aiLimiter, async (req, res) => {
+router.post('/generate-roadmap-stream', requireAuth, aiDailyQuota, roadmapGenLimiter, aiLimiter, async (req, res) => {
   const { goal, experienceLevel, weeklyHours, preferredStyle, college, branch, year } = req.body;
   if (!goal) { res.status(400).json({ error: 'Goal is required', code: 'MISSING_GOAL' }); return; }
 
@@ -142,6 +143,14 @@ router.post('/generate-roadmap-stream', requireAuth, roadmapGenLimiter, aiLimite
   const send = (payload: object) => {
     if (!res.writableEnded) res.write(`data: ${JSON.stringify(payload)}\n\n`);
   };
+
+  // Heartbeat — keeps the Nginx/Render proxy from closing an idle SSE connection
+  // while Groq is generating.  Proxies typically close idle connections after
+  // 30–60 s with no bytes written.  An SSE comment (":" prefix) is valid per
+  // the spec and ignored by clients — it purely prevents the proxy idle timeout.
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(': heartbeat\n\n');
+  }, 15_000);
 
   // Hard 90-second timeout — 3 Groq calls × 30s each at most.
   // Without this, a stalled Groq connection can hold the SSE open indefinitely,
@@ -234,8 +243,8 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
     } else {
       throw new Error('All generation attempts failed the quality gate');
     }
-  } catch (error: any) {
-    logger.error({ err: error.message }, '[Roadmap-Stream] Falling back to local curriculum');
+  } catch (error: unknown) {
+    logger.error({ err: (error instanceof Error ? error.message : String(error)) }, '[Roadmap-Stream] Falling back to local curriculum');
     Sentry.captureException(error);
     const fallbackRoadmap = buildFallbackCurriculum(meta);
     // Emit fallback phase names so the UI still animates.
@@ -245,6 +254,7 @@ Return ONLY a JSON object of this exact shape (one example element shown per arr
     logCurriculumStats('AI-Stream-Fallback', fallbackRoadmap);
     send({ type: 'done', roadmap: fallbackRoadmap, fallback: true });
   } finally {
+    clearInterval(heartbeat);
     clearTimeout(streamTimeout);
     if (!res.writableEnded) res.end();
   }

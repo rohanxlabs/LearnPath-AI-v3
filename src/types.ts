@@ -104,7 +104,7 @@ export interface Achievement {
   icon: string;
   unlocked: boolean;
   unlockedAt?: string;
-  category: 'python' | 'prompt' | 'agent' | 'rag' | 'mcp' | 'expert';
+  category: 'python' | 'prompt' | 'agent' | 'rag' | 'mcp' | 'expert' | 'general' | 'milestone';
   xpReward: number;
 }
 

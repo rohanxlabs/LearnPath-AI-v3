@@ -47,8 +47,8 @@ router.get('/bootstrap', requireAuth, async (req, res) => {
       notifications: progress.notifications || [], chats: progress.chats || [],
       activityLog: progress.activityLog || {}, roadmaps,
     });
-  } catch (error: any) {
-    logger.error({ err: error?.message }, 'bootstrap failed');
+  } catch (error: unknown) {
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, 'bootstrap failed');
     Sentry.withScope((scope) => {
       scope.setTag('feature', 'authentication');
       scope.setExtra('route', 'bootstrap');

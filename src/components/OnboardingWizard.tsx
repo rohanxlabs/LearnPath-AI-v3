@@ -95,6 +95,11 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
     !!preferredStyle,
   ][step];
 
+  // Skip is allowed on step 0 only when the goal is empty (user hasn't typed
+  // anything yet). Once the user types a goal, the button disappears so they
+  // aren't tempted to abandon their personalisation partway through.
+  const canSkip = step === 0 && goal.trim().length === 0;
+
   function handleNext() {
     if (step < STEP_COUNT - 1) {
       setDirection(1);
@@ -132,14 +137,17 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="relative text-center mb-8">
-          <button
-            type="button"
-            onClick={handleSkip}
-            aria-label="Skip onboarding setup"
-            className="absolute top-0 right-0 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
-          >
-            Skip for now →
-          </button>
+          {canSkip && (
+            <button
+              type="button"
+              onClick={handleSkip}
+              aria-label="Skip personalisation and use default settings"
+              title="You can update your preferences later in Settings"
+              className="absolute top-0 right-0 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors cursor-pointer"
+            >
+              Skip for now →
+            </button>
+          )}
           <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center">
             <Sparkles className="w-7 h-7 text-white" />
           </div>

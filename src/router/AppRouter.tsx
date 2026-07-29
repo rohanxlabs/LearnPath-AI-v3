@@ -2,6 +2,7 @@
 // Extracted from App.tsx renderTabContent() + lazy imports.
 
 import React, { lazy, useCallback } from 'react';
+import { LoadingSpinner } from '../components/Skeleton';
 import { useAuth } from '../auth/authHooks';
 import { useRoadmaps } from '../contexts/RoadmapContext';
 import { useUI } from '../contexts/UIContext';
@@ -31,7 +32,7 @@ const AIInsightsTab = lazy(() => import('../components/AIInsightsTab').then(m =>
 export function TabFallback() {
   return (
     <div className="flex items-center justify-center py-24">
-      <div className="w-6 h-6 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
+      <LoadingSpinner size="md" />
     </div>
   );
 }

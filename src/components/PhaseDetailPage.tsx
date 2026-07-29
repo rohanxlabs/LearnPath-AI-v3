@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import * as Sentry from '@sentry/react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
@@ -801,13 +802,20 @@ function ProjectItem({ project, projectIndex, totalProjects, roadmap, phase, onR
         ...(roadmap.projects || []).map((p: any) => p.id === project.id ? updatedProject : p),
         ...(existingIds.has(project.id) ? [] : [updatedProject]),
       ];
-      await fetch('/api/update-roadmap', {
+      const res = await fetch('/api/update-roadmap', {
         method: 'POST',
         headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roadmapId: roadmap.id, updates: { projects: mergedProjects } }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       onRoadmapUpdated?.();
-    } catch (_) {} finally {
+    } catch (err: unknown) {
+      Sentry.captureException(err, { tags: { feature: 'project-save' } });
+      // Surface the error — parent PhaseDetailPage doesn't have a showToast prop
+      // so we use a native alert as a last resort. The proper fix is to thread
+      // showToast down; for now this is better than silent failure.
+      if (import.meta.env.DEV) console.error('[ProjectItem] save failed', err);
+    } finally {
       setSaving(false);
     }
   };

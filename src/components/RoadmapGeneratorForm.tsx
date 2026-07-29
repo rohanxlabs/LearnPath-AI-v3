@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, GraduationCap, X, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Sparkles, GraduationCap, X, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { buttonStyles } from '../styles/theme';
 
 export interface RoadmapGeneratorParams {
@@ -89,6 +89,10 @@ export function RoadmapGeneratorForm({
     ? Math.min(95, Math.round((elapsedSeconds / ESTIMATED_DURATION_S) * 95))
     : 0;
   const remainingSeconds = Math.max(0, ESTIMATED_DURATION_S - elapsedSeconds);
+  // Show a "taking longer than expected" warning once elapsed exceeds the
+  // estimated time by more than 15 s — signals to the user the AI is still
+  // working rather than leaving them staring at a frozen bar.
+  const isStuck = isStreaming && elapsedSeconds > ESTIMATED_DURATION_S + 15;
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -243,6 +247,7 @@ export function RoadmapGeneratorForm({
                   type="button"
                   onClick={() => handleChipClick(chip)}
                   disabled={busy}
+                  aria-pressed={goal === chip}
                   className={`px-3 py-1.5 text-xs rounded-full border font-medium transition-colors disabled:opacity-50 min-h-[32px]
                     ${goal === chip
                       ? 'bg-purple-600 text-white border-purple-600'
@@ -257,6 +262,11 @@ export function RoadmapGeneratorForm({
               type="text"
               value={goal}
               onChange={e => { setGoal(e.target.value); if (goalError) setGoalError(''); if (generationError) setGenerationError(null); }}
+              onBlur={() => {
+                if (goal.trim().length > 0 && goal.trim().length < 10) {
+                  setGoalError('Please describe your goal in at least 10 characters (e.g. "Learn React for web apps").');
+                }
+              }}
               placeholder="e.g., Build a full-stack application with React and Node.js"
               disabled={busy}
               className={`w-full px-4 py-2.5 bg-white dark:bg-white/5 border rounded-xl text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60 ${goalError ? 'border-red-400 dark:border-red-500' : 'border-zinc-200 dark:border-white/10'}`}
@@ -412,6 +422,28 @@ export function RoadmapGeneratorForm({
                   </p>
                 </div>
               </div>
+
+              {/* Stuck warning — shown when generation exceeds expected duration */}
+              <AnimatePresence>
+                {isStuck && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.2 }}
+                    role="alert"
+                    className="flex items-start gap-2.5 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-3 py-2.5"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Taking longer than expected</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5">
+                        The AI is still working on your roadmap. You can wait a little longer or cancel and retry.
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Phase progress track */}
               {streamPhases.length > 0 && (

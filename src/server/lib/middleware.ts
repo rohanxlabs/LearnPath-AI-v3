@@ -268,7 +268,9 @@ export function requireAuth(
 // ---------------------------------------------------------------------------
 // Input validators
 // ---------------------------------------------------------------------------
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Requires: local-part @ domain . TLD (2+ chars). Rejects single-label domains
+// like "a@b.c" where TLD is only 1 char, and multi-@ addresses.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export function isValidEmail(email: string): boolean {
   return typeof email === 'string' && EMAIL_RE.test(email) && email.length <= 254;
 }
@@ -321,6 +323,65 @@ export function validatePassword(password: string): string | null {
     return 'Password is too common — please choose a less predictable one';
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Per-user daily AI request quota
+// ---------------------------------------------------------------------------
+// Tracks how many AI requests each user has made today.
+// Resets automatically at UTC midnight via the date key in the Map entry.
+// In-memory: intentionally ephemeral (resets on restart/redeploy is fine for
+// a daily budget — it gives users a fresh window rather than stranding them).
+// Limit: 50 AI requests per user per day (covers a full study session of
+// roadmap generation + mentor chat + recommendations without being abusive).
+
+const AI_DAILY_LIMIT = process.env.NODE_ENV === 'test' ? 10000 : Number(process.env.AI_DAILY_LIMIT ?? 50);
+const aiDailyUsage: Map<string, { count: number; date: string }> = new Map();
+
+/**
+ * Returns true and increments the counter if the user is within quota.
+ * Returns false if the daily limit has been reached.
+ */
+export function checkAndIncrementAiQuota(userId: string): boolean {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const key = userId;
+  const entry = aiDailyUsage.get(key);
+
+  if (!entry || entry.date !== today) {
+    // New day or new user — reset to 1.
+    aiDailyUsage.set(key, { count: 1, date: today });
+    return true;
+  }
+
+  if (entry.count >= AI_DAILY_LIMIT) return false;
+  entry.count += 1;
+  return true;
+}
+
+/**
+ * Express middleware that enforces the per-user daily AI quota.
+ * Must be placed AFTER requireAuth so req.supabaseUser is populated.
+ */
+export function aiDailyQuota(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+): void {
+  const userId = req.supabaseUser?.id;
+  if (!userId) {
+    // requireAuth should have already rejected, but guard defensively.
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  if (!checkAndIncrementAiQuota(userId)) {
+    logger.warn({ userId: userId.slice(0, 8) + '***' }, 'ai-quota: daily limit reached');
+    res.status(429).json({
+      error: `Daily AI request limit reached (${AI_DAILY_LIMIT} requests/day). Your quota resets at midnight UTC.`,
+      code: 'AI_QUOTA_EXCEEDED',
+    });
+    return;
+  }
+  next();
 }
 
 // ---------------------------------------------------------------------------

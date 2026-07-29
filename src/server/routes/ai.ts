@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ipKeyGenerator } from 'express-rate-limit';
-import { requireAuth, aiLimiter, createLimiter } from '../lib/middleware';
+import { requireAuth, aiLimiter, aiDailyQuota, createLimiter } from '../lib/middleware';
 import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt } from '../lib/ai';
 import { recCache, REC_CACHE_TTL, cacheSet } from '../lib/db';
 import { logger } from '../lib/logger';
@@ -21,7 +21,7 @@ const globalAiIpLimiter = createLimiter({
 router.use(globalAiIpLimiter);
 
 // Generate projects
-router.post('/generate-projects', requireAuth, aiLimiter, async (req, res) => {
+router.post('/generate-projects', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
   const { goal, phases } = req.body;
   if (!goal) return res.status(400).json({ error: 'Goal is required for project generation', code: 'MISSING_GOAL' });
 
@@ -61,8 +61,8 @@ Rules:
       (p: any) => p && typeof p.title === 'string' && typeof p.description === 'string'
     );
     return res.json({ projects });
-  } catch (error: any) {
-    logger.error({ err: error.message }, '[AI] generate-projects fallback');
+  } catch (error: unknown) {
+    logger.error({ err: (error instanceof Error ? error.message : String(error)) }, '[AI] generate-projects fallback');
     Sentry.captureException(error);
     // Return empty array — the roadmap already has embedded phase projects.
     // Better to show nothing than random unrelated project ideas.
@@ -71,7 +71,7 @@ Rules:
 });
 
 // AI Mentor Chat
-router.post('/mentor-chat', requireAuth, aiLimiter, async (req, res) => {
+router.post('/mentor-chat', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
   const { message, history } = req.body;
   if (typeof message !== 'string' || !message.trim()) {
     return res.status(400).json({ error: 'Message payload is required', code: 'MISSING_MESSAGE' });
@@ -118,55 +118,33 @@ Use clean formatting without markdown symbols like ** or ##.`;
 
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' });
     res.end(responseText);
-  } catch (error: any) {
-    logger.error({ err: error.message }, '[AI] mentor-chat error');
+  } catch (error: unknown) {
+    logger.error({ err: error instanceof Error ? (error instanceof Error ? error.message : String(error)) : String(error) }, '[AI] mentor-chat error');
     Sentry.captureException(error);
     const q = sanitizeForPrompt(message, 200);
-    const lc = message.toLowerCase();
 
-    // Build a topic-aware fallback based on keywords in the user's message
-    let topic = 'this topic';
-    let keyPoints = [
-      'Break the concept into smaller sub-problems',
-      'Look for a real-world analogy that maps to the idea',
-      'Build a minimal working example to test your understanding',
-    ];
-    let exercise = 'Write a 3-bullet summary of what you just read, then quiz yourself without looking.';
-    let proTip = 'Active recall (testing yourself) beats passive re-reading by 3x for long-term retention.';
-
-    if (lc.includes('python') || lc.includes('pip') || lc.includes('django') || lc.includes('flask')) {
-      topic = 'Python';
-      keyPoints = ['Use list comprehensions over explicit loops for clarity', 'Lean on the standard library before reaching for third-party packages', 'Write small pure functions — they are easier to test and reuse'];
-      exercise = 'Open a REPL and implement the concept you asked about in under 10 lines.';
-      proTip = 'Read the official Python docs for a function before Stack Overflow — they are more accurate.';
-    } else if (lc.includes('javascript') || lc.includes(' js ') || lc.includes('typescript') || lc.includes('react') || lc.includes('node')) {
-      topic = 'JavaScript / TypeScript';
-      keyPoints = ['Understand the event loop before diving into async/await', 'TypeScript interfaces document intent and catch bugs at compile time', 'Prefer immutable data patterns to reduce side-effect bugs'];
-      exercise = 'Rewrite a callback-based snippet using async/await and compare readability.';
-      proTip = 'Use browser DevTools Sources tab to step through async code — it makes the execution order visible.';
-    } else if (lc.includes('machine learning') || lc.includes(' ml ') || lc.includes('neural') || lc.includes('model training')) {
-      topic = 'Machine Learning';
-      keyPoints = ['Start with the simplest model that could work, then add complexity only if needed', 'Data quality matters more than model sophistication in most real projects', 'Validation split is your sanity check — never tune on the test set'];
-      exercise = 'Describe the bias-variance tradeoff in one sentence using a non-technical analogy.';
-      proTip = 'Plot your loss curves before drawing any conclusions — spikes often reveal data issues, not model issues.';
-    } else if (lc.includes('sql') || lc.includes('database') || lc.includes('postgres') || lc.includes('query')) {
-      topic = 'SQL / Databases';
-      keyPoints = ['Understand EXPLAIN ANALYZE output before optimizing any query', 'Indexes speed up reads but slow down writes — choose deliberately', 'Normalize to third normal form first, then denormalize only with a measured reason'];
-      exercise = 'Write a query that uses a JOIN, a WHERE filter, and an aggregate (COUNT/SUM) on any table you have.';
-      proTip = 'N+1 query problems are the most common performance killer in web apps — learn to spot them early.';
-    } else if (lc.includes('algorithm') || lc.includes('data structure') || lc.includes('complexity') || lc.includes('big o')) {
-      topic = 'Algorithms & Data Structures';
-      keyPoints = ['Time complexity tells you how an algorithm scales, not how fast it is on one input', 'Most interview problems reduce to a handful of patterns: sliding window, two-pointer, BFS/DFS, DP', 'Space complexity is often the hidden cost — always account for the call stack in recursion'];
-      exercise = 'Trace through a binary search on paper for an array of 8 elements, counting comparisons.';
-      proTip = 'Solving the brute-force solution first gives you a correctness baseline to optimize from.';
-    } else if (lc.includes('css') || lc.includes('html') || lc.includes('tailwind') || lc.includes('flexbox') || lc.includes('grid')) {
-      topic = 'CSS / Frontend Styling';
-      keyPoints = ['Learn the box model deeply — margin, border, padding, content', 'Flexbox handles one-dimensional layouts; CSS Grid handles two-dimensional ones', 'Mobile-first media queries are easier to maintain than desktop-first overrides'];
-      exercise = 'Build a centered card with a title, body text, and a button using only Flexbox — no absolute positioning.';
-      proTip = 'Browser DevTools computed styles panel shows exactly which rule is winning — use it before guessing.';
-    }
-
-    const reply = `AI Mentor (offline mode)\n\nYou asked: "${q}"\n\nHere is what I know about ${topic}:\n\n${keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nQuick Exercise: ${exercise}\n\nPro Tip: ${proTip}\n\nNote: The AI mentor is temporarily offline. These are curated study notes. Reconnect for a personalised answer to your exact question.`;
+    // Generic topic-aware fallback — names what the user asked about and
+    // encourages a retry rather than returning a hardcoded keyword-matched
+    // response that may be completely off-topic (e.g. Rust, Go, iOS, DevOps).
+    const reply = [
+      `AI Mentor (offline mode)`,
+      ``,
+      `You asked: "${q}"`,
+      ``,
+      `The AI mentor is temporarily unavailable so I can't give you a personalised answer right now.`,
+      ``,
+      `While you wait, here are three universal study strategies that work for any topic:`,
+      ``,
+      `1. Break it down — split the concept into the smallest sub-problems you can name individually.`,
+      `2. Build a minimal example — even 10 lines of code or a quick sketch cements understanding faster than reading.`,
+      `3. Active recall — close your notes and write down everything you know about the topic from memory, then check.`,
+      ``,
+      `Quick Exercise: Write a 3-bullet summary of what you just read about this topic, then quiz yourself without looking.`,
+      ``,
+      `Pro Tip: Active recall beats passive re-reading by ~3× for long-term retention (Roediger & Butler, 2011).`,
+      ``,
+      `Note: The AI mentor will be back shortly. Try sending your message again in a moment.`,
+    ].join('\n');
 
     if (!res.headersSent) res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(reply);
@@ -186,7 +164,7 @@ function detectLanguage(instructions: string): string {
 }
 
 // Analyze code
-router.post('/analyze-code', requireAuth, aiLimiter, async (req, res) => {
+router.post('/analyze-code', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
   const { code, instructions, solution } = req.body;
   if (!code) return res.status(400).json({ error: 'Code parameter is required', code: 'MISSING_CODE' });
 
@@ -211,19 +189,23 @@ Concoct your response as a valid JSON object matching this structure:
   try {
     const response = await callGroqChatCompletion(prompt, { temperature: 0.3, asJSON: true });
     return res.json(cleanAndParseJSON(response, '{}'));
-  } catch (error: any) {
-    logger.error({ err: error.message }, '[AI] analyze-code fallback');
+  } catch (error: unknown) {
+    logger.error({ err: (error instanceof Error ? error.message : String(error)) }, '[AI] analyze-code fallback');
     Sentry.captureException(error);
     return res.json({ passed: false, systemError: true, suggestions: '', explanation: 'Verification service unavailable. Please retry.' });
   }
 });
 
 // AI Recommendations
-router.post('/ai-recommendations', requireAuth, aiLimiter, async (req, res) => {
-  const { currentXp, level, streak, activeGoal } = req.body;
+router.post('/ai-recommendations', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
+  const { currentXp, level, streak, activeGoal, lessonsCompleted } = req.body;
   const userEmail = req.supabaseUser!.email;
 
-  const cacheKey = `${userEmail}:${activeGoal || ''}`;
+  // Bucket lessonsCompleted in steps of 5 so the cache refreshes after meaningful
+  // progress without busting on every single lesson. Avoids stale recs for users
+  // who complete multiple lessons between the 30-min cache TTL.
+  const lessonBucket = Math.floor((Number(lessonsCompleted) || 0) / 5);
+  const cacheKey = `${userEmail}:${activeGoal || ''}:${lessonBucket}`;
   const cached = recCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < REC_CACHE_TTL) return res.json(cached.data);
 
@@ -251,8 +233,8 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
     const parsed = cleanAndParseJSON(response, '[]');
     cacheSet(recCache, cacheKey, { data: parsed, timestamp: Date.now() });
     return res.json(parsed);
-  } catch (error: any) {
-    logger.error({ err: error.message }, '[AI] recommendations fallback');
+  } catch (error: unknown) {
+    logger.error({ err: (error instanceof Error ? error.message : String(error)) }, '[AI] recommendations fallback');
     Sentry.captureException(error);
     // Goal-aware fallback recs: derive action titles from the activeGoal string
     const goal = sanitizeForPrompt(activeGoal || '', 120);
@@ -289,7 +271,7 @@ Your response must be a JSON array of exactly 3 objects matching this schema:
 });
 
 // Dynamic Topic Overview
-router.post('/generate-topic-overview', requireAuth, aiLimiter, async (req, res) => {
+router.post('/generate-topic-overview', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
   const { topicName, roadmapContext } = req.body;
   if (typeof topicName !== 'string' || !topicName.trim()) {
     return res.status(400).json({ error: 'Topic name is required', code: 'MISSING_TOPIC' });
@@ -312,8 +294,8 @@ Output MUST be a valid JSON object matching this schema:
   try {
     const response = await callGroqChatCompletion(prompt, { temperature: 0.6, asJSON: true });
     return res.json(cleanAndParseJSON(response, '{}'));
-  } catch (error: any) {
-    logger.warn({ err: error.message }, '[AI] topic-overview fallback');
+  } catch (error: unknown) {
+    logger.warn({ err: (error instanceof Error ? error.message : String(error)) }, '[AI] topic-overview fallback');
     Sentry.captureException(error);
     return res.json({
       what: `This module delivers the core logical paradigms and mathematical definitions behind ${topicName}.`,
@@ -324,7 +306,7 @@ Output MUST be a valid JSON object matching this schema:
 });
 
 // Progressive Hints
-router.post('/generate-hints', requireAuth, aiLimiter, async (req, res) => {
+router.post('/generate-hints', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
   const { lessonContent, attemptNumber } = req.body;
   if (!lessonContent) return res.status(400).json({ error: 'Lesson content is required', code: 'MISSING_CONTENT' });
 
@@ -356,15 +338,15 @@ Level ${attemptNumber || 1} is requested. Keep hints educational, not giving awa
       ];
     }
     return res.json(parsed);
-  } catch (error: any) {
-    logger.error({ err: error.message }, '[AI] hints fallback');
+  } catch (error: unknown) {
+    logger.error({ err: (error instanceof Error ? error.message : String(error)) }, '[AI] hints fallback');
     Sentry.captureException(error);
     return res.json({ hints: [{ level: 1, type: 'conceptual', text: 'Focus on the core concept being taught.' }, { level: 2, type: 'syntax', text: 'Think about the key syntax patterns.' }], hintCostXp: 10 });
   }
 });
 
 // AI Progress Summary — used by AIInsightsTab for the narrative summary card
-router.post('/ai-summary', requireAuth, aiLimiter, async (req, res) => {
+router.post('/ai-summary', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
   const { roadmapGoal, progressPercent, completedLessons, totalLessons, activePhase, topSkills } = req.body;
   const userEmail = req.supabaseUser!.email;
 
@@ -388,8 +370,8 @@ Return ONLY the summary text (no JSON, no preamble).`;
     const data = { summary: text.trim() };
     cacheSet(recCache, cacheKey, { data, timestamp: Date.now() });
     return res.json(data);
-  } catch (error: any) {
-    logger.warn({ err: error.message }, '[AI] ai-summary fallback');
+  } catch (error: unknown) {
+    logger.warn({ err: (error instanceof Error ? error.message : String(error)) }, '[AI] ai-summary fallback');
     Sentry.captureException(error);
     const pct = progressPercent || 0;
     const summary = pct < 30

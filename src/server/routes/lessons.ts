@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAuth, aiLimiter, lessonLimiter, HttpError, withUserLock } from '../lib/middleware';
+import { requireAuth, aiLimiter, aiDailyQuota, lessonLimiter, HttpError, withUserLock } from '../lib/middleware';
 import { loadUserDB, saveUserDB, updateStreak, unlockAchievement, addUserXp } from '../lib/db';
 import { logger } from '../lib/logger';
 import { Sentry } from '../lib/sentry';
@@ -37,8 +37,9 @@ async function userOwnsLesson(userEmail: string, roadmapId: string): Promise<boo
   return Boolean(await getRoadmapById(roadmapId, userEmail));
 }
 
-// Lesson content (lazy generate on first access)
-router.get('/lessons/:lessonId/content', requireAuth, async (req, res) => {
+// Lesson content (lazy generate on first access) — counts against the AI quota
+// because getOrGenerateLessonContent may call Groq to generate content.
+router.get('/lessons/:lessonId/content', requireAuth, aiDailyQuota, async (req, res) => {
   const { lessonId } = req.params;
   const userEmail = req.supabaseUser!.email;
   try {
@@ -49,8 +50,8 @@ router.get('/lessons/:lessonId/content', requireAuth, async (req, res) => {
     if (!result) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
     const payload = await assembleLessonResponse(userEmail, result);
     return res.json(payload);
-  } catch (error: any) {
-    logger.error({ err: error?.message || error }, '[Lesson-Gen] content retrieval error');
+  } catch (error: unknown) {
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, '[Lesson-Gen] content retrieval error');
     Sentry.withScope((scope) => {
       scope.setTag('feature', 'lesson-generation');
       scope.setExtra('lessonId', req.params.lessonId);
@@ -73,8 +74,8 @@ router.post('/lessons/:lessonId/generate', requireAuth, aiLimiter, async (req, r
     if (!result) return res.status(404).json({ error: 'Lesson not found', code: 'LESSON_NOT_FOUND' });
     const payload = await assembleLessonResponse(userEmail, result);
     return res.json({ ...payload, regenerated: regenerate && !result.cached });
-  } catch (error: any) {
-    logger.error({ err: error?.message || error }, '[Lesson-Gen] generation error');
+  } catch (error: unknown) {
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, '[Lesson-Gen] generation error');
     Sentry.withScope((scope) => {
       scope.setTag('feature', 'lesson-generation');
       scope.setExtra('lessonId', req.params.lessonId);
@@ -106,8 +107,8 @@ router.get('/lessons/:lessonId/meta', requireAuth, async (req, res) => {
     } catch (_) { /* best-effort */ }
 
     return res.json({ lessonId, name: lesson.title, hasContent, metadata, progress });
-  } catch (error: any) {
-    logger.error({ err: error?.message || error }, '[Lesson-Gen] meta retrieval error');
+  } catch (error: unknown) {
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, '[Lesson-Gen] meta retrieval error');
     Sentry.captureException(error);
     return res.status(500).json({ error: 'Failed to load lesson metadata', code: 'LESSON_META_FAILED' });
   }
@@ -289,7 +290,7 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
 
     return res.json(result);
   } catch (error) {
-    if (error instanceof HttpError) return res.status(error.status).json({ error: error.message });
+    if (error instanceof HttpError) return res.status(error.status).json({ error: (error instanceof Error ? error.message : String(error)) });
     logger.error({ err: error }, 'Complete lesson error');
     Sentry.withScope((scope) => {
       scope.setTag('feature', 'lesson-completion');

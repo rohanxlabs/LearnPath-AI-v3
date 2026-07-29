@@ -2,7 +2,7 @@
 // AI status banner, stripe checkout status.
 // Extracted from App.tsx.
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import type { ToastMessage } from '../components/Toast';
 import type { Achievement } from '../types';
 
@@ -21,6 +21,7 @@ interface UIContextValue {
   unlockedAchievement: Achievement | null;
   setUnlockedAchievement: React.Dispatch<React.SetStateAction<Achievement | null>>;
   aiActive: boolean | null;
+  recheckAiStatus: () => void;
   showAiOfflineBanner: boolean;
   setShowAiOfflineBanner: React.Dispatch<React.SetStateAction<boolean>>;
   stripeCheckoutStatus: string | null;
@@ -62,12 +63,40 @@ export function UIProvider({ children, settingsTheme }: UIProviderProps) {
   const [isRecsLoading, setIsRecsLoading] = useState(false);
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
 
-  // AI health check
+  // Manual recheck — called by the "Check again" button on the AI offline banner.
+  const recheckAiStatus = useCallback(() => {
+    // Bust the module-level cache so the fetch actually fires.
+    (UIProvider as any)._healthCache = undefined;
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => {
+        const active = !!data.aiActive;
+        setAiActive(active);
+        (UIProvider as any)._healthCache = { active, at: Date.now() };
+      })
+      .catch(() => setAiActive(false));
+  }, []);
+
+  // AI health check — cached for 5 min to avoid thundering herd on HMR reloads
+  // and error-boundary recoveries.
   React.useEffect(() => {
+    const CACHE_TTL = 5 * 60 * 1000;
+    const now = Date.now();
+    const cached = (UIProvider as any)._healthCache as { active: boolean; at: number } | undefined;
+    if (cached && now - cached.at < CACHE_TTL) {
+      setAiActive(cached.active);
+      return;
+    }
     let cancelled = false;
     fetch('/api/health')
       .then(res => res.json())
-      .then(data => { if (!cancelled) setAiActive(!!data.aiActive); })
+      .then(data => {
+        if (!cancelled) {
+          const active = !!data.aiActive;
+          setAiActive(active);
+          (UIProvider as any)._healthCache = { active, at: Date.now() };
+        }
+      })
       .catch(() => { if (!cancelled) setAiActive(false); });
     return () => { cancelled = true; };
   }, []);
@@ -96,7 +125,7 @@ export function UIProvider({ children, settingsTheme }: UIProviderProps) {
     activeTab, setActiveTab, isSidebarOpen, setIsSidebarOpen,
     activeLesson, setActiveLesson, activeToast, setActiveToast, showToast,
     confirmDeleteId, setConfirmDeleteId, unlockedAchievement, setUnlockedAchievement,
-    aiActive, showAiOfflineBanner, setShowAiOfflineBanner,
+    aiActive, recheckAiStatus, showAiOfflineBanner, setShowAiOfflineBanner,
     stripeCheckoutStatus, setStripeCheckoutStatus,
     isAiChatGenerating, setIsAiChatGenerating,
     aiRecommendations, setAiRecommendations, isRecsLoading, setIsRecsLoading,

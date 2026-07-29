@@ -1,5 +1,11 @@
-const CACHE_NAME = 'learnpath-ai-cache-v5';
+// Bump this version on every deploy so the old cache is evicted on activation.
+// Format: learnpath-ai-cache-vN  (increment N manually or via CI).
+const CACHE_NAME = 'learnpath-ai-cache-v6';
 const OFFLINE_URL = '/offline.html';
+
+// Only log in local development — console output is stripped by esbuild in the
+// main bundle but sw.js lives in /public and is served as-is in production.
+const DEV = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 
 // External URLs (e.g. Google Fonts) are intentionally excluded from addAll().
 // addAll() must succeed 100% during install; any failed fetch aborts the
@@ -17,7 +23,7 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Pre-caching offline fallback and essentials');
+      if (DEV) console.log('[Service Worker] Pre-caching offline fallback and essentials');
       return cache.addAll(ASSETS_TO_CACHE);
     }).then(() => self.skipWaiting())
   );
@@ -29,7 +35,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
-            console.log('[Service Worker] Cleaning up old cache:', cacheName);
+            if (DEV) console.log('[Service Worker] Cleaning up old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })

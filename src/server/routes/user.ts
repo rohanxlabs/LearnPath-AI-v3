@@ -64,8 +64,8 @@ router.get('/user-stats', requireAuth, async (req, res) => {
       overallMastery: Math.round(overallMastery),
       daysSinceLastVisit,
     });
-  } catch (error: any) {
-    logger.error({ err: error?.message }, 'user-stats query failed');
+  } catch (error: unknown) {
+    logger.error({ err: error instanceof Error ? error.message : String(error) }, 'user-stats query failed');
     Sentry.captureException(error);
     return res.status(503).json({ error: 'Stats temporarily unavailable', code: 'STATS_FAILED' });
   }
@@ -258,7 +258,7 @@ router.post('/progress', requireAuth, async (req, res) => {
 
     const progress = await getRoadmapProgressSnapshot(userEmail, roadmapId);
     return res.json({ success: true, progress });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, 'Progress tracking error');
     Sentry.withScope((scope) => {
       scope.setTag('feature', 'progress-tracking');
@@ -306,7 +306,7 @@ router.get('/progress/:roadmapId', requireAuth, async (req, res) => {
     if (!owned) return res.status(404).json({ error: 'Roadmap not found', code: 'ROADMAP_NOT_FOUND' });
     const progress = await getRoadmapProgressSnapshot(userEmail, roadmapId);
     return res.json({ progress });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error({ err: error }, 'Get progress error');
     return res.json({ progress: null });
   }

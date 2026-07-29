@@ -52,9 +52,12 @@ services:
       - key: SENTRY_AUTH_TOKEN
         sync: false
       - key: REDIS_URL
-        sync: false
+        sync: false          # Strongly recommended for multi-instance — shared rate-limit store
       - key: REDIS_TOKEN
         sync: false
+      # AI daily quota per user (default: 50 requests/day). Increase for paid tiers.
+      - key: AI_DAILY_LIMIT
+        value: 50
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
