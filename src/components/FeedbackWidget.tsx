@@ -113,6 +113,10 @@ export function FeedbackWidget({ context, getAuthHeaders }: FeedbackWidgetProps)
                     />
                   </div>
 
+                  <p className="text-[10px] text-gray-400 dark:text-zinc-600 text-center leading-snug">
+                    Your feedback is stored to help us improve the product.
+                  </p>
+
                   <button
                     type="submit"
                     disabled={!sentiment || submitting}

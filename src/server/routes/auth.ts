@@ -6,7 +6,7 @@
  * or cookie implementation.
  */
 import { Router } from 'express';
-import { requireAuth } from '../lib/middleware';
+import { requireAuth, authLimiter } from '../lib/middleware';
 import { getDefaultUserDB, loadUserDB, saveUserDB, sql } from '../lib/db';
 import { getUserRoadmapsReconstructed, backfillUserLessonProgress } from '../db/queries';
 import { logger } from '../lib/logger';
@@ -14,12 +14,12 @@ import { Sentry } from '../lib/sentry';
 
 const router = Router();
 
-router.get('/session', requireAuth, (req, res) => {
+router.get('/session', requireAuth, authLimiter, (req, res) => {
   res.json({ authenticated: true, email: req.supabaseUser!.email });
 });
 
 /** Loads product data for an authenticated Supabase session. */
-router.get('/bootstrap', requireAuth, async (req, res) => {
+router.get('/bootstrap', requireAuth, authLimiter, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   try {
     let dbData = await loadUserDB(userEmail, { createIfMissing: false });
