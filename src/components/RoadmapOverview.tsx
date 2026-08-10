@@ -25,7 +25,7 @@ interface RoadmapOverviewProps {
   onContinueActive: () => void;
   profile: UserProfile;
   onLessonSelect?: (phaseId: string, levelId: string, lessonId: string) => void;
-  onAiAction?: (actionType: string, phaseName?: string) => void;
+  onAiAction?: (actionType: 'explain' | 'quiz' | 'study_plan' | 'projects', phaseName: string) => void;
 }
 
 export function RoadmapOverview({

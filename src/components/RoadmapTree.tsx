@@ -17,7 +17,7 @@ interface RoadmapTreeProps {
   data?: SkillNode;
   roadmap?: Roadmap;
   onLessonSelect?: (phaseId: string, levelId: string, lessonId: string) => void;
-  onAiAction?: (actionType: string, phaseName?: string) => void;
+  onAiAction?: (actionType: 'explain' | 'quiz' | 'study_plan' | 'projects', phaseName: string) => void;
 }
 
 export const transformRoadmapToSkillTree = (roadmap?: Roadmap): SkillNode | null => {

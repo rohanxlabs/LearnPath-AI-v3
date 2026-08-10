@@ -62,7 +62,7 @@ router.get('/lessons/:lessonId/content', requireAuth, aiDailyQuota, async (req, 
 });
 
 // Force-regenerate lesson content
-router.post('/lessons/:lessonId/generate', requireAuth, aiLimiter, async (req, res) => {
+router.post('/lessons/:lessonId/generate', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
   const { lessonId } = req.params;
   const userEmail = req.supabaseUser!.email;
   const regenerate = req.body?.regenerate === true || req.query?.regenerate === 'true';
@@ -303,7 +303,7 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
 
 // Generate quiz — requires a lessonId so we can verify the lesson belongs to
 // the requesting user before spending an AI call.
-router.post('/generate-quiz', requireAuth, aiLimiter, async (req, res) => {
+router.post('/generate-quiz', requireAuth, aiDailyQuota, aiLimiter, async (req, res) => {
   const { topicName, lessonId } = req.body;
   if (!topicName) return res.status(400).json({ error: 'Topic name is required for quiz', code: 'MISSING_TOPIC_NAME' });
   const userEmail = req.supabaseUser!.email;

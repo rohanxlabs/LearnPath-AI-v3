@@ -323,7 +323,7 @@ export function PhaseDetailPage({
               savedQuiz={savedQuiz}
               onAddXp={onAddXp}
               onRoadmapUpdated={onRoadmapUpdated}
-              onQuizComplete={(score) => setPhaseQuizScore(score)}
+              onQuizComplete={(score: number) => setPhaseQuizScore(score)}
               getAuthHeaders={getAuthHeaders}
             />
           )}

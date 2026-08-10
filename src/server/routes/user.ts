@@ -89,6 +89,7 @@ router.post('/user-resource-states', requireAuth, async (req, res) => {
   const { completedIds, savedIds } = req.body;
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: true });
+    if (!dbData) return res.status(503).json({ error: 'Resource states temporarily unavailable', code: 'RESOURCE_STATES_FAILED' });
     if (!dbData.progress) dbData.progress = {};
     dbData.progress.resource_states = { completedIds: Array.isArray(completedIds) ? completedIds : [], savedIds: Array.isArray(savedIds) ? savedIds : [] };
     await saveUserDB(userEmail, dbData);
@@ -144,6 +145,7 @@ router.put('/user-profile', requireAuth, async (req, res) => {
 
   try {
     const dbData = await loadUserDB(userEmail, { createIfMissing: true });
+    if (!dbData) return res.status(503).json({ error: 'Profile temporarily unavailable', code: 'PROFILE_UNAVAILABLE' });
     if (!dbData.progress) dbData.progress = {};
     const safeProfile = sanitizeProfile(profile);
     if (safeProfile) {

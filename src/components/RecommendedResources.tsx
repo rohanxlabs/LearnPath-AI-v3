@@ -35,7 +35,7 @@ const RecommendedResources: React.FC<RecommendedResourcesProps> = ({ techStack, 
             className="bg-black/20 p-3 rounded-lg border border-white/10 hover:bg-black/40 transition-colors flex items-center justify-between gap-3"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="shrink-0">{iconMap[res.type] || <BookOpen size={16} />}</div>
+              <div className="shrink-0">{iconMap[res.type as keyof typeof iconMap] || <BookOpen size={16} />}</div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{res.title}</p>
                 <p className="text-xs text-zinc-400 uppercase tracking-wide">{res.provider}</p>

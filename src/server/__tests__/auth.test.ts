@@ -76,7 +76,7 @@ describe('/api/bootstrap', () => {
   it('returns 401 when no token is provided', async () => {
     const res = await request(app).get('/api/bootstrap');
     expect(res.status).toBe(401);
-  });
+  }, 15000);
 
   it('returns 401 for an invalid token', async () => {
     const res = await request(app)

@@ -17,7 +17,7 @@ interface RoadmapsTabContainerProps {
   isGenerating: boolean;
   profile: UserProfile;
   isLoading?: boolean;
-  onAiAction?: (actionType: string, phaseName?: string) => void;
+  onAiAction?: (actionType: 'explain' | 'quiz' | 'study_plan' | 'projects', phaseName: string) => void;
   onLessonClick?: (phaseId: string, levelId: string, lessonId: string) => void;
   /** Auth header factory threaded down to the SSE streaming fetch in RoadmapGeneratorForm. */
   getHeaders?: () => Promise<Record<string, string>>;

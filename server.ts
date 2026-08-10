@@ -387,8 +387,12 @@ process.on('unhandledRejection', (reason) => {
   Sentry.captureException(err);
 });
 
-bootstrap().catch((err) => {
-  logger.fatal({ err }, 'Server failed to start');
-  process.exit(1);
-});
+// Supertest imports `app` directly. Do not start Vite or bind a port as a
+// module-import side effect, or Vitest will retain open handles.
+if (process.env.NODE_ENV !== 'test') {
+  bootstrap().catch((err) => {
+    logger.fatal({ err }, 'Server failed to start');
+    process.exit(1);
+  });
+}
 

@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
+    // The in-memory integration doubles are shared within a worker. A single
+    // worker is deterministic and avoids exhausting process limits in CI.
+    maxWorkers: 1,
     // Server tests run in node. Component tests use jsdom via workspace config.
     environment: 'node',
     include: [

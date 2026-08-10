@@ -121,7 +121,14 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
       const res = await fetch('/api/generate-quiz', {
         method: 'POST',
         headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topicName })
+        body: JSON.stringify({
+          topicName,
+          // Bind the generation request to the user's curriculum whenever a
+          // lesson is available, allowing the API to enforce ownership.
+          lessonId: roadmap.phases?.flatMap((phase: any) => phase.levels || phase.modules || [])
+            .flatMap((module: any) => module.lessons || [])
+            .find((lesson: any) => lesson?.id)?.id,
+        })
       });
       if (res.ok) {
         const questions = await res.json();
@@ -289,7 +296,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
           <motion.div key="quiz-active" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <ActiveQuiz
               quizId={activeQuizId}
-              source={activeQuizSource}
+              source={activeQuizSource!}
               questions={activeQuestions}
               onComplete={handleQuizComplete}
               onExit={handleQuizExit}
@@ -385,11 +392,11 @@ const QuizCard = ({ quiz, onStartQuiz, cacheEntry, onRetry }: { quiz: any; onSta
   </div>
 );
 
-const PrepResource = ({ resource }: { resource: any }) => {
+const PrepResource = ({ resource }: { resource: { type: string; url: string; title: string; provider: string } }) => {
     const iconMap = { video: <Video size={16} />, course: <Bookmark size={16} />, book: <BookOpen size={16} /> };
     return (
         <a href={resource.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors">
-            <div className="text-blue-400">{iconMap[resource.type] || <BookOpen size={16} />}</div>
+            <div className="text-blue-400">{iconMap[resource.type as keyof typeof iconMap] || <BookOpen size={16} />}</div>
             <div>
                 <div className="text-sm font-semibold text-white">{resource.title}</div>
                 <div className="text-xs text-zinc-400">{resource.provider}</div>
@@ -408,11 +415,11 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
 }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [selectedOpt, setSelectedOpt] = useState(null);
+  const [selectedOpt, setSelectedOpt] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const correctCount = useMemo(() => Object.values(answers).filter(a => a).length, [answers]);
 
-  const handleSelectOption = (idx) => {
+  const handleSelectOption = (idx: number) => {
     if (showFeedback) return;
     setSelectedOpt(idx);
   };
@@ -515,7 +522,7 @@ const ActiveQuiz = ({ quizId, source, questions, onComplete, onExit }: {
   );
 };
 
-const QuizResultDisplay = ({ result, onDismiss }) => (
+const QuizResultDisplay = ({ result, onDismiss }: { result: { score: number; correct: number; total: number; xp: number }; onDismiss: () => void }) => (
   <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="p-6 mb-6 rounded-2xl border border-purple-500/30 bg-purple-500/10 text-center relative">
     <button onClick={onDismiss} className="absolute top-3 right-3 text-zinc-400 hover:text-white"><XCircle size={20} /></button>
     <Trophy className="w-12 h-12 text-amber-400 mx-auto mb-4" />

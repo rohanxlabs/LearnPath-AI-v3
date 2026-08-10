@@ -7,13 +7,14 @@ import {
 // Reuse the single shared pg Pool from the Drizzle client module so the
 // process only ever holds one pool (max: 10) instead of two (max: 20).
 import { pool } from '../db/drizzle';
+import type { QueryResultRow } from 'pg';
 
 // Provide a tagged-template `sql` interface compatible with the existing call
 // sites (sql`SELECT ...` returns rows as an array).
 // Raw SQL call sites use different projections. Defaulting to a string-keyed
 // row keeps untyped projections usable while explicit callers can still supply
 // a narrower row type with `sql<MyRow>`.
-export async function sql<T = Record<string, any>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> {
+export async function sql<T extends QueryResultRow = Record<string, any>>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T[]> {
   const text = strings.reduce((acc, s, i) => acc + s + (i < values.length ? `$${i + 1}` : ''), '');
   const { rows } = await pool.query<T>(text, values);
   return rows;
@@ -97,29 +98,11 @@ export async function ensureUsersTable(): Promise<void> {
 export function getDefaultUserDB(): UserDB {
   return {
     roadmaps: [],
-    curated_resources: [
-      { id: 'res-1', phaseId: 'phase-0', title: 'Deep Learning Foundations & Abstractions', type: 'video', url: 'https://www.youtube.com/watch?v=aircAruvnKk', provider: '3Blue1Brown', duration: '22 mins', description: 'Excellent video explaining deep neural networks and backpropagation visually.' },
-      { id: 'res-2', phaseId: 'phase-0', title: 'Google Machine Learning Crash Course', type: 'course', url: 'https://developers.google.com/machine-learning/crash-course', provider: 'Google Devs', duration: '15 hours', description: "Google's high-speed structured introduction to core ML concepts." },
-      { id: 'res-3', phaseId: 'phase-1', title: 'Advanced Scientific Computing with NumPy', type: 'article', url: 'https://numpy.org/doc/stable/user/quickstart.html', provider: 'NumPy Org', duration: '45 mins', description: 'Comprehensive tutorials on tensor layouts, multi-dimensional slicing, and broadcast loops.' },
-      { id: 'res-4', phaseId: 'phase-1', title: 'A Whirlwind Tour of Python Coding', type: 'book', url: 'https://github.com/jakevdp/WhirlwindTourOfPython', provider: "O'Reilly Press", duration: '3 hours', description: 'Fast track course on essential syntax, structures, and object orientation.' },
-      { id: 'res-5', phaseId: 'phase-2', title: 'Linear Algebra Cheat Sheet & Vectors', type: 'article', url: 'https://medium.com', provider: 'Towards Data Science', duration: '15 mins', description: 'A beautifully formatted guide covering matrices, dot products, and principal dimensions.' },
-      { id: 'res-6', phaseId: 'phase-2', title: 'The Matrix Calculus & Backpropagation Handbook', type: 'paper', url: 'https://arxiv.org', provider: 'arXiv Preprints', duration: '2 hours', description: 'Rigorous derivation of cost function optimizations and weight updates.' },
-      { id: 'res-7', phaseId: 'phase-3', title: 'Attention Is All You Need (Transformer Paper)', type: 'paper', url: 'https://arxiv.org/abs/1706.03762', provider: 'arXiv Preprints', duration: '1.2 hours', description: 'The breakthrough research paper detailing the self-attention architecture.' },
-      { id: 'res-8', phaseId: 'phase-3', title: 'Prompt Engineering Techniques & Standards', type: 'course', url: 'https://www.promptingguide.ai/', provider: 'DAIR.AI', duration: '4 hours', description: 'Industry-standard guides on dynamic template styling, few-shot routing, and chain of thought.' }
-    ],
-    topic_wise_quizzes: [
-      { id: 'quiz-python', quizId: 'quiz-python', quizName: 'Python Foundations & Data Structure Quiz', score: 100, totalQuestions: 5, attemptsCount: 2, lastAttemptedAt: new Date(Date.now() - 36 * 3600 * 1000).toISOString() },
-      { id: 'quiz-math', quizId: 'quiz-math', quizName: 'Linear Algebra & Dimensional Calculus Quiz', score: 80, totalQuestions: 5, attemptsCount: 1, lastAttemptedAt: new Date(Date.now() - 12 * 3600 * 1000).toISOString() },
-      { id: 'quiz-llm', quizId: 'quiz-llm', quizName: 'Attention Engine & LLM Architecture Quiz', score: 0, totalQuestions: 5, attemptsCount: 0, lastAttemptedAt: 'Never' },
-      { id: 'quiz-rag', quizId: 'quiz-rag', quizName: 'Vector Embeddings & RAG Optimization Quiz', score: 0, totalQuestions: 5, attemptsCount: 0, lastAttemptedAt: 'Never' }
-    ],
-    projects: [
-      { id: 'proj-1', title: 'Custom AI Prompt Template Builder & Proxy', difficulty: 'beginner', description: 'Build an editor to style and optimize customizable system prompts, validating them using strict safety filters.', techStack: ['React', 'Tailwind', 'localStorage', 'lucide-react'], features: ['Dynamic variable injection', 'Precompiled templates library', 'One-click markdown export'], progress: 100, githubUrl: 'https://github.com/learnpath/prompt-builder' },
-      { id: 'proj-2', title: 'Interactive NumPy Tensor Calculator', difficulty: 'beginner', description: 'A visual calculator demonstrating dot products, matrix multiplications, transpose operations, and scalar broadcasting rules.', techStack: ['React', 'NumPy Web Assembly', 'Tailwind CSS'], features: ['Interactive matrix grid inputs', 'Staggered computation steps visualization', 'Dimension validation warnings'], progress: 30, githubUrl: 'https://github.com/learnpath/tensor-calc' },
-      { id: 'proj-3', title: 'Document PDF Ingestion Engine & Summarizer', difficulty: 'intermediate', description: 'A robust web utility that parses text from uploaded PDF chapters, generates chunk-based summaries, and builds high-speed search filters.', techStack: ['Express', 'React', 'PDF-Parse', 'Gemini Core'], features: ['Recursive token splitting', 'Auto-generated context tags map', 'Search with text highlight markers'], progress: 0 },
-      { id: 'proj-4', title: 'Local Git Commit Enhancer & Interactive Explainer', difficulty: 'intermediate', description: 'Integrate dynamic git hooks to read git diff files, draft informative commit messages matching core conventions, and explain semantic changes.', techStack: ['Node.js CLI', 'Simple Git API', 'Gemini LLMs'], features: ['Automatic Conventional Commits formatting', 'Performance impact flag review', 'Security-sensitive files monitor'], progress: 0 },
-      { id: 'proj-5', title: 'Autonomous AI Debugging Sandbox & Runner', difficulty: 'advanced', description: 'Create a secured, encapsulated browser coding playground that runs exercises, analyzes error logs, and requests corrective instructions from Gemini.', techStack: ['React', 'WebContainers', 'Xterm.js', 'LLM Agents'], features: ['Real-time terminal execution logs', 'Automated code diagnostics tool', 'Staggered auto-repair loops'], progress: 0 }
-    ],
+    // New accounts start with no generated content or claimed progress. The
+    // achievement catalogue below is product configuration, not user progress.
+    curated_resources: [],
+    topic_wise_quizzes: [],
+    projects: [],
     achievements: [
       { id: 'ach-1', name: 'First Steps', description: 'Complete your first lesson to begin your learning journey.', icon: '🎯', unlocked: false, category: 'python', xpReward: 50 },
       { id: 'ach-2', name: 'Quiz Master', description: 'Score 100% on any quiz to demonstrate mastery.', icon: '🧠', unlocked: false, category: 'prompt', xpReward: 75 },
