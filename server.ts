@@ -1,6 +1,15 @@
 import 'dotenv/config';
 import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
+
+// ---------------------------------------------------------------------------
+// Environment validation — fail fast with clear error messages before any
+// other initialization. Must run before Sentry so we can log to console if
+// logger config itself depends on invalid env vars.
+// ---------------------------------------------------------------------------
+import { validateEnvironmentOrExit } from './src/server/lib/validateEnv';
+validateEnvironmentOrExit();
+
 // ---------------------------------------------------------------------------
 // Sentry MUST be initialised before any other import that could throw, so
 // the very first import after dotenv is the dedicated backend Sentry module.
@@ -25,25 +34,9 @@ import { pool } from './src/server/db/drizzle';
 import { ensureRoadmapTables } from './src/server/db/queries';
 
 // ---------------------------------------------------------------------------
-// Startup env-var validation — fail fast with a clear message.
+// Startup configuration
 // ---------------------------------------------------------------------------
 const isProduction = process.env.NODE_ENV === 'production';
-
-// SUPABASE_JWT_SECRET is only required for HS256 projects (older Supabase).
-// ES256 projects (newer Supabase) use JWKS — SUPABASE_URL is sufficient.
-const requiredEnvVars = ['DATABASE_URL', 'GROQ_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_ANON_KEY'];
-const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
-if (missingEnvVars.length > 0) {
-  logger.fatal({ missing: missingEnvVars }, 'Missing required environment variables — server cannot start');
-  process.exit(1);
-}
-
-// FRONTEND_URL is required in production for CORS to work correctly.
-// Without it, allowedOrigins is empty and all browser requests are blocked.
-if (isProduction && !process.env.FRONTEND_URL) {
-  logger.fatal('FRONTEND_URL must be set in production (required for CORS). Set it to your public service URL, e.g. https://learnpath-ai.onrender.com');
-  process.exit(1);
-}
 
 export const app = express();
 app.set('trust proxy', 1);

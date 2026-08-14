@@ -8,6 +8,7 @@ import {
 } from '../db/queries';
 import { logger } from '../lib/logger';
 import { Sentry } from '../lib/sentry';
+import { getDailyUsageStats } from '../lib/ai';
 
 // ---------------------------------------------------------------------------
 // Public stats cache — TTL 5 minutes so the landing page is fast.
@@ -392,6 +393,22 @@ router.get('/public-stats', async (_req, res) => {
   } catch (err) {
     logger.warn({ err }, '[public-stats] DB query failed, returning zeros');
     return res.json({ roadmapsGenerated: 0, skillsCovered: 0 });
+  }
+});
+
+// AI Usage Stats — for monitoring and cost tracking
+// This endpoint is currently public, but should be restricted to admins in production
+// (add IP whitelist or admin auth middleware)
+router.get('/ai-usage-stats', async (_req, res) => {
+  try {
+    const stats = getDailyUsageStats();
+    return res.json({
+      ...stats,
+      message: 'Daily AI usage statistics. Note: Groq is currently free, costs are estimated for monitoring purposes.',
+    });
+  } catch (error) {
+    logger.error({ err: error }, 'AI usage stats error');
+    return res.status(500).json({ error: 'Failed to retrieve AI usage stats' });
   }
 });
 

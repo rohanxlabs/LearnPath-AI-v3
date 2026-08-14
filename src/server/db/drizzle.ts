@@ -12,6 +12,16 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '../../../drizzle/schema';
 
+// Connection pool size: defaults to 10, configurable via DATABASE_POOL_MAX.
+// Production deployments may need higher limits (20-50) depending on:
+//   - Number of app instances (each has its own pool)
+//   - Concurrent request volume
+//   - Database connection limit (Supabase free: 60, paid: higher)
+// Rule of thumb: (instances × pool_size) should be < 80% of DB connection limit.
+const poolMax = process.env.DATABASE_POOL_MAX
+  ? Number(process.env.DATABASE_POOL_MAX)
+  : 10;
+
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   // Verify TLS certificates in production. Set DATABASE_INSECURE_SSL=true only
@@ -19,7 +29,7 @@ export const pool = new Pool({
   ssl: process.env.DATABASE_INSECURE_SSL === 'true'
     ? { rejectUnauthorized: false }
     : { rejectUnauthorized: true },
-  max: 10,
+  max: poolMax,
   // Supabase / PgBouncer drops idle connections after ~5 min. Evict pool
   // entries well before that so we never hand a dead socket to a query.
   idleTimeoutMillis: 60000,

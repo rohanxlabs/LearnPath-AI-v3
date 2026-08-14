@@ -188,6 +188,11 @@ pnpm run dev
 # Open http://localhost:3000
 ```
 
+**📚 Additional Setup Guides:**
+- [Supabase Auth Configuration](docs/SUPABASE_AUTH_SETUP.md) - Email verification, SMTP, security
+- [Redis Rate Limiting (P0 for multi-instance)](docs/REDIS_RATE_LIMITING.md) - Shared rate limits across instances
+- [AI Cost Monitoring](docs/AI_COST_MONITORING.md) - Track and optimize AI API usage
+
 | Command | Purpose |
 |---|---|
 | `pnpm run lint` | TypeScript type check |

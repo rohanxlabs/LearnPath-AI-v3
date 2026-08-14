@@ -1,5 +1,149 @@
 import { jsonrepair } from 'jsonrepair';
 import { logger } from './logger';
+import { Sentry } from './sentry';
+
+// ---------------------------------------------------------------------------
+// AI Usage Tracking & Cost Monitoring
+// ---------------------------------------------------------------------------
+
+// Approximate token costs per 1M tokens (as of Jan 2025)
+// Groq is currently free for these models, but tracking helps monitor usage
+const GROQ_PRICING = {
+  'llama-3.3-70b-versatile': { input: 0.59, output: 0.79 },  // per 1M tokens
+  'llama-3.1-8b-instant': { input: 0.05, output: 0.08 },     // per 1M tokens
+};
+
+interface UsageMetrics {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  model: string;
+  estimatedCost: number;
+}
+
+// In-memory usage aggregator (resets on server restart)
+// For persistent tracking, send this data to an analytics service or database
+let dailyUsageStats = {
+  date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+  totalRequests: 0,
+  totalTokens: 0,
+  totalCost: 0,
+  byModel: {} as Record<string, { requests: number; tokens: number; cost: number }>,
+  byEndpoint: {} as Record<string, { requests: number; tokens: number; cost: number }>,
+};
+
+/**
+ * Track AI API usage and log metrics for cost monitoring.
+ * Call this after every successful Groq API call.
+ */
+export function trackAIUsage(metrics: UsageMetrics, endpoint?: string): void {
+  const today = new Date().toISOString().slice(0, 10);
+  
+  // Reset stats at midnight UTC
+  if (dailyUsageStats.date !== today) {
+    // Log yesterday's stats before resetting
+    logger.info(
+      {
+        date: dailyUsageStats.date,
+        totalRequests: dailyUsageStats.totalRequests,
+        totalTokens: dailyUsageStats.totalTokens,
+        estimatedCost: dailyUsageStats.totalCost.toFixed(4),
+        byModel: dailyUsageStats.byModel,
+      },
+      '[AI Usage] Daily summary'
+    );
+    
+    dailyUsageStats = {
+      date: today,
+      totalRequests: 0,
+      totalTokens: 0,
+      totalCost: 0,
+      byModel: {},
+      byEndpoint: {},
+    };
+  }
+  
+  // Update totals
+  dailyUsageStats.totalRequests += 1;
+  dailyUsageStats.totalTokens += metrics.totalTokens;
+  dailyUsageStats.totalCost += metrics.estimatedCost;
+  
+  // Update per-model stats
+  if (!dailyUsageStats.byModel[metrics.model]) {
+    dailyUsageStats.byModel[metrics.model] = { requests: 0, tokens: 0, cost: 0 };
+  }
+  dailyUsageStats.byModel[metrics.model].requests += 1;
+  dailyUsageStats.byModel[metrics.model].tokens += metrics.totalTokens;
+  dailyUsageStats.byModel[metrics.model].cost += metrics.estimatedCost;
+  
+  // Update per-endpoint stats
+  if (endpoint) {
+    if (!dailyUsageStats.byEndpoint[endpoint]) {
+      dailyUsageStats.byEndpoint[endpoint] = { requests: 0, tokens: 0, cost: 0 };
+    }
+    dailyUsageStats.byEndpoint[endpoint].requests += 1;
+    dailyUsageStats.byEndpoint[endpoint].tokens += metrics.totalTokens;
+    dailyUsageStats.byEndpoint[endpoint].cost += metrics.estimatedCost;
+  }
+  
+  // Log each request with cost info
+  logger.info(
+    {
+      model: metrics.model,
+      endpoint,
+      promptTokens: metrics.promptTokens,
+      completionTokens: metrics.completionTokens,
+      totalTokens: metrics.totalTokens,
+      estimatedCost: metrics.estimatedCost.toFixed(6),
+    },
+    '[AI Usage] API call'
+  );
+  
+  // Send high-cost alerts to Sentry (useful for detecting abuse or bugs)
+  if (metrics.estimatedCost > 0.10) {  // Alert if single request > $0.10
+    Sentry.captureMessage(`High-cost AI request: $${metrics.estimatedCost.toFixed(4)}`, {
+      level: 'warning',
+      tags: {
+        feature: 'ai-cost-monitoring',
+        model: metrics.model,
+        endpoint: endpoint || 'unknown',
+      },
+      extra: metrics,
+    });
+  }
+  
+  // Alert if daily cost exceeds threshold
+  if (dailyUsageStats.totalCost > 10.00) {  // Alert at $10/day
+    Sentry.captureMessage(`Daily AI cost exceeded $10: $${dailyUsageStats.totalCost.toFixed(2)}`, {
+      level: 'error',
+      tags: { feature: 'ai-cost-monitoring' },
+      extra: { dailyStats: dailyUsageStats },
+    });
+  }
+}
+
+/**
+ * Calculate estimated cost from token usage.
+ * Groq is currently free, but this helps monitor usage and prepare for future pricing.
+ */
+function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
+  const pricing = GROQ_PRICING[model as keyof typeof GROQ_PRICING];
+  if (!pricing) {
+    // Unknown model, use average pricing
+    return ((promptTokens * 0.30) + (completionTokens * 0.40)) / 1_000_000;
+  }
+  
+  const inputCost = (promptTokens * pricing.input) / 1_000_000;
+  const outputCost = (completionTokens * pricing.output) / 1_000_000;
+  return inputCost + outputCost;
+}
+
+/**
+ * Get current daily usage stats (useful for admin dashboard or health checks).
+ */
+export function getDailyUsageStats() {
+  return { ...dailyUsageStats };
+}
 
 // ---------------------------------------------------------------------------
 // JSON repair/parse utility
@@ -157,9 +301,39 @@ export async function callGroqChatCompletion(
         throw new Error(responseText || `Groq request failed with status ${response.status}`);
       }
 
-      const parsed = JSON.parse(responseText) as { choices?: Array<{ message?: { content?: string } }> };
+      const parsed = JSON.parse(responseText) as { 
+        choices?: Array<{ message?: { content?: string } }>;
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+        };
+      };
+      
       const content = parsed.choices?.[0]?.message?.content || '';
       if (!content.trim()) throw new Error('Groq returned an empty completion');
+      
+      // Track usage metrics for cost monitoring
+      if (parsed.usage) {
+        const promptTokens = parsed.usage.prompt_tokens || 0;
+        const completionTokens = parsed.usage.completion_tokens || 0;
+        const totalTokens = parsed.usage.total_tokens || promptTokens + completionTokens;
+        
+        const estimatedCost = calculateCost(model, promptTokens, completionTokens);
+        
+        trackAIUsage(
+          {
+            promptTokens,
+            completionTokens,
+            totalTokens,
+            model,
+            estimatedCost,
+          },
+          // Extract endpoint from stack trace (optional, helps identify which route is using most tokens)
+          new Error().stack?.split('\n')[3]?.match(/at (\w+)/)?.[1]
+        );
+      }
+      
       return content;
     } finally {
       clearTimeout(timeoutId);
