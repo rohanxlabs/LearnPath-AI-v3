@@ -2,22 +2,6 @@ import { useState, type FormEvent } from 'react';
 import { authService } from '../auth/authService';
 import { AuthLayout, buttonClass, inputClass, authLinkClass, labelClass } from './AuthLayout';
 
-const COMMON_PASSWORDS = new Set([
-  'password1', 'Password1', 'password12', 'Password12',
-  'qwerty123', 'Qwerty123', '12345678a', '123456789a',
-  'abc12345', 'Abc12345', 'letmein1', 'welcome1',
-  'monkey123', 'dragon12', 'master12', 'passw0rd',
-]);
-
-function validatePassword(password: string): string | null {
-  if (password.length < 10) return 'Password must be at least 10 characters.';
-  if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password))
-    return 'Password must contain at least one letter and one number.';
-  if (COMMON_PASSWORDS.has(password))
-    return 'Password is too common — please choose a less predictable one.';
-  return null;
-}
-
 export function Register({ navigate }: { navigate: (path: string) => void }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -29,12 +13,8 @@ export function Register({ navigate }: { navigate: (path: string) => void }) {
     const name = String(f.get('name') || '').trim();
     const email = String(f.get('email') || '');
     const password = String(f.get('password') || '');
-    const confirm = String(f.get('confirm') || '');
 
     if (!name || !email) return setError('Enter your name and a valid email.');
-    if (password !== confirm) return setError('Passwords do not match.');
-    const pwError = validatePassword(password);
-    if (pwError) return setError(pwError);
 
     setLoading(true);
     setError('');
@@ -62,15 +42,8 @@ export function Register({ navigate }: { navigate: (path: string) => void }) {
           <input id="reg-email" className={inputClass} name="email" type="email" autoComplete="email" required />
         </div>
         <div>
-          <label htmlFor="reg-password" className={labelClass}>
-            Password{' '}
-            <span className="text-violet-700/65">(10+ chars, letters &amp; numbers)</span>
-          </label>
-          <input id="reg-password" className={inputClass} name="password" type="password" minLength={10} autoComplete="new-password" required />
-        </div>
-        <div>
-          <label htmlFor="reg-confirm" className={labelClass}>Confirm password</label>
-          <input id="reg-confirm" className={inputClass} name="confirm" type="password" autoComplete="off" required />
+          <label htmlFor="reg-password" className={labelClass}>Password</label>
+          <input id="reg-password" className={inputClass} name="password" type="password" autoComplete="new-password" required />
         </div>
         {error && <p role="alert" className="rounded-xl bg-rose-100/80 px-3 py-2 text-sm text-rose-700">{error}</p>}
         {message && <p role="status" className="rounded-xl bg-emerald-100/80 px-3 py-2 text-sm text-emerald-700">{message}</p>}

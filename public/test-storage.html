@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalStorage Test</title>
+    <style>
+        body {
+            font-family: system-ui;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0A0A0A;
+            color: #e4e4e7;
+        }
+        .result {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .success {
+            background: #10b98114;
+            border: 1px solid #10b981;
+            color: #10b981;
+        }
+        .error {
+            background: #ef444414;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+        button {
+            background: #8b5cf6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Storage & Session Test</h1>
+    <p>This page tests if your browser supports localStorage and if Supabase sessions are persisting.</p>
+    
+    <div id="results"></div>
+    
+    <button onclick="runTests()">Run Tests</button>
+    <button onclick="checkSupabaseSession()">Check Supabase Session</button>
+    <button onclick="clearAll()">Clear All Storage</button>
+    
+    <script>
+        function addResult(message, isSuccess) {
+            const div = document.createElement('div');
+            div.className = 'result ' + (isSuccess ? 'success' : 'error');
+            div.textContent = (isSuccess ? '✓ ' : '✗ ') + message;
+            document.getElementById('results').appendChild(div);
+        }
+        
+        function runTests() {
+            document.getElementById('results').innerHTML = '';
+            
+            // Test 1: localStorage availability
+            try {
+                const testKey = 'test-' + Date.now();
+                localStorage.setItem(testKey, 'test-value');
+                const retrieved = localStorage.getItem(testKey);
+                localStorage.removeItem(testKey);
+                
+                if (retrieved === 'test-value') {
+                    addResult('localStorage is working correctly', true);
+                } else {
+                    addResult('localStorage read/write mismatch', false);
+                }
+            } catch (e) {
+                addResult('localStorage is blocked or unavailable: ' + e.message, false);
+            }
+            
+            // Test 2: sessionStorage availability
+            try {
+                const testKey = 'test-' + Date.now();
+                sessionStorage.setItem(testKey, 'test-value');
+                const retrieved = sessionStorage.getItem(testKey);
+                sessionStorage.removeItem(testKey);
+                
+                if (retrieved === 'test-value') {
+                    addResult('sessionStorage is working correctly', true);
+                } else {
+                    addResult('sessionStorage read/write mismatch', false);
+                }
+            } catch (e) {
+                addResult('sessionStorage is blocked or unavailable: ' + e.message, false);
+            }
+            
+            // Test 3: Check storage size
+            try {
+                let total = 0;
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        total += localStorage[key].length + key.length;
+                    }
+                }
+                addResult(`localStorage contains ~${Math.round(total / 1024)}KB of data`, true);
+            } catch (e) {
+                addResult('Could not calculate storage size', false);
+            }
+        }
+        
+        function checkSupabaseSession() {
+            document.getElementById('results').innerHTML = '';
+            
+            // Check for Supabase auth token
+            const authToken = localStorage.getItem('sb-auth-token');
+            
+            if (authToken) {
+                try {
+                    const parsed = JSON.parse(authToken);
+                    addResult('Supabase session found in localStorage', true);
+                    
+                    if (parsed.access_token) {
+                        addResult('Access token present', true);
+                        
+                        // Check token expiry
+                        if (parsed.expires_at) {
+                            const expiresAt = new Date(parsed.expires_at * 1000);
+                            const now = new Date();
+                            if (expiresAt > now) {
+                                addResult(`Token valid until ${expiresAt.toLocaleString()}`, true);
+                            } else {
+                                addResult('Token has expired', false);
+                            }
+                        }
+                    } else {
+                        addResult('No access token in session', false);
+                    }
+                    
+                    if (parsed.user?.email) {
+                        addResult(`Logged in as: ${parsed.user.email}`, true);
+                    }
+                } catch (e) {
+                    addResult('Found auth token but could not parse it', false);
+                }
+            } else {
+                // Try alternate storage keys
+                let found = false;
+                for (let key in localStorage) {
+                    if (key.includes('supabase') || key.includes('sb-')) {
+                        addResult(`Found Supabase key: ${key}`, true);
+                        found = true;
+                    }
+                }
+                
+                if (!found) {
+                    addResult('No Supabase session found in localStorage', false);
+                }
+            }
+        }
+        
+        function clearAll() {
+            localStorage.clear();
+            sessionStorage.clear();
+            document.getElementById('results').innerHTML = '';
+            addResult('All storage cleared', true);
+        }
+        
+        // Run tests on load
+        window.onload = runTests;
+    </script>
+</body>
+</html>

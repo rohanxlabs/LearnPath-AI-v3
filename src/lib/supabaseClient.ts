@@ -20,7 +20,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // Persist the session in localStorage so the user stays logged in on refresh.
     persistSession: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     autoRefreshToken: true,
     detectSessionInUrl: true, // handles the magic-link / OAuth redirect
+    // Ensure tokens are refreshed before they expire
+    storageKey: 'sb-auth-token',
   },
 });

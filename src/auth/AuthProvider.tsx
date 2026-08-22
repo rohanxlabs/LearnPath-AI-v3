@@ -4,6 +4,7 @@ import type { Achievement, ChatMessage, SystemNotification, UserProfile, UserSet
 import { supabase } from '../lib/supabaseClient';
 import { getAuthHeaders } from './authMiddleware';
 import { authService } from './authService';
+import { authDebug } from '../lib/authDebug';
 
 const avatar = 'data:image/svg+xml;utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128"%3E%3Crect width="128" height="128" rx="64" fill="%238b5cf6"/%3E%3Ccircle cx="64" cy="48" r="22" fill="white"/%3E%3Cpath d="M28 112c7-22 20-33 36-33s29 11 36 33" fill="white"/%3E%3C/svg%3E';
 export const DEFAULT_SETTINGS: UserSettings = { theme: 'system', notificationsEnabled: true, emailNotifications: true, pushNotifications: false, privacyPublicProfile: false };
@@ -32,7 +33,12 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
 
   const clear = useCallback(() => { setIsAuthenticated(false); setProfile(createEmptyProfile()); setSettings(DEFAULT_SETTINGS); setAchievements([]); setNotifications([]); setChats([]); setActivityLog({}); }, []);
   const bootstrap = useCallback(async (email: string) => {
-    if (booting.current) return; booting.current = true;
+    if (booting.current) {
+      console.log('[Auth] Bootstrap already in progress, skipping');
+      return;
+    }
+    booting.current = true;
+    console.log('[Auth] Starting bootstrap for:', email);
 
     // Retry /api/bootstrap up to 3 times on transient server errors (503/502/504).
     // Only call clear() on a definitive auth failure (401/403) — a transient DB
@@ -41,11 +47,14 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
     let lastStatus = 0;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
+        console.log(`[Auth] Bootstrap attempt ${attempt}/${MAX_ATTEMPTS}`);
         const response = await fetch('/api/bootstrap', { headers: await getAuthHeaders() });
         lastStatus = response.status;
+        console.log('[Auth] Bootstrap response status:', response.status);
 
         if (response.ok) {
           const data = await response.json();
+          console.log('[Auth] Bootstrap successful, received data');
           const user = (await supabase.auth.getUser()).data.user;
           const resolved = { ...createEmptyProfile(email, user?.user_metadata?.full_name || user?.user_metadata?.name || ''), ...(data.profile || {}) };
           // Bootstrap creates the database row idempotently. Persist the resolved
@@ -60,39 +69,94 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
           Sentry.setUser({ id: resolved.id || email, email });
           identify(email, { name: resolved.name }); onAuthenticated({ ...data, email, profile: resolved });
           booting.current = false; setIsLoadingAuth(false);
+          console.log('[Auth] Bootstrap complete, user authenticated');
           return;
         }
 
         // 401/403 = definitively not authenticated — stop retrying.
-        if (response.status === 401 || response.status === 403) break;
+        if (response.status === 401 || response.status === 403) {
+          console.warn('[Auth] Authentication failed with status:', response.status);
+          break;
+        }
 
         // 5xx = transient — wait then retry (except on last attempt).
         if (attempt < MAX_ATTEMPTS) {
+          console.warn(`[Auth] Server error ${response.status}, retrying in ${attempt}s...`);
           await new Promise(resolve => setTimeout(resolve, attempt * 1000));
         }
-      } catch {
+      } catch (error) {
+        console.error('[Auth] Bootstrap request failed:', error);
         // Network error — retry unless last attempt.
         if (attempt < MAX_ATTEMPTS) {
+          console.warn(`[Auth] Network error, retrying in ${attempt}s...`);
           await new Promise(resolve => setTimeout(resolve, attempt * 1000));
         }
       }
     }
 
     // All attempts exhausted or auth error — only clear if definitively unauthorised.
-    if (lastStatus === 401 || lastStatus === 403) clear();
+    if (lastStatus === 401 || lastStatus === 403) {
+      console.warn('[Auth] Clearing auth state due to failed authentication');
+      clear();
+    }
     // Otherwise leave any existing state intact so a refresh can recover.
     booting.current = false; setIsLoadingAuth(false);
+    console.log('[Auth] Bootstrap finished with status:', lastStatus);
   }, [clear, identify, onAuthenticated]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => data.session?.user.email ? bootstrap(data.session.user.email) : setIsLoadingAuth(false));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') { setIsLoadingAuth(false); return; }
-      if (event === 'SIGNED_OUT') { clear(); setIsLoadingAuth(false); }
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user.email) {
-        setIsLoadingAuth(true); void bootstrap(session.user.email);
+    // Enable storage monitoring in development
+    if (import.meta.env.DEV) {
+      authDebug.watchStorage();
+      authDebug.logAuthState('AuthProvider mounted');
+    }
+
+    // Check for existing session on mount (handles page refresh)
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (import.meta.env.DEV) {
+        authDebug.logAuthState('getSession() result');
+      }
+      
+      if (error) {
+        console.error('[Auth] Failed to get session:', error);
+        setIsLoadingAuth(false);
+        return;
+      }
+      if (data.session?.user.email) {
+        console.log('[Auth] Session found, bootstrapping user:', data.session.user.email);
+        bootstrap(data.session.user.email);
+      } else {
+        console.log('[Auth] No session found');
+        setIsLoadingAuth(false);
       }
     });
+
+    // Listen for auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Auth] State change:', event, session?.user?.email || 'no user');
+      
+      if (import.meta.env.DEV) {
+        authDebug.logAuthState(`onAuthStateChange: ${event}`);
+      }
+      
+      if (event === 'PASSWORD_RECOVERY') { 
+        setIsLoadingAuth(false); 
+        return; 
+      }
+      
+      if (event === 'SIGNED_OUT') { 
+        console.log('[Auth] User signed out, clearing state');
+        clear(); 
+        setIsLoadingAuth(false); 
+      }
+      
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user.email) {
+        console.log('[Auth] User signed in/token refreshed, bootstrapping');
+        setIsLoadingAuth(true); 
+        void bootstrap(session.user.email);
+      }
+    });
+    
     return () => subscription.unsubscribe();
   }, [bootstrap, clear]);
 
@@ -122,13 +186,33 @@ export function AuthProvider({ children, onAuthenticated, onLoggedOut, identify 
   }, [isAuthenticated, profile, settings, achievements, notifications, activityLog, chats]);
 
   const handleLogout = useCallback(async () => {
+    console.log('[Auth] Starting logout process');
+    if (import.meta.env.DEV) {
+      authDebug.logAuthState('Before logout');
+    }
+    
+    // Save any pending changes before logout
     await fullSave().catch(() => undefined);
+    
+    // Sign out from Supabase (this will clear localStorage)
     await authService.signOut();
+    console.log('[Auth] Supabase signOut complete');
+    
+    if (import.meta.env.DEV) {
+      authDebug.logAuthState('After signOut');
+    }
+    
     // Clear Sentry user context so subsequent errors are not attributed to the
     // logged-out session.
     Sentry.setUser(null);
+    
+    // Clear local state
     clear();
+    console.log('[Auth] Local state cleared');
+    
+    // Notify parent component
     onLoggedOut();
+    console.log('[Auth] Logout complete');
   }, [clear, onLoggedOut, fullSave]);
   return <AuthContext.Provider value={{ isAuthenticated, isLoadingAuth, profile, setProfile, settings, setSettings, achievements, setAchievements, notifications, setNotifications, chats, setChats, activityLog, setActivityLog, handleLogout, mutatingHeaders: getAuthHeaders, getStoredUserEmail: () => profile.email }}>{children}</AuthContext.Provider>;
 }
