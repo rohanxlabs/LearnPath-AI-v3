@@ -350,6 +350,18 @@ function AppShell() {
     }
   }, [mutatingHeaders, showToast]);
 
+  // --- Authenticated user on auth pages → redirect to home ---
+  // After successful login, if the user is still on /login, /register, etc., 
+  // redirect them to the home page automatically.
+  // NOTE: This useEffect MUST be before early returns to satisfy React's
+  // rules of hooks (hooks must be called in the same order every render).
+  useEffect(() => {
+    if (isAuthenticated && ['/login', '/register', '/forgot-password', '/reset-password'].includes(currentPath)) {
+      window.history.pushState({}, '', '/');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+  }, [isAuthenticated, currentPath]);
+
   // --- Loading state ---
   // Cold page load (no session confirmed yet): show splash so the auth gateway
   // never flashes before the session check completes.
@@ -592,25 +604,16 @@ export default function App() {
         onLoggedOut={() => setBootRoadmaps([])}
         identify={identify}
       >
-        <UIProviderWrapper>
-          <RoadmapProviderWrapper bootRoadmaps={bootRoadmaps}>
-            <AppShell />
-          </RoadmapProviderWrapper>
-        </UIProviderWrapper>
+        <ConnectedProviders bootRoadmaps={bootRoadmaps} />
       </AuthProvider>
     </PWAProvider>
   );
 }
 
-// Wrappers that read from AuthProvider to supply props to child providers
-function UIProviderWrapper({ children }: { children: React.ReactNode }) {
-  const { settings } = useAuth();
-  return <UIProvider settingsTheme={settings.theme}>{children}</UIProvider>;
-}
-
-function RoadmapProviderWrapper({ children, bootRoadmaps }: { children: React.ReactNode; bootRoadmaps: Roadmap[] }) {
-  const { isAuthenticated, mutatingHeaders, setNotifications, setAchievements } = useAuth();
-  const { showToast, setActiveTab } = useUI();
+// Single wrapper component that sets up both UI and Roadmap providers
+// This ensures hooks are always called in the same order
+function ConnectedProviders({ bootRoadmaps }: { bootRoadmaps: Roadmap[] }) {
+  const { isAuthenticated, mutatingHeaders, setNotifications, setAchievements, settings } = useAuth();
 
   const handleAchievementUnlocked = useCallback((ach: { id: string; name: string; icon: string; xpReward: number }) => {
     setAchievements(prev => {
@@ -619,7 +622,36 @@ function RoadmapProviderWrapper({ children, bootRoadmaps }: { children: React.Re
       return prev;
     });
     setNotifications((prev: SystemNotification[]) => [{ id: `notif-ach-${Date.now()}`, title: `Achievement Unlocked: ${ach.name} 🏆`, message: `+${ach.xpReward} XP awarded!`, category: 'achievement', read: false, timestamp: new Date().toISOString() }, ...prev]);
-  }, []);
+  }, [setAchievements, setNotifications]);
+
+  return (
+    <UIProvider settingsTheme={settings.theme}>
+      <InnerRoadmapProvider 
+        bootRoadmaps={bootRoadmaps}
+        isAuthenticated={isAuthenticated}
+        mutatingHeaders={mutatingHeaders}
+        handleAchievementUnlocked={handleAchievementUnlocked}
+        setNotifications={setNotifications}
+      />
+    </UIProvider>
+  );
+}
+
+// Inner wrapper that can now safely use useUI hook
+function InnerRoadmapProvider({ 
+  bootRoadmaps, 
+  isAuthenticated, 
+  mutatingHeaders,
+  handleAchievementUnlocked,
+  setNotifications
+}: { 
+  bootRoadmaps: Roadmap[]; 
+  isAuthenticated: boolean;
+  mutatingHeaders: () => Promise<Record<string, string>>;
+  handleAchievementUnlocked: (ach: { id: string; name: string; icon: string; xpReward: number }) => void;
+  setNotifications: React.Dispatch<React.SetStateAction<SystemNotification[]>>;
+}) {
+  const { showToast, setActiveTab } = useUI();
 
   return (
     <RoadmapProvider
@@ -632,7 +664,7 @@ function RoadmapProviderWrapper({ children, bootRoadmaps }: { children: React.Re
       onShowToast={showToast}
       onTabChange={setActiveTab}
     >
-      {children}
+      <AppShell />
     </RoadmapProvider>
   );
 }
