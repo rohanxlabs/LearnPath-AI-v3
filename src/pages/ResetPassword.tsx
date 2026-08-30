@@ -10,8 +10,8 @@ export function ResetPassword({ navigate }: { navigate: (path: string) => void }
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const password = String(form.get('password'));
-    if (password.length < 10 || password !== form.get('confirm')) {
-      return setError('Passwords must match and contain at least 10 characters.');
+    if (password.length < 10) {
+      return setError('Password must contain at least 10 characters.');
     }
     try {
       await authService.resetPassword(password);
@@ -39,11 +39,7 @@ export function ResetPassword({ navigate }: { navigate: (path: string) => void }
         <form className="mt-7 space-y-4" noValidate onSubmit={submit}>
           <div>
             <label htmlFor="reset-password" className={labelClass}>New password</label>
-            <input id="reset-password" className={inputClass} name="password" type="password" minLength={10} required />
-          </div>
-          <div>
-            <label htmlFor="reset-confirm" className={labelClass}>Confirm password</label>
-            <input id="reset-confirm" className={inputClass} name="confirm" type="password" autoComplete="off" required />
+            <input id="reset-password" className={inputClass} name="password" type="password" minLength={10} autoComplete="new-password" required />
           </div>
           {error && (
             <p role="alert" className="rounded-xl bg-rose-100/80 px-3 py-2 text-sm text-rose-700">

@@ -42,7 +42,9 @@ export function Register({ navigate }: { navigate: (path: string) => void }) {
           <input id="reg-email" className={inputClass} name="email" type="email" autoComplete="email" required />
         </div>
         <div>
-          <label htmlFor="reg-password" className={labelClass}>Password</label>
+          <label htmlFor="reg-password" className={labelClass}>
+            Password <span className="text-xs text-violet-600/60">(10+ chars, letters & numbers)</span>
+          </label>
           <input id="reg-password" className={inputClass} name="password" type="password" autoComplete="new-password" required />
         </div>
         {error && <p role="alert" className="rounded-xl bg-rose-100/80 px-3 py-2 text-sm text-rose-700">{error}</p>}
