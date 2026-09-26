@@ -90,10 +90,14 @@ export function AppRouter({
     selectedRoadmapId, setSelectedRoadmapId,
     selectedPhaseId, setSelectedPhaseId,
     roadmapDetailTab, setRoadmapDetailTab,
+    roadmapProgress,
+    progressErrors,
+    retryProgress,
     isAiGeneratingRoadmap,
     handleGenerateRoadmap,
     handleRoadmapReadyFromStream,
     getNextIncompleteLesson,
+    setCurrentLesson,
     syncRoadmapsFromDatabase,
   } = useRoadmaps();
   const { activeTab, setActiveTab, activeLesson, setActiveLesson, aiActive, setConfirmDeleteId } = useUI();
@@ -112,7 +116,10 @@ export function AppRouter({
       <LearningWorkspace
         roadmap={activeRoadmap} activeLesson={activeLesson}
         onCompleteLesson={(xpAdded, lessonId) => onLessonComplete(xpAdded, lessonId)}
-        onNavigateToLesson={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
+        onNavigateToLesson={(phaseId, levelId, lessonId) => {
+          setActiveLesson({ phaseId, levelId, lessonId });
+          void setCurrentLesson(activeRoadmap.id, lessonId);
+        }}
         getHeaders={mutatingHeaders}
       />
     );
@@ -127,6 +134,9 @@ export function AppRouter({
         getNextIncompleteLesson,
         setActiveTab, setActiveLesson, handleSelectRecommendationTask,
         getAuthHeaders: mutatingHeaders,
+        onResumeLesson: (roadmapId, lessonId) => { void setCurrentLesson(roadmapId, lessonId); },
+        roadmaps,
+        onSelectRoadmap: setActiveRoadmapId,
       });
     }
     if (activeTab === 'mentor') {
@@ -179,6 +189,12 @@ export function AppRouter({
         getNextIncompleteLesson,
         setActiveTab, setActiveLesson, handleSelectRecommendationTask,
         getAuthHeaders: mutatingHeaders,
+        resumeLessonId: activeRoadmap ? roadmapProgress[activeRoadmap.id]?.currentLessonId : null,
+        onResumeLesson: (roadmapId, lessonId) => { void setCurrentLesson(roadmapId, lessonId); },
+        roadmaps,
+        onSelectRoadmap: setActiveRoadmapId,
+        progressRefreshFailed: Boolean(progressErrors[activeRoadmap.id]),
+        onRetryProgress: retryProgress,
       });
 
     case 'roadmaps': {

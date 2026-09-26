@@ -31,11 +31,11 @@ export function MobileHeader({
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between h-16 px-4 md:px-6 bg-white/80 dark:bg-[#111111]/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-colors duration-300">
-      <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-40 flex items-center justify-between h-14 md:h-16 px-3 md:px-6 bg-white/80 dark:bg-[#111111]/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-colors duration-300">
+      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
         <button
           onClick={onOpenDrawer}
-          className="p-2 -ml-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+          className="p-2 -ml-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors cursor-pointer flex-shrink-0"
           aria-label="Open sidebar"
           id="btn-nav-sidebar"
         >
@@ -45,28 +45,40 @@ export function MobileHeader({
           type="button"
           onClick={() => onTabChange('home')}
           aria-label="Go to home"
-          className="flex items-center gap-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors px-1 py-0.5 -mx-1"
+          className="flex items-center gap-1.5 md:gap-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors px-1 py-0.5 -mx-1 min-w-0 flex-shrink"
         >
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
-            <Sparkles className="w-4 h-4 text-white" />
+          <div className="w-7 h-7 md:w-8 md:h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)] flex-shrink-0">
+            <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
           </div>
-          <span className="font-display text-lg font-semibold tracking-tight text-slate-900 dark:text-white">
+          <span className="font-display text-base md:text-lg font-semibold tracking-tight text-slate-900 dark:text-white whitespace-nowrap">
             LearnPath <span className="text-purple-600 dark:text-purple-400 font-extrabold">AI</span>
           </span>
         </button>
       </div>
 
-      <div className="flex items-center gap-2.5">
-        {/* Streak badge visible on all screen widths */}
-        <StreakBadge days={profile.streak} />
+      <div className="flex items-center gap-1.5 md:gap-2.5 flex-shrink-0">
+        {/* Compact streak badge on mobile, full version on desktop */}
+        <div className="hidden xs:block">
+          <StreakBadge days={profile.streak} />
+        </div>
+        <div className="block xs:hidden">
+          <button
+            onClick={() => onTabChange('progress')}
+            className="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-500/30 hover:border-orange-500/50 transition-all cursor-pointer"
+            aria-label={`${profile.streak} day streak`}
+          >
+            <Flame className="w-3.5 h-3.5 text-orange-500" />
+            <span className="text-xs font-bold text-orange-600 dark:text-orange-400">{profile.streak}</span>
+          </button>
+        </div>
 
         <button
           onClick={onNotificationsClick}
-          className="relative p-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-full transition-all duration-200 cursor-pointer"
+          className="relative p-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-full transition-all duration-200 cursor-pointer flex-shrink-0"
           aria-label="View notifications"
           id="btn-nav-notif"
         >
-          <Bell className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
+          <Bell className="w-4.5 h-4.5 md:w-5 md:h-5 text-zinc-600 dark:text-zinc-300" />
           {unreadCount > 0 && (
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-purple-500" aria-label={`${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}`} />
           )}
@@ -75,7 +87,7 @@ export function MobileHeader({
         <button
           onClick={() => onTabChange('profile')}
           aria-label="Go to profile"
-          className="w-8 h-8 rounded-full overflow-hidden border border-zinc-200 dark:border-white/10 hover:border-purple-600 dark:hover:border-purple-500 transition-all duration-200 flex-shrink-0 cursor-pointer"
+          className="w-7 h-7 md:w-8 md:h-8 rounded-full overflow-hidden border border-zinc-200 dark:border-white/10 hover:border-purple-600 dark:hover:border-purple-500 transition-all duration-200 flex-shrink-0 cursor-pointer"
         >
           <img
             src={profile.avatar}

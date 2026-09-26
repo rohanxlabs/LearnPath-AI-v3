@@ -108,7 +108,7 @@ export function trackAIUsage(metrics: UsageMetrics, endpoint?: string): void {
         model: metrics.model,
         endpoint: endpoint || 'unknown',
       },
-      extra: metrics,
+      extra: { metrics },
     });
   }
   
@@ -354,4 +354,3 @@ export async function callGroqChatCompletion(
 
   throw lastError || new Error('All Groq models failed');
 }
-

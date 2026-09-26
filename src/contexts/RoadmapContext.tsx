@@ -21,6 +21,8 @@ interface RoadmapContextValue {
   roadmapDetailTab: 'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights';
   setRoadmapDetailTab: React.Dispatch<React.SetStateAction<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>>;
   roadmapProgress: Record<string, any>;
+  progressErrors: Record<string, boolean>;
+  retryProgress: () => void;
   isAiGeneratingRoadmap: boolean;
   setIsAiGeneratingRoadmap: React.Dispatch<React.SetStateAction<boolean>>;
   syncRoadmapsFromDatabase: () => Promise<void>;
@@ -28,6 +30,7 @@ interface RoadmapContextValue {
   handleRoadmapReadyFromStream: (data: any) => Promise<void>;
   handleDeleteRoadmap: (id: string) => Promise<void>;
   getNextIncompleteLesson: (roadmap: Roadmap) => { phaseId: string; levelId: string; lessonId: string } | null;
+  setCurrentLesson: (roadmapId: string, lessonId: string) => Promise<void>;
 }
 
 const RoadmapContext = createContext<RoadmapContextValue | null>(null);
@@ -69,6 +72,9 @@ export function RoadmapProvider({
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
   const [roadmapDetailTab, setRoadmapDetailTab] = useState<'roadmap' | 'resources' | 'quiz' | 'projects' | 'insights'>('roadmap');
   const [roadmapProgress, setRoadmapProgress] = useState<Record<string, any>>({});
+  const [progressErrors, setProgressErrors] = useState<Record<string, boolean>>({});
+  const [progressRefreshNonce, setProgressRefreshNonce] = useState(0);
+  const hasResolvedInitialResumeRoadmap = React.useRef(false);
   const [isAiGeneratingRoadmap, setIsAiGeneratingRoadmap] = useState(false);
 
   // Load progress for all roadmaps in parallel.
@@ -91,19 +97,35 @@ export function RoadmapProvider({
             const res = await fetch(`/api/progress/${roadmap.id}`, { headers });
             if (res.ok) {
               const data = await res.json();
-              if (data.progress) return { id: roadmap.id, progress: data.progress };
+              if (data.progress) return { id: roadmap.id, progress: data.progress, failed: false };
             }
-          } catch { /* ignore per-roadmap failures */ }
-          return null;
+          } catch { /* handled below per roadmap */ }
+          return { id: roadmap.id, progress: null, failed: true };
         })
       );
       const updates: Record<string, any> = {};
-      results.forEach(r => { if (r) updates[r.id] = r.progress; });
+      const errors: Record<string, boolean> = {};
+      results.forEach(r => {
+        if (r.progress) updates[r.id] = r.progress;
+        if (r.failed) errors[r.id] = true;
+      });
       setRoadmapProgress(prev => ({ ...prev, ...updates }));
+      setProgressErrors(errors);
+      // The first dashboard visit should favour the course the learner touched
+      // most recently, rather than whichever roadmap happened to be created first.
+      if (!hasResolvedInitialResumeRoadmap.current) {
+        hasResolvedInitialResumeRoadmap.current = true;
+        const mostRecent = results
+          .filter((result) => result.progress?.updatedAt)
+          .sort((a, b) => Date.parse(b.progress?.updatedAt || '') - Date.parse(a.progress?.updatedAt || ''))[0];
+        if (mostRecent) setActiveRoadmapId(mostRecent.id);
+      }
     };
     loadProgress();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roadmapIdKey]);
+  }, [roadmapIdKey, progressRefreshNonce]);
+
+  const retryProgress = useCallback(() => setProgressRefreshNonce(value => value + 1), []);
 
   // When bootRoadmaps prop changes (new login or logout), sync state.
   // - New login:  bootRoadmaps has data → seed roadmaps immediately so the
@@ -157,6 +179,16 @@ export function RoadmapProvider({
 
   const getNextIncompleteLesson = useCallback((roadmap: Roadmap) => {
     const progress = roadmapProgress[roadmap.id];
+    // Resume the saved in-progress lesson when it is still incomplete.
+    if (progress?.currentLessonId && !progress?.completedLessonIds?.includes(progress.currentLessonId)) {
+      for (const phase of roadmap.phases || []) {
+        for (const level of phase.levels || []) {
+          if (level.lessons.some(lesson => lesson.id === progress.currentLessonId)) {
+            return { phaseId: phase.id, levelId: level.id, lessonId: progress.currentLessonId };
+          }
+        }
+      }
+    }
     if (progress?.completedLessonIds) {
       for (const phase of roadmap.phases || []) {
         for (const level of phase.levels || []) {
@@ -189,6 +221,26 @@ export function RoadmapProvider({
     }
     return null;
   }, [roadmapProgress]);
+
+  const setCurrentLesson = useCallback(async (roadmapId: string, lessonId: string) => {
+    if (!getHeaders) return;
+    try {
+      const headers = await getHeaders();
+      if (!headers.Authorization) return;
+      const response = await fetch('/api/progress', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ roadmapId, lessonId, action: 'set-current' }),
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (data.progress) {
+        setRoadmapProgress(prev => ({ ...prev, [roadmapId]: data.progress }));
+      }
+    } catch {
+      // Saving resume position is best-effort; opening a lesson must not fail.
+    }
+  }, [getHeaders]);
 
   // Sub-Task 8: called by RoadmapGeneratorForm after the SSE stream delivers the final roadmap.
   // The form already shows isStreaming=true; we keep isAiGeneratingRoadmap=true here only for
@@ -330,10 +382,10 @@ export function RoadmapProvider({
   const value: RoadmapContextValue = {
     roadmaps, setRoadmaps, activeRoadmapId, setActiveRoadmapId,
     selectedRoadmapId, setSelectedRoadmapId, selectedPhaseId, setSelectedPhaseId,
-    roadmapDetailTab, setRoadmapDetailTab, roadmapProgress,
+    roadmapDetailTab, setRoadmapDetailTab, roadmapProgress, progressErrors, retryProgress,
     isAiGeneratingRoadmap, setIsAiGeneratingRoadmap,
     syncRoadmapsFromDatabase, handleGenerateRoadmap, handleRoadmapReadyFromStream,
-    handleDeleteRoadmap, getNextIncompleteLesson,
+    handleDeleteRoadmap, getNextIncompleteLesson, setCurrentLesson,
   };
 
   return <RoadmapContext.Provider value={value}>{children}</RoadmapContext.Provider>;

@@ -108,6 +108,26 @@ export function findCurrentLesson(roadmap: Roadmap | null): LessonContext | null
   return ordered.find((ctx) => ctx.lesson.status === 'available') ?? null;
 }
 
+/**
+ * Resolve the lesson a learner should resume. A saved current lesson wins while
+ * it is still incomplete; otherwise we use the next available lesson. The
+ * locked fallback keeps a newly-created roadmap actionable while its server
+ * unlock state is still being hydrated.
+ */
+export function findResumeLesson(
+  roadmap: Roadmap | null,
+  currentLessonId?: string | null,
+): LessonContext | null {
+  const ordered = getAllLessonsInOrder(roadmap);
+  const saved = currentLessonId
+    ? ordered.find((ctx) => ctx.lesson.id === currentLessonId && ctx.lesson.status !== 'completed')
+    : null;
+  return saved
+    ?? ordered.find((ctx) => ctx.lesson.status === 'available')
+    ?? ordered.find((ctx) => ctx.lesson.status === 'locked')
+    ?? null;
+}
+
 export function findNextUpLesson(roadmap: Roadmap | null): LessonContext | null {
   const ordered = getAllLessonsInOrder(roadmap);
   const currentIdx = ordered.findIndex((ctx) => ctx.lesson.status === 'available');

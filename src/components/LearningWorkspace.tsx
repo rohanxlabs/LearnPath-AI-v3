@@ -1,3 +1,7 @@
+// LearningWorkspace.tsx — Light mode lesson player with integrated syllabus
+// Desktop: 3-column layout (sidebar | content | stats)
+// Mobile: Content-first with collapsible bottom sheet syllabus
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -8,35 +12,38 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import {
   ChevronRight, CheckCircle2, Play, Code2, Brain, Trophy,
   Target, BookOpen, Zap, Youtube, Library, Rocket, ExternalLink, Github,
-  Clock, RefreshCw,
+  Clock, RefreshCw, List, X,
 } from 'lucide-react';
 import { Roadmap, Lesson } from '../types';
 
 type ContentTab = 'learn' | 'resources' | 'quiz' | 'project';
 
 // ---------------------------------------------------------------------------
-// Markdown renderer — light-mode prose
+// Markdown renderer — light-mode prose with mobile-safe typography
 // ---------------------------------------------------------------------------
 const markdownComponents: Components = {
-  h1: ({ children }) => <h1 className="font-bold text-base text-slate-900 mt-5 mb-2">{children}</h1>,
-  h2: ({ children }) => <h2 className="font-bold text-sm text-slate-800 mt-4 mb-1.5">{children}</h2>,
-  h3: ({ children }) => <h3 className="font-semibold text-sm text-slate-700 mt-3 mb-1">{children}</h3>,
-  p:  ({ children }) => <p className="mt-2 text-sm text-slate-600 leading-relaxed">{children}</p>,
-  ul: ({ children }) => <ul className="list-disc ml-4 mt-2 mb-2 text-sm text-slate-600 space-y-1">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal ml-4 mt-2 mb-2 text-sm text-slate-600 space-y-1">{children}</ol>,
-  li: ({ children }) => <li>{children}</li>,
+  h1: ({ children }) => <h1 className="font-bold text-xl md:text-2xl text-slate-900 mt-5 mb-2 max-w-full overflow-wrap-anywhere">{children}</h1>,
+  h2: ({ children }) => <h2 className="font-bold text-lg md:text-xl text-slate-800 mt-4 mb-1.5 max-w-full overflow-wrap-anywhere">{children}</h2>,
+  h3: ({ children }) => <h3 className="font-semibold text-base md:text-lg text-slate-700 mt-3 mb-1 max-w-full overflow-wrap-anywhere">{children}</h3>,
+  p:  ({ children }) => <p className="mt-2 text-sm md:text-base text-slate-600 leading-relaxed max-w-full overflow-wrap-anywhere">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc ml-4 mt-2 mb-2 text-sm md:text-base text-slate-600 space-y-1">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal ml-4 mt-2 mb-2 text-sm md:text-base text-slate-600 space-y-1">{children}</ol>,
+  li: ({ children }) => <li className="max-w-full">{children}</li>,
   strong: ({ children }) => <strong className="text-slate-900 font-semibold">{children}</strong>,
+  a: ({ href, children }) => <a href={href as string | undefined} target="_blank" rel="noopener noreferrer" className="text-violet-600 hover:text-violet-700 underline underline-offset-2 break-words">{children}</a>,
   code: (({ className, children }) => {
     const isBlock = /language-/.test((className as string) || '');
     if (!isBlock) {
       return <code className="px-1.5 py-0.5 rounded-md bg-violet-50 text-violet-700 text-xs font-mono border border-violet-100">{children}</code>;
     }
     return (
-      <pre className="my-3 p-4 rounded-xl bg-slate-50 border border-slate-200 overflow-x-auto text-xs text-slate-700 leading-relaxed">
+      <pre className="my-3 p-3 md:p-4 rounded-xl bg-slate-50 border border-slate-200 overflow-x-auto text-xs text-slate-700 leading-relaxed max-w-full">
         <code>{children}</code>
       </pre>
     );
   }) as Components['code'],
+  table: ({ children }) => <div className="overflow-x-auto my-3 max-w-full"><table className="w-full text-sm border-collapse min-w-[300px]">{children}</table></div>,
+  img: ({ src, alt }) => <img src={src} alt={alt} className="max-w-full h-auto rounded-lg my-4" />,
 };
 
 // ---------------------------------------------------------------------------
@@ -139,6 +146,9 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   const [quizScore, setQuizScore] = useState<number | null>(null);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [contentTab, setContentTab] = useState<ContentTab>('learn');
+  
+  // Mobile syllabus sheet state
+  const [isSyllabusOpen, setIsSyllabusOpen] = useState(false);
 
   // Engagement gate: require 30s on page before Mark Complete activates
   const [secondsOnPage, setSecondsOnPage] = useState(0);
@@ -278,6 +288,8 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
       }
     }
     onNavigateToLesson(phaseId, levelId, lesson.id);
+    // Close mobile syllabus sheet after selection
+    setIsSyllabusOpen(false);
   };
 
   // skipGate=true allows quiz completion to bypass the 30-second timer (C-03 fix).
@@ -317,27 +329,38 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   // Render
   // -------------------------------------------------------------------------
   return (
-    <div className="flex flex-col lg:flex-row h-full bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm">
+    <div className="flex flex-col lg:flex-row h-full bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm relative">
 
       {/* ── CENTER PANEL (order-1 mobile = shown first) ── */}
       <div className="w-full lg:flex-1 flex flex-col overflow-hidden order-1 lg:order-2 min-h-0">
 
-        {/* Sticky header: breadcrumb + tabs */}
+        {/* Sticky header: breadcrumb + tabs + mobile syllabus trigger */}
         <div className="sticky top-0 z-10 flex-shrink-0 px-4 lg:px-5 pt-4 pb-0 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
           {/* breadcrumb */}
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3 truncate">
-            <span className="truncate max-w-[160px]">{roadmap.goal}</span>
-            {topicData && (
-              <>
-                <ChevronRight className="w-3 h-3 flex-shrink-0 text-slate-300" />
-                <span className="text-slate-700 font-medium truncate">{topicData.name}</span>
-              </>
-            )}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 truncate min-w-0 flex-1">
+              <span className="truncate max-w-[120px] sm:max-w-[180px]">{roadmap.goal}</span>
+              {topicData && (
+                <>
+                  <ChevronRight className="w-3 h-3 flex-shrink-0 text-slate-300" />
+                  <span className="text-slate-700 font-medium truncate">{topicData.name}</span>
+                </>
+              )}
+            </div>
+            {/* Mobile syllabus trigger button */}
+            <button
+              onClick={() => setIsSyllabusOpen(true)}
+              className="lg:hidden flex items-center gap-1.5 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex-shrink-0"
+              aria-label="Open syllabus"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Syllabus</span>
+            </button>
           </div>
 
           {/* Tab bar — pill container */}
           {(topicData || loading) && (
-            <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5 w-fit mb-3 overflow-x-auto scrollbar-hide">
+            <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-0.5 w-fit max-w-full mb-3 overflow-x-auto scrollbar-hide scroll-smooth">
               {loading ? (
                 [64, 80, 48, 60].map((w, i) => (
                   <div key={i} className="h-7 rounded-lg bg-slate-200 animate-pulse flex-shrink-0" style={{ width: w }} />
@@ -355,7 +378,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
                     <button
                       key={t.id}
                       onClick={() => setContentTab(t.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex-shrink-0 ${
                         active
                           ? 'bg-violet-600 text-white shadow-sm'
                           : 'text-slate-500 hover:text-slate-800 hover:bg-white'
@@ -765,8 +788,8 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
         )}
       </div>
 
-      {/* ── LEFT SIDEBAR (order-2 mobile) ── */}
-      <div className="w-full lg:w-56 border-b lg:border-b-0 lg:border-r border-slate-200 flex flex-col order-2 lg:order-1 max-h-64 lg:max-h-none bg-slate-50">
+      {/* ── LEFT SIDEBAR — Desktop only (order-2 mobile, order-1 desktop) ── */}
+      <div className="hidden lg:flex w-56 border-r border-slate-200 flex-col order-1 bg-slate-50">
 
         {/* Sidebar header */}
         <div className="flex-shrink-0 px-4 py-3.5 border-b border-slate-200">
@@ -937,6 +960,136 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
           )}
         </div>
       </div>
+
+      {/* ── MOBILE SYLLABUS BOTTOM SHEET ── */}
+      <AnimatePresence>
+        {isSyllabusOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/40 z-50 lg:hidden"
+              onClick={() => setIsSyllabusOpen(false)}
+            />
+            
+            {/* Bottom sheet */}
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="fixed inset-x-0 bottom-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col lg:hidden"
+              style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            >
+              {/* Drag handle */}
+              <div className="flex-shrink-0 py-3 flex justify-center border-b border-slate-200">
+                <div className="w-12 h-1 bg-slate-300 rounded-full" />
+              </div>
+              
+              {/* Sheet header */}
+              <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-bold text-slate-800 line-clamp-2 leading-snug">{roadmap.goal}</h3>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-violet-500 to-blue-500 rounded-full transition-all duration-700"
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-slate-500 flex-shrink-0">{progressPercent}%</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsSyllabusOpen(false)}
+                  className="p-2 -mr-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors flex-shrink-0"
+                  aria-label="Close syllabus"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Phase accordion list — scrollable */}
+              <div className="flex-1 overflow-y-auto py-2 px-2">
+                {roadmap.phases.map((phase, phaseIdx) => {
+                  const isExpanded = expandedPhases.has(phase.id);
+                  const phaseDone = (phase.levels || []).flatMap(l => l.lessons || []).filter(l => l.status === 'completed').length;
+                  const phaseTotal = (phase.levels || []).flatMap(l => l.lessons || []).length;
+                  const hasActive = (phase.levels || []).flatMap(l => l.lessons || []).some(l => l.id === selectedTopicId);
+
+                  return (
+                    <div key={phase.id} className={phaseIdx > 0 ? 'mt-1 border-t border-slate-100 pt-1' : ''}>
+                      {/* Phase toggle */}
+                      <button
+                        onClick={() => setExpandedPhases(prev => {
+                          const next = new Set(prev);
+                          if (next.has(phase.id)) next.delete(phase.id);
+                          else next.add(phase.id);
+                          return next;
+                        })}
+                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-colors group ${hasActive ? 'text-violet-700' : 'text-slate-600 hover:text-slate-900'}`}
+                      >
+                        <ChevronRight className={`w-3 h-3 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90 text-violet-500' : 'text-slate-400'}`} />
+                        <span className="text-xs font-bold uppercase tracking-wide truncate flex-1 leading-tight">
+                          {phase.name}
+                        </span>
+                        <span className="text-xs text-slate-400 flex-shrink-0 tabular-nums">{phaseDone}/{phaseTotal}</span>
+                      </button>
+
+                      {/* Lessons list */}
+                      {isExpanded && (
+                        <div className="ml-3 space-y-px mb-1">
+                          {phase.levels.map(level => (
+                            <div key={level.id}>
+                              <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider truncate">
+                                {level.name}
+                              </div>
+                              {(level.lessons || []).map(lesson => {
+                                const status = getTopicStatus(lesson);
+                                const isActive = selectedTopicId === lesson.id;
+                                return (
+                                  <button
+                                    key={lesson.id}
+                                    onClick={() => handleTopicClick({ ...lesson, phaseId: phase.id, levelId: level.id })}
+                                    className={`w-full flex items-center gap-2 pl-5 pr-3 py-2 rounded-lg text-left text-xs transition-all cursor-pointer min-h-[44px] ${
+                                      isActive
+                                        ? 'bg-violet-100 border border-violet-200 text-violet-800'
+                                        : status === 'completed'
+                                        ? 'text-emerald-600 hover:bg-emerald-50'
+                                        : 'text-slate-500 hover:bg-white hover:text-slate-800'
+                                    }`}
+                                  >
+                                    {status === 'completed'
+                                      ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                                      : <Play className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-violet-500' : 'text-slate-300'}`} />
+                                    }
+                                    <span className="truncate flex-1 leading-snug">{lesson.name}</span>
+                                    {isActive
+                                      ? <span className="text-violet-500 text-xs font-bold flex-shrink-0">NOW</span>
+                                      : status !== 'completed' && (
+                                        <span className="text-slate-400 text-[10px] flex-shrink-0 tabular-nums">
+                                          {lessonDurationLabel(lesson.xpReward)}
+                                        </span>
+                                      )
+                                    }
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
     </div>
   );

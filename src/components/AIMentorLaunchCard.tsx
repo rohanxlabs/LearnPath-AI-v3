@@ -34,19 +34,24 @@ export function AIMentorLaunchCard({ onOpen, className = '' }: AIMentorLaunchCar
   return (
     <button
       onClick={onOpen}
-      className={`fixed right-4 bottom-20 md:bottom-6 z-40 cursor-pointer ${className}`}
+      className={`fixed right-3 md:right-4 z-40 cursor-pointer ${className}`}
+      style={{
+        // Position above bottom nav on mobile (64px nav + safe-area + 12px margin)
+        // On desktop, position normally from bottom
+        bottom: 'calc(76px + env(safe-area-inset-bottom, 0px))',
+      }}
       aria-label="Ask AI Mentor"
     >
-      <LiquidGlassCard className="!p-3 flex items-center gap-2.5 pr-4 hover:!bg-white/10 transition-colors">
-        <div className="relative flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
+      <LiquidGlassCard className="!p-2.5 md:!p-3 flex items-center gap-2 md:gap-2.5 pr-3 md:pr-4 hover:!bg-white/10 transition-colors">
+        <div className="relative flex-shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
           <div
             ref={glowRef}
             className="pointer-events-none absolute -inset-1 rounded-full bg-purple-500 blur-md opacity-40 -z-10"
           />
-          <Bot className="w-4 h-4 text-white" />
+          <Bot className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
         </div>
-        <div className="text-left">
-          <div className="flex items-center gap-1 text-xs font-bold text-white">
+        <div className="text-left hidden xs:block">
+          <div className="flex items-center gap-1 text-xs font-bold text-white whitespace-nowrap">
             Ask AI Mentor
             <Sparkles className="w-3 h-3 text-purple-300" />
           </div>

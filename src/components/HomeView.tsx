@@ -34,7 +34,7 @@ import {
   computeRoadmapStats,
   deriveProgressInsights,
   deriveTodaysTasks,
-  findCurrentLesson,
+  findResumeLesson,
   findNextUpLesson,
   findCurrentModule,
   getModuleProgress,
@@ -69,6 +69,11 @@ export interface HomeViewProps {
   onOpenMentor: () => void;
   onViewProgress: () => void;
   getAuthHeaders?: () => Promise<Record<string, string>>;
+  resumeLessonId?: string | null;
+  roadmaps?: Roadmap[];
+  onSelectRoadmap?: (roadmapId: string) => void;
+  progressRefreshFailed?: boolean;
+  onRetryProgress?: () => void;
 }
 
 interface UserStatsWithVisit {
@@ -169,6 +174,11 @@ export function HomeView({
   onOpenMentor,
   onViewProgress,
   getAuthHeaders,
+  resumeLessonId,
+  roadmaps = [],
+  onSelectRoadmap,
+  progressRefreshFailed = false,
+  onRetryProgress,
 }: HomeViewProps) {
   const reduced = useReducedMotion();
   const fadeUp = makeFadeUp(reduced);
@@ -223,8 +233,8 @@ export function HomeView({
 
   const stats = useMemo(() => computeRoadmapStats(activeRoadmap), [activeRoadmap]);
   const currentLesson = useMemo(
-    () => (activeRoadmap ? findCurrentLesson(activeRoadmap) : null),
-    [activeRoadmap],
+    () => findResumeLesson(activeRoadmap, resumeLessonId),
+    [activeRoadmap, resumeLessonId],
   );
   const nextLesson = useMemo(
     () => (activeRoadmap ? findNextUpLesson(activeRoadmap) : null),
@@ -260,6 +270,12 @@ export function HomeView({
   const showActivity = hasLearningActivity(profile, stats);
   const roadmapTitle = activeRoadmap?.goal ?? null;
   const learningGoal = activeRoadmap?.goal ?? 'Start your first learning roadmap';
+  const isRoadmapComplete = Boolean(
+    activeRoadmap && stats.totalLessons > 0 && stats.completedLessons >= stats.totalLessons,
+  );
+  const courseProgressPercent = stats.totalLessons > 0
+    ? Math.round((stats.completedLessons / stats.totalLessons) * 100)
+    : stats.progressPercent;
 
   if (isLoading) {
     return (
@@ -354,21 +370,7 @@ export function HomeView({
       tint: 'glass-card-teal',
       onClick: onViewProgress,
     },
-    {
-      id: 'continue',
-      label: 'Continue Lesson',
-      icon: Play,
-      tint: 'glass-card-emerald',
-      onClick: () => {
-        if (currentLesson) {
-          onStartLesson(currentLesson.phase.id, currentLesson.level.id, currentLesson.lesson.id);
-        } else {
-          onContinueLearning();
-        }
-      },
-      disabled: !activeRoadmap,
-    },
-  ], [onGenerateRoadmap, onOpenMentor, onViewProgress, onStartLesson, onContinueLearning, currentLesson, activeRoadmap]);
+  ], [onGenerateRoadmap, onOpenMentor, onViewProgress]);
 
   return (
     <>
@@ -421,37 +423,37 @@ export function HomeView({
 
       {/* SECTION 1 — Personalized Hero */}
       <motion.section {...fadeUp}>
-        <GlassCard tint="glass-card-purple" className="p-5 sm:p-6">
+        <GlassCard tint="glass-card-purple" className="p-4 sm:p-5 md:p-6">
           <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600 rounded-full blur-[120px] opacity-15 pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-36 h-36 bg-blue-600 rounded-full blur-[100px] opacity-10 pointer-events-none" />
 
           <div className="relative z-10">
-            <span className="text-sm font-bold text-purple-400 uppercase tracking-wider">
+            <span className="text-xs sm:text-sm font-bold text-purple-400 uppercase tracking-wider">
               {getTimeGreeting()}, {firstName}
             </span>
-            <h2 className="font-display text-2xl sm:text-3xl font-bold text-white mt-1 leading-tight">
+            <h2 className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-white mt-1 leading-tight max-w-full overflow-wrap-anywhere">
               {activeRoadmap ? 'Continue your learning journey' : 'Start your learning journey'}
             </h2>
 
             {activeRoadmap ? (
               <>
-                <div className="flex flex-wrap items-center gap-2 mt-3.5">
-                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 sm:mt-3.5">
+                  <span className="home-chip inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold text-zinc-300 max-w-full">
                     <Map className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                    <span className="truncate max-w-[220px]">{roadmapTitle}</span>
+                    <span className="truncate max-w-[180px] sm:max-w-[220px]">{roadmapTitle}</span>
                   </span>
-                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300">
+                  <span className="home-chip inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold text-zinc-300 flex-shrink-0">
                     <Target className="w-3.5 h-3.5 text-purple-400" />
                     Level {stats.curriculumLevel}
                   </span>
-                  <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-300">
+                  <span className="home-chip inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-semibold text-zinc-300 flex-shrink-0">
                     <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
                     {stats.progressPercent}% complete
                   </span>
                   {profile.streak > 0 ? (
                     <StreakBadge days={profile.streak} />
                   ) : (
-                    <span className="home-chip inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-zinc-400">
+                    <span className="home-chip inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs font-medium text-zinc-400 flex-shrink-0">
                       <Flame className="w-3.5 h-3.5 text-zinc-500" />
                       {profile.streak} day streak
                     </span>
@@ -459,14 +461,14 @@ export function HomeView({
                 </div>
 
                 {activePhase && (
-                  <p className="text-xs text-zinc-300 mt-3 truncate">
+                  <p className="text-xs text-zinc-300 mt-3 overflow-wrap-anywhere">
                     Goal: <span className="font-medium text-white">{learningGoal}</span>
                     {' · '}
                     Phase: <span className="font-medium text-white">{activePhase.name}</span>
                   </p>
                 )}
 
-                <div className="flex flex-col sm:flex-row gap-2.5 mt-4">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-2.5 mt-4 w-full">
                   <button
                     onClick={
                       currentLesson
@@ -478,17 +480,17 @@ export function HomeView({
                             )
                         : onContinueLearning
                     }
-                    className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-white font-bold text-sm rounded-xl active:scale-[0.98] transition-all cursor-pointer ${buttonStyles.primary}`}
+                    className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-white font-bold text-sm rounded-xl active:scale-[0.98] transition-all cursor-pointer w-full sm:w-auto ${buttonStyles.primary}`}
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                     Continue Learning
                   </button>
                   <button
                     onClick={onOpenMentor}
-                    className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-purple-400 font-bold text-sm rounded-xl transition-all cursor-pointer ${buttonStyles.secondary}`}
+                    className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-purple-400 font-bold text-sm rounded-xl transition-all cursor-pointer w-full sm:w-auto ${buttonStyles.secondary}`}
                   >
                     <Bot className="w-4 h-4" />
-                    Open AI Mentor
+                    <span className="hidden xs:inline">Open </span>AI Mentor
                   </button>
                 </div>
               </>
@@ -498,13 +500,13 @@ export function HomeView({
                   Let&apos;s create your first learning roadmap. Tell us your goal and we&apos;ll
                   build a structured path with lessons, quizzes, and projects.
                 </p>
-<button
-                onClick={onGenerateRoadmap}
-                className={`inline-flex items-center gap-2 px-6 py-3 text-white font-bold text-sm rounded-xl active:scale-[0.98] transition-all cursor-pointer ${buttonStyles.primary}`}
-              >
-                <PlusCircle className="w-4 h-4" />
-                Generate Roadmap
-              </button>
+                <button
+                  onClick={onGenerateRoadmap}
+                  className={`inline-flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 text-white font-bold text-sm rounded-xl active:scale-[0.98] transition-all cursor-pointer w-full sm:w-auto mt-4 ${buttonStyles.primary}`}
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Generate Roadmap
+                </button>
               </>
             )}
           </div>
@@ -514,18 +516,18 @@ export function HomeView({
       {/* SECTION 2 — Learning Snapshot */}
       <motion.section {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.04 }}>
         <SectionHeader icon={BarChart3} title="Learning Snapshot" subtitle="Your real-time progress" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           {snapshotCards.map((card) => {
             const Icon = card.icon;
             return (
-              <GlassCard key={card.id} tint={card.glass} className="p-4">
+              <GlassCard key={card.id} tint={card.glass} className="p-3 sm:p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-zinc-300 font-medium">{card.label}</span>
+                  <span className="text-xs text-zinc-300 font-medium truncate flex-1">{card.label}</span>
                   <div className={`p-1.5 rounded-lg border flex-shrink-0 ${card.iconColor}`}>
-                    <Icon className="w-4 h-4" />
+                    <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </div>
                 </div>
-                <p className="font-display text-xl sm:text-2xl font-bold text-white mt-3">{card.value}</p>
+                <p className="font-display text-xl sm:text-2xl font-bold text-white mt-2 sm:mt-3 overflow-wrap-anywhere">{card.value}</p>
                 <p className="text-xs text-zinc-500 mt-1 truncate">{card.sub}</p>
               </GlassCard>
             );
@@ -533,14 +535,14 @@ export function HomeView({
         </div>
         {/* Zero-state onboarding nudge — shown only when no activity at all */}
         {!activeRoadmap && stats.completedLessons === 0 && profile.streak === 0 && (
-          <div className="col-span-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-purple-500/8 border border-purple-500/20 mt-1">
+          <div className="col-span-full flex flex-col xs:flex-row items-start xs:items-center gap-2 xs:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl bg-purple-500/8 border border-purple-500/20 mt-2 sm:mt-1">
             <Sparkles className="w-4 h-4 text-purple-400 flex-shrink-0" />
-            <p className="text-xs text-zinc-400 flex-1">
+            <p className="text-xs text-zinc-400 flex-1 leading-relaxed">
               Complete your first lesson to unlock live tracking — streak, XP, progress, and more.
             </p>
             <button
               onClick={onGenerateRoadmap}
-              className="flex-shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors cursor-pointer whitespace-nowrap"
+              className="flex-shrink-0 text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors cursor-pointer whitespace-nowrap self-end xs:self-auto"
             >
               Get started →
             </button>
@@ -550,98 +552,161 @@ export function HomeView({
 
       {/* SECTION 3 — Continue Learning */}
       <motion.section {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.08 }}>
-        <SectionHeader icon={Play} title="Continue Learning" subtitle="Your current position in the roadmap" />
-        {activeRoadmap && currentModule ? (
-          <GlassCard tint="glass-card-purple" className="p-5 sm:p-6">
-            <div className="flex flex-col gap-3.5">
-              <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <SectionHeader icon={Play} title="Continue Learning" />
+          {roadmaps.length > 1 && activeRoadmap && onSelectRoadmap && (
+            <label className="flex items-center gap-2 text-xs text-zinc-400 shrink-0">
+              <span className="hidden sm:inline">Course</span>
+              <select
+                value={activeRoadmap.id}
+                onChange={(event) => onSelectRoadmap(event.target.value)}
+                className="max-w-36 sm:max-w-52 rounded-lg border border-white/10 bg-zinc-900 px-2 py-1.5 text-xs font-medium text-white cursor-pointer"
+                aria-label="Choose course to continue"
+              >
+                {roadmaps.map((roadmap) => <option key={roadmap.id} value={roadmap.id}>{roadmap.goal}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+        {progressRefreshFailed && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <span>Progress could not be refreshed. Showing your last saved roadmap.</span>
+            {onRetryProgress && <button onClick={onRetryProgress} className="shrink-0 font-bold underline underline-offset-2 cursor-pointer">Retry</button>}
+          </div>
+        )}
+        {activeRoadmap && currentModule && !isRoadmapComplete ? (
+          <GlassCard tint="glass-card-purple" className="p-4 sm:p-5 md:p-6">
+            <div className="flex flex-col gap-3 sm:gap-3.5">
+              <p className="text-xs font-semibold text-purple-300 truncate min-w-0" title={activeRoadmap.goal}>{activeRoadmap.goal}</p>
+
+              {/* Current Lesson - prominently displayed (P0-1) */}
+              {currentLesson && (
                 <div className="min-w-0">
-                  <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
-                    {activeRoadmap.goal}
-                  </span>
-                  <h4 className="font-display font-bold text-lg text-white mt-1">
-                    {currentModule.level.name}
-                  </h4>
-                  <p className="text-xs text-zinc-400 mt-0.5">{currentModule.phase.name}</p>
+                  <h3 className="font-display font-bold text-lg sm:text-xl md:text-2xl text-white leading-tight line-clamp-2 overflow-wrap-anywhere" title={currentLesson.lesson.name}>
+                    {currentLesson.lesson.name}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-zinc-400 mt-1.5">
+                    {estimateLessonDuration(currentLesson.lesson)}
+                    {currentLesson.lesson.xpReward > 0 && (
+                      <span className="text-xs text-zinc-500 ml-2">+{currentLesson.lesson.xpReward} XP</span>
+                    )}
+                  </p>
                 </div>
-                <span className="shrink-0 text-xs font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-lg">
-                  {getModuleProgress(currentModule.level)}%
-                </span>
-              </div>
+              )}
 
-              <div className="h-2 rounded-full bg-white/5 border border-white/5 overflow-hidden">
-                <motion.div
-                  className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${getModuleProgress(currentModule.level)}%` }}
-                  transition={{ duration: 0.7, ease: 'easeOut' }}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {currentLesson && (
-                  <div className="state-current rounded-2xl p-3.5">
-                    <p className="text-xs font-bold uppercase tracking-wider text-purple-400">
-                      Current Lesson
-                    </p>
-                    <p className="font-semibold text-sm text-white mt-1 truncate">
-                      {currentLesson.lesson.name}
-                    </p>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      {estimateLessonDuration(currentLesson.lesson)} · +{currentLesson.lesson.xpReward} XP
-                    </p>
-                  </div>
+              {/* Progress bar with completion count (P0-2: removed badge, P1-3: faster animation, P1-6: ARIA, P2-6: lesson counter) */}
+              <div className="space-y-2">
+                <p className="text-xs text-zinc-400 flex-wrap">
+                  Course progress <span className="font-semibold text-white">{courseProgressPercent}%</span>
+                  <span className="text-zinc-500"> · {stats.completedLessons} of {stats.totalLessons} lessons complete</span>
+                </p>
+                <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-1 xs:gap-2 text-xs">
+                  <span className="font-medium text-zinc-400 min-w-0 truncate">Module: {currentModule.level.name}</span>
+                  <span className="font-mono font-bold text-purple-400 shrink-0">
+                    {(() => {
+                      const completed = currentModule.level.lessons.filter(l => l.status === 'completed').length;
+                      const total = currentModule.level.lessons.length;
+                      const currentIndex = currentModule.level.lessons.findIndex(l => l.id === currentLesson?.lesson.id);
+                      return currentIndex >= 0 ? `Lesson ${currentIndex + 1} of ${total}` : `${completed} of ${total} lessons`;
+                    })()}
+                  </span>
+                </div>
+                <div
+                  className="h-2 rounded-xl bg-white/5 border border-white/5 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={getModuleProgress(currentModule.level)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`Module progress: ${getModuleProgress(currentModule.level)}% complete`}
+                >
+                  <motion.div
+                    className="h-full rounded-xl bg-gradient-to-r from-purple-500 to-blue-500"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${getModuleProgress(currentModule.level)}%` }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                  />
+                </div>
+                {/* P2-5: Motivational messaging */}
+                {getModuleProgress(currentModule.level) >= 80 && getModuleProgress(currentModule.level) < 100 && (
+                  <p className="text-xs text-emerald-400 font-medium">
+                    🎯 Almost there! Just a few more lessons to complete this module.
+                  </p>
                 )}
+                {getModuleProgress(currentModule.level) >= 50 && getModuleProgress(currentModule.level) < 80 && (
+                  <p className="text-xs text-blue-400 font-medium">
+                    💪 You're halfway through! Keep up the great work.
+                  </p>
+                )}
+              </div>
+
+              {currentLesson && (
+                <button
+                  onClick={() => onStartLesson(currentLesson.phase.id, currentLesson.level.id, currentLesson.lesson.id)}
+                  aria-label={`Continue learning: ${currentLesson.lesson.name}`}
+                  className="inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 font-bold text-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl hover:from-purple-700 hover:to-indigo-700 active:scale-[0.98] transition-all cursor-pointer shadow-lg focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 w-full sm:w-auto"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  Continue Learning
+                </button>
+              )}
+
+              {/* Up next is supplementary; the current lesson is already the card title. */}
+              <div className="hidden sm:block">
                 {nextLesson && nextLesson.lesson.id !== currentLesson?.lesson.id && (
-                  <div className="state-upcoming rounded-2xl p-3.5 opacity-100">
+                  <div className="state-upcoming rounded-xl p-3.5 border border-transparent max-w-md">
                     <p className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                       Up Next
                     </p>
-                    <p className="font-semibold text-sm text-white mt-1 truncate">
+                    <p className="font-semibold text-sm text-white mt-1 line-clamp-2 overflow-wrap-anywhere" title={nextLesson.lesson.name}>
                       {nextLesson.lesson.name}
                     </p>
                     <p className="text-xs text-zinc-400 mt-0.5">
-                      {nextLesson.lesson.type?.replace('_', ' ') || 'Lesson'} · +{nextLesson.lesson.xpReward || 0} XP
+                      {nextLesson.lesson.type?.replace('_', ' ') || 'Lesson'}
+                      {nextLesson.lesson.xpReward > 0 && (
+                        <span className="text-xs text-zinc-500 ml-2">+{nextLesson.lesson.xpReward} XP</span>
+                      )}
                     </p>
                   </div>
                 )}
               </div>
 
-{currentLesson && (
-                <button
-                  onClick={() =>
-                    onStartLesson(
-                      currentLesson.phase.id,
-                      currentLesson.level.id,
-                      currentLesson.lesson.id,
-                    )
-                  }
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 font-bold text-sm text-purple-400 border border-purple-500/30 bg-purple-500/10 rounded-xl hover:bg-purple-500/20 active:scale-[0.98] transition-all cursor-pointer w-full sm:w-auto self-start"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  Open Lesson
-                </button>
+              {/* Mobile: Show "Up Next" as inline text (P0-3) */}
+              {nextLesson && nextLesson.lesson.id !== currentLesson?.lesson.id && (
+                <p className="block sm:hidden text-xs text-zinc-400 overflow-wrap-anywhere">
+                  Up next: <span className="text-white font-medium overflow-wrap-anywhere">{nextLesson.lesson.name}</span>
+                </p>
               )}
             </div>
           </GlassCard>
         ) : (
-          <GlassCard className="p-5 text-center">
+          <GlassCard className="p-4 sm:p-5 text-center">
             <BookOpen className="w-8 h-8 text-zinc-500 mx-auto mb-2.5" />
             <h4 className="font-display font-semibold text-sm text-white">
-              {activeRoadmap ? 'All lessons completed!' : 'No active roadmap yet'}
+              {isRoadmapComplete ? 'Roadmap completed!' : 'No active roadmap yet'}
             </h4>
             <p className="text-xs text-zinc-400 mt-1.5 max-w-sm mx-auto">
-              {activeRoadmap
-                ? 'You have finished every lesson in this roadmap. Generate a new one to keep learning.'
+              {isRoadmapComplete
+                ? 'You have finished every lesson in this roadmap. Review your completed path or create a new goal.'
                 : 'Create a roadmap to see your current module, lesson, and progress here.'}
             </p>
-            <button
-              onClick={onGenerateRoadmap}
-              className="mt-3.5 inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 rounded-xl hover:bg-purple-500/15 transition-colors cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              {activeRoadmap ? 'Generate New Roadmap' : 'Generate Roadmap'}
-            </button>
+            <div className="flex flex-col xs:flex-row gap-2 justify-center mt-3.5">
+              {isRoadmapComplete && (
+                <button
+                  onClick={onContinueLearning}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors cursor-pointer"
+                >
+                  <Map className="w-3.5 h-3.5" />
+                  View Completed Roadmap
+                </button>
+              )}
+              <button
+                onClick={onGenerateRoadmap}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 rounded-xl hover:bg-purple-500/15 transition-colors cursor-pointer"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                {isRoadmapComplete ? 'Create New Roadmap' : 'Generate Roadmap'}
+              </button>
+            </div>
           </GlassCard>
         )}
       </motion.section>
@@ -899,14 +964,13 @@ export function HomeView({
       {/* SECTION 8 — Quick Actions */}
       <motion.section {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.28 }}>
         <SectionHeader icon={Zap} title="Quick Actions" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {quickActions.map((action) => {
             const Icon = action.icon;
             return (
               <button
                 key={action.id}
                 onClick={action.onClick}
-                disabled={action.disabled}
                 className={`${action.tint} ${glassCardClass()} ${buttonStyles.ghost} rounded-2xl p-4 text-left transition-all duration-200 cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0 min-h-[88px]`}
               >
                 <div className="p-2 rounded-xl border text-purple-400 bg-purple-500/10 border-purple-500/20 w-fit mb-2.5">

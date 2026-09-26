@@ -48,21 +48,36 @@ export function renderHomeView(props: {
   setActiveLesson: (lesson: { phaseId: string; levelId: string; lessonId: string } | null) => void;
   handleSelectRecommendationTask: (rec: any) => void;
   getAuthHeaders?: () => Promise<Record<string, string>>;
+  resumeLessonId?: string | null;
+  onResumeLesson?: (roadmapId: string, lessonId: string) => void;
+  roadmaps?: Roadmap[];
+  onSelectRoadmap?: (roadmapId: string) => void;
+  progressRefreshFailed?: boolean;
+  onRetryProgress?: () => void;
 }) {
-  const { profile, activeRoadmap, activePhase, achievements, aiRecommendations, isRecsLoading, isLoading, getNextIncompleteLesson, setActiveTab, setActiveLesson, handleSelectRecommendationTask, getAuthHeaders } = props;
+  const { profile, activeRoadmap, activePhase, achievements, aiRecommendations, isRecsLoading, isLoading, getNextIncompleteLesson, setActiveTab, setActiveLesson, handleSelectRecommendationTask, getAuthHeaders, resumeLessonId, onResumeLesson, roadmaps, onSelectRoadmap, progressRefreshFailed, onRetryProgress } = props;
+  const openLesson = (phaseId: string, levelId: string, lessonId: string) => {
+    setActiveLesson({ phaseId, levelId, lessonId });
+    if (activeRoadmap) onResumeLesson?.(activeRoadmap.id, lessonId);
+  };
   return (
     <HomeView
       profile={profile} activeRoadmap={activeRoadmap} activePhase={activePhase}
       achievements={achievements} aiRecommendations={aiRecommendations}
       isRecsLoading={isRecsLoading} isLoading={isLoading}
       getAuthHeaders={getAuthHeaders}
+      resumeLessonId={resumeLessonId}
+      roadmaps={roadmaps}
+      onSelectRoadmap={onSelectRoadmap}
+      progressRefreshFailed={progressRefreshFailed}
+      onRetryProgress={onRetryProgress}
       onContinueLearning={() => {
         const nextLesson = getNextIncompleteLesson(activeRoadmap!);
-        if (nextLesson) setActiveLesson(nextLesson);
+        if (nextLesson) openLesson(nextLesson.phaseId, nextLesson.levelId, nextLesson.lessonId);
         else setActiveTab('roadmaps');
       }}
       onGenerateRoadmap={() => { setActiveTab('roadmaps'); setActiveLesson(null); }}
-      onStartLesson={(phaseId, levelId, lessonId) => setActiveLesson({ phaseId, levelId, lessonId })}
+      onStartLesson={openLesson}
       onLaunchRecommendation={handleSelectRecommendationTask}
       onOpenMentor={() => { setActiveTab('mentor'); setActiveLesson(null); }}
       onViewProgress={() => { setActiveTab('progress'); setActiveLesson(null); }}
@@ -440,14 +455,14 @@ function AppShell() {
         )}
 
         {activeTab === 'roadmaps' && !selectedLevelObj && (
-          <div className="sticky top-16 z-30 bg-white/90 dark:bg-zinc-950/85 backdrop-blur-md border-b border-zinc-200 dark:border-white/5">
+          <div className="sticky top-14 md:top-16 z-30 bg-white/90 dark:bg-zinc-950/85 backdrop-blur-md border-b border-zinc-200 dark:border-white/5">
             <div className="max-w-4xl mx-auto px-4">
-              <div className="flex gap-6 overflow-x-auto scrollbar-none py-3.5 -mb-[1px]">
+              <div className="flex gap-3 md:gap-6 overflow-x-auto scrollbar-hide py-3.5 -mb-[1px] scroll-smooth snap-x snap-mandatory">
                 {[{ id: 'roadmap', label: 'Roadmap' }, { id: 'resources', label: 'Resources' }, { id: 'quiz', label: 'Quiz' }, { id: 'projects', label: 'Projects' }, { id: 'insights', label: 'AI Insights' }].map((t) => {
                   const isActive = roadmapDetailTab === t.id;
                   return (
                     <button key={t.id} onClick={() => setRoadmapDetailTab(t.id as any)}
-                      className={`relative pb-1 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer flex-shrink-0 ${isActive ? 'text-purple-600 dark:text-purple-400 font-extrabold' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'}`}
+                      className={`relative pb-1 text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer flex-shrink-0 snap-start ${isActive ? 'text-purple-600 dark:text-purple-400 font-extrabold' : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'}`}
                     >
                       {t.label}
                       {isActive && <motion.div layoutId="activeRoadmapTabBar" className="absolute bottom-[-14px] left-0 right-0 h-0.5 bg-gradient-to-r from-purple-500 to-blue-500" transition={{ type: 'spring', stiffness: 350, damping: 30 }} />}
@@ -460,7 +475,7 @@ function AppShell() {
         )}
 
         <main
-          className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100dvh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100dvh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100dvh-10rem)]'}`}
+          className={`${activeTab === 'mentor' ? 'max-w-none mx-0 px-0 py-0 h-[calc(100dvh-7.5rem)] md:h-[calc(100dvh-8rem)]' : activeLesson ? 'max-w-7xl mx-auto px-0 py-0 h-[calc(100dvh-7.5rem)] md:h-[calc(100dvh-8rem)]' : 'max-w-4xl mx-auto px-4 py-6 md:py-8 min-h-[calc(100dvh-9.5rem)] md:min-h-[calc(100dvh-10rem)]'}`}
           style={activeLesson ? undefined : { contain: 'layout style' }}
         >
           <ErrorBoundary key={activeLesson ? `lesson-${activeLesson.lessonId}` : activeTab}>
