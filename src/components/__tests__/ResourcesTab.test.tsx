@@ -3,7 +3,7 @@
 
 import React from 'react';
 import './setup';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('motion/react', () => ({
@@ -11,6 +11,7 @@ vi.mock('motion/react', () => ({
     get: (_t, prop) => ({ children, layout: _l, initial: _i, animate: _a, exit: _e, transition: _tr, ...rest }: any) =>
       React.createElement(String(prop), rest, children),
   }),
+  useReducedMotion: () => false,
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
@@ -82,5 +83,55 @@ describe('ResourcesTab fallback indicator', () => {
     await waitFor(() => {
       expect(screen.queryByText(/Showing general resource suggestions/i)).not.toBeInTheDocument();
     });
+  });
+
+  it('keeps a resource usable when its preview fails and exposes accessible actions', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).startsWith('/api/resources/preview')) return Promise.resolve({ ok: false });
+      return Promise.resolve({ ok: true, json: async () => ({ completedIds: [], savedIds: [] }) });
+    }) as any;
+    const onAskMentor = vi.fn();
+    const { ResourcesTab } = await import('../ResourcesTab');
+    const roadmap = { ...ROADMAP_WITH_RESOURCES, resources: [{ ...ROADMAP_WITH_RESOURCES.resources[0], url: 'https://preview-error.example.com/resource' }] };
+    render(<ResourcesTab roadmap={roadmap} onAskMentor={onAskMentor} />);
+
+    expect(await screen.findByText('Preview unavailable. You can still open this resource.')).toBeInTheDocument();
+    expect(screen.getAllByText('Video').length).toBeGreaterThan(1);
+    const link = screen.getByRole('link', { name: /Open JS Resource on external site/i });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    fireEvent.click(screen.getByRole('button', { name: 'Ask AI Mentor about JS Resource' }));
+    expect(onAskMentor).toHaveBeenCalledWith(roadmap.resources[0]);
+  });
+
+  it('renders available preview metadata and only the supplied duration', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).startsWith('/api/resources/preview')) return Promise.resolve({ ok: true, json: async () => ({ title: 'OG Article Title', description: 'Preview summary', publisher: 'Example Publisher', author: 'Ada Lovelace' }) });
+      return Promise.resolve({ ok: true, json: async () => ({ completedIds: [], savedIds: [] }) });
+    }) as any;
+    const roadmap = { ...ROADMAP_WITH_RESOURCES, resources: [{ ...ROADMAP_WITH_RESOURCES.resources[0], url: 'https://metadata.example.com/article', duration: '12 min' }] };
+    const { ResourcesTab } = await import('../ResourcesTab');
+    render(<ResourcesTab roadmap={roadmap} />);
+
+    expect(await screen.findByText('OG Article Title')).toBeInTheDocument();
+    expect(screen.getByText('Preview summary')).toBeInTheDocument();
+    expect(screen.getByText('Example Publisher')).toBeInTheDocument();
+    expect(screen.getByText('By Ada Lovelace')).toBeInTheDocument();
+    expect(screen.getByText('12 min')).toBeInTheDocument();
+  });
+
+  it('shows the LearnPath icon fallback when a preview image fails', async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (String(url).startsWith('/api/resources/preview')) return Promise.resolve({ ok: true, json: async () => ({ image: 'https://example.com/preview.jpg' }) });
+      return Promise.resolve({ ok: true, json: async () => ({ completedIds: [], savedIds: [] }) });
+    }) as any;
+    const roadmap = { ...ROADMAP_WITH_RESOURCES, resources: [{ ...ROADMAP_WITH_RESOURCES.resources[0], url: 'https://preview-image.example.com/resource', image: 'https://example.com/image.jpg' }] };
+    const { ResourcesTab } = await import('../ResourcesTab');
+    render(<ResourcesTab roadmap={roadmap} />);
+    await waitFor(() => expect(document.querySelector('img')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('img')).toHaveAttribute('src', 'https://example.com/preview.jpg'));
+    fireEvent.error(document.querySelector('img')!);
+    await waitFor(() => expect(document.querySelector('img')).toBeNull());
+    expect(screen.getAllByTestId('icon-Video').length).toBeGreaterThan(0);
   });
 });

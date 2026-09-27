@@ -32,7 +32,7 @@ export function ConfirmDialog({
   // Close on ESC
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); onCancel(); } };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [open, onCancel]);
@@ -80,9 +80,10 @@ export function ConfirmDialog({
                   <h3 id="confirm-title" className="text-base font-bold text-zinc-900 dark:text-white">{title}</h3>
                 </div>
                 <button
+                  type="button"
                   onClick={onCancel}
                   aria-label="Cancel"
-                  className="p-1.5 -mr-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 -mr-1 text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 rounded-lg transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-500"
                 >
                   <X className="w-4 h-4" />
                 </button>

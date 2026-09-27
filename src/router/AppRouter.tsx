@@ -7,9 +7,11 @@ import { useAuth } from '../auth/authHooks';
 import { useRoadmaps } from '../contexts/RoadmapContext';
 import { useUI } from '../contexts/UIContext';
 import { renderHomeView } from '../App';
+import { buildMentorRoadmapContext, buildRoadmapMentorContext } from '../lib/homeData';
 import { getPhaseUnlockStatus } from '../lib/roadmapUtils';
 import { AchievementCard, NotificationCard } from '../components/Cards';
-import type { SystemNotification, ChatMessage } from '../types';
+import type { SystemNotification, ChatMessage, MentorRoadmapContext, CuratedResource } from '../types';
+import type { RoadmapModule, RoadmapModuleStatus } from '../lib/roadmap/roadmapView';
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded views
@@ -44,7 +46,7 @@ export function TabFallback() {
 interface AppRouterProps {
   chats: ChatMessage[];
   isAiChatGenerating: boolean;
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (text: string, context?: MentorRoadmapContext) => Promise<void>;
   onAiAction: (actionType: 'explain' | 'quiz' | 'study_plan' | 'projects', phaseName: string) => void;
   onLessonComplete: (xpAdded: number, lessonId?: string) => void;
   onHandleAddXp: (amount: number) => void;
@@ -60,6 +62,7 @@ interface AppRouterProps {
   onToggleReadNotification: (id: string) => void;
   onSetSettings: (s: any) => void;
   onSetProfile: (p: any) => void;
+  onOpenMentorContext: (context: MentorRoadmapContext) => void;
 }
 
 export function AppRouter({
@@ -81,6 +84,7 @@ export function AppRouter({
   onToggleReadNotification,
   onSetSettings,
   onSetProfile,
+  onOpenMentorContext,
 }: AppRouterProps) {
   const { profile, settings, achievements, isLoadingAuth, activityLog, mutatingHeaders } = useAuth();
   const {
@@ -109,6 +113,50 @@ export function AppRouter({
     setActiveTab('mentor');
     onAiAction(actionType, phaseName);
   }, [setActiveTab, onAiAction]);
+
+  const handleModuleStatusChange = useCallback(async (module: RoadmapModule, status: RoadmapModuleStatus) => {
+    const roadmapId = selectedRoadmapId || activeRoadmapId;
+    const roadmap = roadmaps.find(item => item.id === roadmapId);
+    if (!roadmap?.phases.some(phase => phase.id === module.phase.id && phase.levels.some(level => level.id === module.level.id))) return false;
+    try {
+      const headers = await mutatingHeaders();
+      const update = async (lessonId: string, action: string) => fetch('/api/progress', {
+        method: 'POST', headers, body: JSON.stringify({ roadmapId, lessonId, action }),
+      });
+      if (status === 'in_progress') {
+        const next = module.level.lessons.find(lesson => lesson.status !== 'completed');
+        if (!next) return false;
+        const response = await update(next.id, 'set-current');
+        if (!response.ok) return false;
+      } else if (status === 'completed') {
+        let latestXp = profile.xp;
+        for (const lesson of module.level.lessons.filter(item => item.status !== 'completed')) {
+          const response = await fetch('/api/complete-lesson', { method: 'POST', headers, body: JSON.stringify({ roadmapId, lessonId: lesson.id }) });
+          if (!response.ok) {
+            if (latestXp > profile.xp) onHandleAddXp(latestXp - profile.xp);
+            await syncRoadmapsFromDatabase(); return false;
+          }
+          const data = await response.json();
+          if (typeof data.xp === 'number') {
+            latestXp = data.xp;
+          }
+        }
+        if (latestXp > profile.xp) onHandleAddXp(latestXp - profile.xp);
+      } else {
+        if (module.completedLessons > 0) return false;
+        const currentLessonId = roadmapProgress[roadmapId]?.currentLessonId;
+        if (currentLessonId && module.level.lessons.some(lesson => lesson.id === currentLessonId)) {
+          const response = await update(currentLessonId, 'clear-current');
+          if (!response.ok) return false;
+        }
+      }
+      await syncRoadmapsFromDatabase();
+      return true;
+    } catch {
+      await syncRoadmapsFromDatabase();
+      return false;
+    }
+  }, [roadmaps, selectedRoadmapId, activeRoadmapId, roadmapProgress, profile.xp, onHandleAddXp, mutatingHeaders, syncRoadmapsFromDatabase]);
 
   // Active lesson workspace takes priority
   if (activeLesson && activeRoadmap) {
@@ -162,12 +210,6 @@ export function AppRouter({
     }
     return (
       <div className="space-y-6 animate-fade-in">
-        <div className="p-6 rounded-3xl glass-card glass-card-purple">
-          <h2 className="font-display font-bold text-xl text-white">Create your first roadmap</h2>
-          <p className="text-xs text-zinc-400 mt-1">
-            This account has no saved curriculum yet. Generate a roadmap and it will be stored under {profile.email}.
-          </p>
-        </div>
         <RoadmapOverview
           roadmaps={roadmaps} activeId={activeRoadmapId}
           onSetActive={(id) => { setActiveRoadmapId(id); setActiveLesson(null); }}
@@ -199,7 +241,21 @@ export function AppRouter({
 
     case 'roadmaps': {
       const selectedRm = roadmaps.find(r => r.id === selectedRoadmapId) ?? null;
-      if (selectedRm && roadmapDetailTab === 'resources') return <ResourcesTab roadmap={selectedRm} getAuthHeaders={mutatingHeaders} />;
+      if (selectedRm && roadmapDetailTab === 'resources') return <ResourcesTab roadmap={selectedRm} getAuthHeaders={mutatingHeaders} onAskMentor={(resource: CuratedResource) => {
+        const module = selectedRm.phases.flatMap(phase => phase.levels.map(level => ({ phase, level }))).find(item => item.level.id === resource.moduleId);
+        if (module) {
+          const currentLessonId = roadmapProgress[selectedRm.id]?.currentLessonId;
+          const currentLesson = module.level.lessons.find(lesson => lesson.id === currentLessonId);
+          onOpenMentorContext(buildMentorRoadmapContext(selectedRm, module.phase, module.level, currentLesson, resource));
+          return;
+        }
+        const phase = selectedRm.phases.find(item => item.id === resource.phaseId);
+        onOpenMentorContext({
+          goal: selectedRm.goal,
+          phase: phase ? { name: phase.name, description: phase.description } : undefined,
+          resources: [{ title: resource.title, provider: resource.provider || resource.source, type: resource.type, description: resource.description }],
+        });
+      }} />;
       if (selectedRm && roadmapDetailTab === 'quiz') return <QuizTab roadmap={selectedRm} onAddXp={onHandleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} onAchievementUnlocked={onAchievementUnlocked} getAuthHeaders={mutatingHeaders} />;
       if (selectedRm && roadmapDetailTab === 'projects') return <ProjectsTab roadmap={selectedRm} onAddXp={onHandleAddXp} onRoadmapUpdated={syncRoadmapsFromDatabase} getAuthHeaders={mutatingHeaders} />;
       if (selectedRm && roadmapDetailTab === 'insights') return <AIInsightsTab roadmap={selectedRm} profile={profile} activityLog={activityLog} getAuthHeaders={mutatingHeaders} />;
@@ -234,6 +290,17 @@ export function AppRouter({
         })();
         return (
           <RoadmapOverviewPage roadmap={selectedRm} profile={profile}
+            currentLessonId={roadmapProgress[selectedRm.id]?.currentLessonId}
+            onOpenRoadmapLesson={(phaseId, levelId, lessonId) => {
+              setActiveLesson({ phaseId, levelId, lessonId });
+              void setCurrentLesson(selectedRm.id, lessonId);
+            }}
+            onModuleStatusChange={handleModuleStatusChange}
+            onOpenModuleMentor={(module) => {
+              const active = activeLesson?.phaseId === module.phase.id && activeLesson.levelId === module.level.id
+                ? module.level.lessons.find(lesson => lesson.id === activeLesson.lessonId) : undefined;
+              onOpenMentorContext(buildMentorRoadmapContext(selectedRm, module.phase, module.level, active));
+            }}
             onSelectPhase={(phaseId) => setSelectedPhaseId(phaseId)}
             onBack={() => { setSelectedRoadmapId(null); setSelectedPhaseId(null); }}
             onContinueLearning={() => { const next = getNextIncompleteLesson(selectedRm); if (next) setActiveLesson(next); }}
@@ -259,13 +326,18 @@ export function AppRouter({
       );
     }
 
-    case 'mentor':
+    case 'mentor': {
+      const mentorRoadmap = roadmaps.find(roadmap => roadmap.id === activeRoadmapId);
+      const mentorContext = mentorRoadmap
+        ? buildRoadmapMentorContext(mentorRoadmap, activeLesson?.lessonId || roadmapProgress[mentorRoadmap.id]?.currentLessonId)
+        : undefined;
       return (
-        <MentorChatView chats={chats} isGenerating={isAiChatGenerating} onSendMessage={onSendMessage}
-          onSelectAction={(topic) => onSendMessage(topic)} aiActive={aiActive}
-          roadmapGoal={roadmaps.find(r => r.id === activeRoadmapId)?.goal}
+        <MentorChatView chats={chats} isGenerating={isAiChatGenerating} onSendMessage={(text) => onSendMessage(text, mentorContext)}
+          onSelectAction={(topic) => onSendMessage(topic, mentorContext)} aiActive={aiActive}
+          roadmapGoal={mentorRoadmap?.goal} roadmapContext={mentorContext}
         />
       );
+    }
 
     case 'progress':
       return <AnalyticsView profile={profile} activityLog={activityLog} onNavigate={(tab) => { setActiveTab(tab); setActiveLesson(null); }} getAuthHeaders={mutatingHeaders} />;

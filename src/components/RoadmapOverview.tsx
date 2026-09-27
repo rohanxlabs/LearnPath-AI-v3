@@ -7,6 +7,7 @@ import RoadmapTree, { transformRoadmapToSkillTree } from './RoadmapTree';
 import { AIMentorAnalysis } from './AIMentorAnalysis';
 import { buttonStyles } from '../styles/theme';
 import { generateMentorAnalysis } from '../lib/roadmapUtils';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 
 // Helper function to transform roadmap data into a skill tree
 // (imported from RoadmapTree so lesson IDs are preserved for selection)
@@ -39,13 +40,29 @@ export function RoadmapOverview({
   onLessonSelect,
   onAiAction
 }: RoadmapOverviewProps) {
-  const [showGenerator, setShowGenerator] = useState(false);
+  const [showGenerator, setShowGenerator] = useState(roadmaps.length === 0);
   const [goal, setGoal] = useState('');
   const [experienceLevel, setExperienceLevel] = useState('Beginner');
   const [weeklyHours, setWeeklyHours] = useState(10);
   const [preferredStyle, setPreferredStyle] = useState('Hands-on');
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [goalFocused, setGoalFocused] = useState(false);
+  const reducedMotion = useReducedMotion();
 
   const activeRoadmap = roadmaps.find(r => r.id === activeId) || roadmaps[0];
+
+  const examples = [
+    'I want to learn Rust for systems programming',
+    'Transition from Junior to Senior Developer',
+    'Data Science with Python in 6 months',
+    'Learn React and build production applications',
+    'Become an AI Engineer',
+  ];
+  React.useEffect(() => {
+    if (activeRoadmap || goalFocused || goal || reducedMotion) return;
+    const timer = window.setInterval(() => setPlaceholderIndex(index => (index + 1) % examples.length), 3000);
+    return () => window.clearInterval(timer);
+  }, [activeRoadmap, goalFocused, goal, reducedMotion]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +96,20 @@ export function RoadmapOverview({
 
   return (
     <div className="space-y-6">
+      {!activeRoadmap && (
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 text-center shadow-sm dark:border-white/10 dark:bg-zinc-900 sm:p-8" aria-labelledby="empty-roadmap-title">
+          <svg aria-hidden="true" viewBox="0 0 180 90" className="mx-auto mb-4 h-20 w-40 text-purple-600 dark:text-purple-300" fill="none">
+            <path d="M28 62 67 28l42 34 40-35" stroke="currentColor" strokeWidth="2" strokeDasharray="4 5" />
+            <circle cx="28" cy="62" r="10" fill="currentColor" fillOpacity=".14" stroke="currentColor" strokeWidth="2" />
+            <circle cx="67" cy="28" r="10" fill="currentColor" fillOpacity=".2" stroke="currentColor" strokeWidth="2" />
+            <circle cx="109" cy="62" r="10" fill="currentColor" fillOpacity=".14" stroke="currentColor" strokeWidth="2" />
+            <circle cx="149" cy="27" r="10" fill="currentColor" fillOpacity=".2" stroke="currentColor" strokeWidth="2" />
+            <path d="m143 27 5 5 9-11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <h1 id="empty-roadmap-title" className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">What do you want to learn?</h1>
+          <p className="mx-auto mt-2 max-w-md text-sm text-zinc-700 dark:text-zinc-200">Turn your goal into a personalized learning path with lessons, projects, and progress tracking.</p>
+        </section>
+      )}
       {activeRoadmap && (
         <>
           <RoadmapHero roadmap={activeRoadmap} />
@@ -120,10 +151,13 @@ export function RoadmapOverview({
               type="text"
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              placeholder="e.g., Build a full-stack application with React and Node.js"
+              placeholder={`Try: “${examples[placeholderIndex]}”`}
+              onFocus={() => setGoalFocused(true)}
+              onBlur={() => setGoalFocused(false)}
               className="w-full px-4 py-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
               required
             />
+            {!activeRoadmap && <p className="text-xs text-zinc-600 dark:text-zinc-300" aria-live="polite">Try: “{examples[placeholderIndex]}”</p>}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

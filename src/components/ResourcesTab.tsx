@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { BookOpen, Video, FileText, Bookmark, ExternalLink, CheckCircle, Search, ChevronDown, Clock, Layers } from 'lucide-react';
-import { motion } from 'motion/react';
+import { BookOpen, Video, FileText, Bookmark, ExternalLink, CheckCircle, Search, ChevronDown, Clock, Layers, MessageCircle } from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Roadmap, CuratedResource } from '../types';
 import { getRecommendationsForRoadmap } from '../lib/recommendations';
 import { calcPhaseProgress } from '../lib/roadmapUtils';
@@ -11,12 +11,13 @@ import { EmptyState } from './EmptyState';
 interface ResourcesTabProps {
   roadmap: Roadmap;
   getAuthHeaders?: () => Promise<Record<string, string>>;
+  onAskMentor?: (resource: CuratedResource) => void;
 }
 
 type FilterType = 'all' | CuratedResource['type'];
 type FilterStatus = 'all' | 'completed' | 'unread' | 'saved';
 
-export function ResourcesTab({ roadmap, getAuthHeaders }: ResourcesTabProps) {
+export function ResourcesTab({ roadmap, getAuthHeaders, onAskMentor }: ResourcesTabProps) {
   const [resources, setResources] = useState<CuratedResource[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isUsingFallback, setIsUsingFallback] = useState(false);
@@ -139,7 +140,7 @@ export function ResourcesTab({ roadmap, getAuthHeaders }: ResourcesTabProps) {
             <SkeletonCard key={i} />
           ))}
         </div>
-      ) : <ResourceGrid resources={filteredResources} completedIds={completedIds} savedIds={savedIds} onToggleCompleted={toggleCompleted} onToggleSaved={toggleSaved} />}
+      ) : <ResourceGrid resources={filteredResources} completedIds={completedIds} savedIds={savedIds} onToggleCompleted={toggleCompleted} onToggleSaved={toggleSaved} getAuthHeaders={getAuthHeaders} onAskMentor={onAskMentor} />}
     </div>
   );
 }
@@ -221,7 +222,7 @@ const FilterControls = ({ searchTerm, setSearchTerm, filterType, setFilterType, 
   </div>
 );
 
-const ResourceGrid = ({ resources, completedIds, savedIds, onToggleCompleted, onToggleSaved }: { resources: any[]; completedIds: any[]; savedIds: any[]; onToggleCompleted: any; onToggleSaved: any }) => {
+const ResourceGrid = ({ resources, completedIds, savedIds, onToggleCompleted, onToggleSaved, getAuthHeaders, onAskMentor }: { resources: any[]; completedIds: any[]; savedIds: any[]; onToggleCompleted: any; onToggleSaved: any; getAuthHeaders?: () => Promise<Record<string, string>>; onAskMentor?: ResourcesTabProps['onAskMentor'] }) => {
   if (resources.length === 0) {
     return (
       <EmptyState
@@ -235,13 +236,79 @@ const ResourceGrid = ({ resources, completedIds, savedIds, onToggleCompleted, on
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {resources.map(res => (
-        <ResourceCard key={res.id} resource={res} isCompleted={completedIds.includes(res.id)} isSaved={savedIds.includes(res.id)} onToggleCompleted={onToggleCompleted} onToggleSaved={onToggleSaved} />
+        <ResourceCard key={res.id} resource={res} isCompleted={completedIds.includes(res.id)} isSaved={savedIds.includes(res.id)} onToggleCompleted={onToggleCompleted} onToggleSaved={onToggleSaved} getAuthHeaders={getAuthHeaders} onAskMentor={onAskMentor} />
       ))}
     </div>
   );
 };
 
-const ResourceCard = ({ resource, isCompleted, isSaved, onToggleCompleted, onToggleSaved }: { resource: any; isCompleted: any; isSaved: any; onToggleCompleted: any; onToggleSaved: any }) => {
+const resourcePreviewCache = new Map<string, any>();
+const resourcePreviewFailureCache = new Set<string>();
+function getSafeHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password ? url.toString() : undefined;
+  } catch { return undefined; }
+}
+function formatResourceDuration(resource: any, preview?: any): string | undefined {
+  if (resource.duration) return resource.duration;
+  const minutes = resource.estimatedMinutes || preview?.estimatedMinutes || resourcePreviewCache.get(resource.url)?.estimatedMinutes;
+  if (!Number.isFinite(minutes) || minutes <= 0) return undefined;
+  if (minutes >= 60 && minutes % 60 === 0) return `${minutes / 60} ${minutes === 60 ? 'hour' : 'hours'}`;
+  return `${minutes} mins`;
+}
+
+const ResourceCard = ({ resource, isCompleted, isSaved, onToggleCompleted, onToggleSaved, getAuthHeaders, onAskMentor }: { resource: any; isCompleted: any; isSaved: any; onToggleCompleted: any; onToggleSaved: any; getAuthHeaders?: () => Promise<Record<string, string>>; onAskMentor?: ResourcesTabProps['onAskMentor'] }) => {
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const reducedMotion = useReducedMotion();
+  const [preview, setPreview] = React.useState<any>(() => resourcePreviewCache.get(resource.url) || null);
+  const [previewLoading, setPreviewLoading] = React.useState(false);
+  const [previewFailed, setPreviewFailed] = React.useState(() => resourcePreviewFailureCache.has(resource.url));
+  const [imageFailed, setImageFailed] = React.useState(false);
+  const duration = formatResourceDuration(resource, preview);
+  React.useEffect(() => {
+    if (!resource.url || preview || previewFailed || resourcePreviewFailureCache.has(resource.url)) return;
+    let requested = false;
+    let cancelled = false;
+    const loadPreview = () => {
+      if (requested) return;
+      requested = true;
+      try {
+        const url = new URL(resource.url);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) { resourcePreviewFailureCache.add(resource.url); setPreviewFailed(true); return; }
+      } catch { resourcePreviewFailureCache.add(resource.url); setPreviewFailed(true); return; }
+      setPreviewLoading(true);
+      void (async () => {
+        try {
+          const headers = getAuthHeaders ? await getAuthHeaders() : {};
+          const response = await fetch(`/api/resources/preview?url=${encodeURIComponent(resource.url)}`, { headers });
+          if (!response.ok) throw new Error('Preview unavailable');
+          const metadata = await response.json();
+          resourcePreviewCache.set(resource.url, metadata);
+          if (!cancelled) setPreview(metadata);
+        } catch {
+          resourcePreviewFailureCache.add(resource.url);
+          if (!cancelled) setPreviewFailed(true);
+        } finally {
+          if (!cancelled) setPreviewLoading(false);
+        }
+      })();
+    };
+    if (typeof IntersectionObserver === 'undefined') {
+      loadPreview();
+      return () => { cancelled = true; };
+    }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) loadPreview();
+    }, { rootMargin: '200px' });
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [resource.url, preview, previewFailed, getAuthHeaders]);
+  React.useEffect(() => { setImageFailed(false); }, [preview?.image, resource.image]);
+  const resourceTypeLabel = ({ video: 'Video', article: 'Article', book: 'Book', paper: 'Paper', course: 'Course' } as Record<string, string>)[resource.type] || 'Resource';
+  const imageUrl = imageFailed ? undefined : getSafeHttpUrl(preview?.image) || getSafeHttpUrl(resource.image);
+  const safeResourceUrl = getSafeHttpUrl(resource.url);
   const getResourceIcon = (type: string) => {
     switch (type) {
       case 'video': return <Video className="w-4 h-4 text-rose-400" />;
@@ -253,56 +320,67 @@ const ResourceCard = ({ resource, isCompleted, isSaved, onToggleCompleted, onTog
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      ref={cardRef}
+      initial={reducedMotion ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: reducedMotion ? 0 : 0.3 }}
       className={`p-4 sm:p-5 rounded-2xl border transition-all duration-300 flex flex-col justify-between gap-3 sm:gap-4 bg-white/5 shadow-lg ${isCompleted ? 'border-violet-500/50' : 'border-white/10'}`}
     >
       <div className="space-y-2 sm:space-y-3 min-w-0">
+        <div className="h-28 w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-100 dark:bg-zinc-800">
+          {imageUrl ? <img src={imageUrl} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setImageFailed(true)} /> : <div className="flex h-full items-center justify-center">{getResourceIcon(resource.type)}</div>}
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-300">{getResourceIcon(resource.type)}{resourceTypeLabel}</span>
+        <h3 className={`font-bold text-sm sm:text-base leading-tight overflow-wrap-anywhere ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
+          {preview?.title || resource.title}
+        </h3>
+        <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed overflow-wrap-anywhere">
+          {preview?.description || resource.description}
+        </p>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-bold text-zinc-400 flex items-center gap-2 uppercase tracking-wider truncate min-w-0">
-            {getResourceIcon(resource.type)}
-            <span className="truncate">{resource.provider}</span>
+          <span className="text-xs text-zinc-400 truncate min-w-0">
+            {preview?.publisher || resource.source || resource.provider}
           </span>
-          {resource.duration && (
+          {duration && (
             <span className="text-xs text-zinc-400 bg-white/5 px-2 py-1 rounded-full flex-shrink-0 whitespace-nowrap">
-              {resource.duration}
+              {duration}
             </span>
           )}
         </div>
-        <h3 className={`font-bold text-sm sm:text-base leading-tight transition-colors overflow-wrap-anywhere ${isCompleted ? 'text-zinc-500 line-through' : 'text-white'}`}>
-          {resource.title}
-        </h3>
-        <p className="text-xs sm:text-sm text-zinc-400 leading-relaxed overflow-wrap-anywhere">
-          {resource.description}
-        </p>
+        {(preview?.author || resource.author) && <p className="text-xs text-zinc-500 dark:text-zinc-300">By {preview?.author || resource.author}</p>}
+        {previewLoading && <p className="text-xs text-zinc-500" role="status">Loading resource preview…</p>}
+        {previewFailed && <p className="text-xs text-zinc-500" role="status">Preview unavailable. You can still open this resource.</p>}
       </div>
       <div className="flex items-center justify-between border-t border-white/10 pt-3 sm:pt-4 mt-2">
         <div className="flex items-center gap-2">
           <button 
             onClick={() => onToggleCompleted(resource.id)} 
-            className={`p-2 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${isCompleted ? 'bg-violet-500/20 text-violet-400' : 'bg-white/10 hover:bg-white/20 text-zinc-300'}`}
+            className={`p-2 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${isCompleted ? 'bg-violet-500/20 text-violet-400' : 'bg-white/10 hover:bg-white/20 text-zinc-300'}`}
             aria-label={isCompleted ? "Mark as unread" : "Mark as completed"}
+            aria-pressed={isCompleted}
           >
             <CheckCircle className="w-5 h-5" />
           </button>
           <button 
             onClick={() => onToggleSaved(resource.id)} 
-            className={`p-2 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${isSaved ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 hover:bg-white/20 text-zinc-300'}`}
+            className={`p-2 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${isSaved ? 'bg-amber-500/20 text-amber-400' : 'bg-white/10 hover:bg-white/20 text-zinc-300'}`}
             aria-label={isSaved ? "Remove from saved" : "Save for later"}
+            aria-pressed={isSaved}
           >
             <Bookmark className="w-5 h-5" />
           </button>
         </div>
-        <a 
-          href={resource.url} 
+        {onAskMentor && <button type="button" onClick={() => onAskMentor(resource)} aria-label={`Ask AI Mentor about ${resource.title}`} className="min-h-11 rounded-lg px-2 text-xs font-semibold text-purple-300 hover:bg-purple-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"><MessageCircle className="mr-1 inline h-4 w-4" aria-hidden="true" />Ask Mentor</button>}
+        {safeResourceUrl ? <a
+          href={safeResourceUrl}
           target="_blank" 
           rel="noopener noreferrer" 
-          className="text-xs sm:text-sm font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-all hover:gap-2 min-h-[44px]"
+          aria-label={`Open ${resource.title} on external site (opens in a new tab)`}
+          className="text-xs sm:text-sm font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-all hover:gap-2 min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
         >
-          <span>Explore</span>
-          <ExternalLink className="w-4 h-4 flex-shrink-0" />
-        </a>
+          <span>↗ Open</span>
+          <ExternalLink className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+        </a> : <span className="self-center text-xs text-zinc-500">Resource link unavailable</span>}
       </div>
     </motion.div>
   );

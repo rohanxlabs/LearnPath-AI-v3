@@ -12,8 +12,9 @@ import { CheckCircle } from 'lucide-react';
 import { Toast } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { AuthGateway } from './auth/AuthGateway';
-import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification } from './types';
+import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, type MentorRoadmapContext } from './types';
 import { getPhaseUnlockStatus, calcPhaseProgress, isPhaseComplete } from './lib/roadmapUtils';
+import { buildMentorRoadmapContext, buildRoadmapMentorContext } from './lib/homeData';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
 import { HomeView } from './components/HomeView';
 import { SplashScreen } from './components/SplashScreen';
@@ -23,6 +24,7 @@ import { FeedbackWidget } from './components/FeedbackWidget';
 import { TermsPage, PrivacyPage } from './components/LegalPages';
 import { useAnalytics } from './hooks/useAnalytics';
 import { PhaseCompletionModal } from './components/PhaseCompletionModal';
+import { ContextualMentorSidebar } from './components/mentor/ContextualMentorSidebar';
 
 import { AuthProvider, createEmptyProfile, DEFAULT_SETTINGS } from './auth/AuthProvider';
 import { useAuth } from './auth/authHooks';
@@ -30,6 +32,7 @@ import { RoadmapProvider, useRoadmaps } from './contexts/RoadmapContext';
 import { UIProvider, useUI } from './contexts/UIContext';
 import { PWAProvider, usePWAContext } from './contexts/PWAContext';
 import { AppRouter, TabFallback, AchievementCelebration } from './router/AppRouter';
+const CommandPalette = lazy(() => import('./components/command/CommandPalette').then(m => ({ default: m.CommandPalette })));
 
 // ---------------------------------------------------------------------------
 // renderHomeView — exported so AppRouter can use it without circular dependency
@@ -92,6 +95,7 @@ export function renderHomeView(props: {
 function AppShell() {
   const { track, identify } = useAnalytics();
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [contextualMentor, setContextualMentor] = useState<MentorRoadmapContext | null>(null);
   useEffect(() => {
     const onPop = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', onPop);
@@ -116,7 +120,7 @@ function AppShell() {
     selectedRoadmapId, setSelectedRoadmapId, selectedPhaseId, setSelectedPhaseId,
     roadmapDetailTab, setRoadmapDetailTab, roadmapProgress,
     isAiGeneratingRoadmap, handleGenerateRoadmap, handleDeleteRoadmap,
-    syncRoadmapsFromDatabase, getNextIncompleteLesson,
+    syncRoadmapsFromDatabase, getNextIncompleteLesson, setCurrentLesson,
   } = useRoadmaps();
 
   const {
@@ -131,6 +135,39 @@ function AppShell() {
   } = useUI();
 
   const { pwa, showOnlineToast, verifiedStatus, setVerifiedStatus, legalPage, setLegalPage } = usePWAContext();
+  const commandRoadmap = roadmaps.find(roadmap => roadmap.id === activeRoadmapId) || roadmaps[0] || null;
+  useEffect(() => {
+    if (!contextualMentor || !activeLesson || !commandRoadmap) return;
+    const phase = commandRoadmap.phases.find(item => item.id === activeLesson.phaseId);
+    const level = phase?.levels.find(item => item.id === activeLesson.levelId);
+    const lesson = level?.lessons.find(item => item.id === activeLesson.lessonId);
+    if (phase && level) {
+      const next = buildMentorRoadmapContext(commandRoadmap, phase, level, lesson);
+      setContextualMentor(previous => previous && JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
+    }
+  }, [activeLesson, commandRoadmap, contextualMentor]);
+  const handleCommandCompleteModule = async (moduleId: string) => {
+    if (!commandRoadmap) return;
+    const module = commandRoadmap.phases.flatMap(phase => phase.levels).find(level => level.id === moduleId);
+    if (!module) return;
+    let latestXp = profile.xp;
+    try {
+      const headers = await mutatingHeaders();
+      for (const lesson of module.lessons.filter(item => item.status !== 'completed')) {
+        const response = await fetch('/api/complete-lesson', { method: 'POST', headers, body: JSON.stringify({ roadmapId: commandRoadmap.id, lessonId: lesson.id }) });
+        if (!response.ok) throw new Error('Could not save module progress');
+        const data = await response.json();
+        if (typeof data.xp === 'number') latestXp = data.xp;
+      }
+      if (latestXp > profile.xp) handleAddXp(latestXp - profile.xp);
+      await syncRoadmapsFromDatabase();
+      showToast(`${module.name} marked mastered.`, 'success');
+    } catch {
+      if (latestXp > profile.xp) handleAddXp(latestXp - profile.xp);
+      await syncRoadmapsFromDatabase();
+      showToast('Could not update this module. Your saved progress has been refreshed.', 'error');
+    }
+  };
 
   const themeClass = `${resolvedTheme} ${resolvedTheme === 'dark' ? 'text-zinc-100' : 'text-slate-950'}`;
   const customBackground = resolvedTheme === 'dark' ? { backgroundColor: '#0A0A0A' } : { backgroundColor: '#F8FAFC' };
@@ -305,7 +342,7 @@ function AppShell() {
   }, [profile.xp, profile.level]);
 
   // Mentor chat
-  const handleSendMessage = useCallback(async (text: string) => {
+  const handleSendMessage = useCallback(async (text: string, roadmapContext?: MentorRoadmapContext) => {
     Sentry.setTag('feature', 'ai-mentor');
     const userMsg = { id: `chat-usr-${Date.now()}`, sender: 'user' as const, text, timestamp: new Date().toISOString() };
     setChats(prev => [...prev, userMsg]);
@@ -314,7 +351,10 @@ function AppShell() {
     let aiMsg = { id: aiMsgId, sender: 'assistant' as const, text: '', timestamp: new Date().toISOString() };
     setChats(prev => [...prev, aiMsg]);
     try {
-      const response = await fetch('/api/mentor-chat', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify({ message: text, history: chats.slice(-6), userEmail: getStoredUserEmail() }) });
+      const defaultMentorContext = commandRoadmap
+        ? buildRoadmapMentorContext(commandRoadmap, roadmapProgress[commandRoadmap.id]?.currentLessonId)
+        : undefined;
+      const response = await fetch('/api/mentor-chat', { method: 'POST', headers: await mutatingHeaders(), body: JSON.stringify({ message: text, history: chats.slice(-6), userEmail: getStoredUserEmail(), roadmapContext: roadmapContext || contextualMentor || defaultMentorContext }) });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -329,7 +369,16 @@ function AppShell() {
       if (import.meta.env.DEV) { console.error('[ai-mentor] stream error:', err); }
       Sentry.captureException(err, { tags: { feature: 'ai-mentor' } });
     } finally { setIsAiChatGenerating(false); }
-  }, [chats, mutatingHeaders, getStoredUserEmail]);
+  }, [chats, mutatingHeaders, getStoredUserEmail, contextualMentor, commandRoadmap, roadmapProgress]);
+
+  const openContextualMentor = useCallback((context: MentorRoadmapContext) => {
+    setContextualMentor(context);
+    const activeResource = context.resources?.[0]?.title;
+    const prompt = activeResource
+      ? `Please summarize "${activeResource}" and connect its key ideas to my current learning context.`
+      : 'Please help me understand my current module.';
+    void handleSendMessage(prompt, context);
+  }, [handleSendMessage]);
 
   const handleSelectRecommendationTask = useCallback((rec: any) => {
     if (rec.category === 'mentor') { setActiveTab('mentor'); handleSendMessage(`Can you explain details about ${rec.title}?`); }
@@ -515,10 +564,22 @@ function AppShell() {
                 onToggleReadNotification={(id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: !n.read } : n))}
                 onSetSettings={(s) => setSettings(prev => ({ ...prev, ...s }))}
                 onSetProfile={(p) => setProfile(prev => ({ ...prev, name: p.name }))}
+                onOpenMentorContext={openContextualMentor}
               />
             </Suspense>
           </ErrorBoundary>
         </main>
+
+        <ContextualMentorSidebar
+          open={contextualMentor !== null}
+          context={contextualMentor}
+          chats={chats}
+          isGenerating={isAiChatGenerating}
+          aiActive={!!aiActive}
+          roadmapGoal={commandRoadmap?.goal}
+          onSendMessage={(text) => handleSendMessage(text, contextualMentor || undefined)}
+          onClose={() => setContextualMentor(null)}
+        />
 
         {!pwa.isOnline && (
           <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-4 right-4 z-50 p-3 rounded-2xl glass-card glass-card-orange border border-amber-500/20 text-amber-300 text-xs shadow-2xl flex items-center gap-3 max-w-sm mx-auto animate-pulse-glow">
@@ -551,6 +612,33 @@ function AppShell() {
         )}
 
         <BottomNavigation activeTab={activeTab} onTabChange={(tab) => { setActiveTab(tab); setActiveLesson(null); }} />
+
+        <Suspense fallback={null}><CommandPalette
+          roadmap={commandRoadmap}
+          currentLessonId={roadmapProgress[commandRoadmap?.id || '']?.currentLessonId}
+          visible={activeTab === 'roadmaps' && !activeLesson}
+          onOpenLesson={(roadmapId, phaseId, moduleId, lessonId) => {
+            setSelectedRoadmapId(roadmapId); setSelectedPhaseId(null); setRoadmapDetailTab('roadmap');
+            setActiveTab('roadmaps'); setActiveLesson({ phaseId, levelId: moduleId, lessonId });
+            void setCurrentLesson(roadmapId, lessonId);
+          }}
+          onJumpPhase={(roadmapId, phaseId) => { setSelectedRoadmapId(roadmapId); setSelectedPhaseId(phaseId); setRoadmapDetailTab('roadmap'); setActiveTab('roadmaps'); }}
+          onOpenMentor={(moduleId) => {
+            const module = moduleId ? commandRoadmap?.phases.flatMap(phase => phase.levels.map(level => ({ phase, level }))).find(item => item.level.id === moduleId) : null;
+            setActiveTab('mentor'); setActiveLesson(null);
+            if (module && commandRoadmap) {
+              const currentLessonId = roadmapProgress[commandRoadmap.id]?.currentLessonId;
+              const currentLesson = module.level.lessons.find(lesson => lesson.id === currentLessonId);
+              openContextualMentor(buildMentorRoadmapContext(commandRoadmap, module.phase, module.level, currentLesson));
+            }
+          }}
+          onContinue={() => {
+            if (!commandRoadmap) return;
+            const next = getNextIncompleteLesson(commandRoadmap);
+            if (next) { setSelectedRoadmapId(commandRoadmap.id); setSelectedPhaseId(null); setActiveTab('roadmaps'); setActiveLesson(next); void setCurrentLesson(commandRoadmap.id, next.lessonId); }
+          }}
+          onCompleteModule={handleCommandCompleteModule}
+        /></Suspense>
 
         {unlockedAchievement && (
           <Suspense fallback={null}>

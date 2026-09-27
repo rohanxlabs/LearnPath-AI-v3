@@ -20,7 +20,7 @@ vi.mock('motion/react', () => ({
 vi.mock('lucide-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('lucide-react')>();
   // Return simple spans for all icons to avoid SVG rendering complexity.
-  const handler = { get: (_: any, name: string) => () => <span data-testid={`icon-${name}`} /> };
+  const handler = { get: (target: any, name: string) => name === 'then' ? undefined : name in target ? () => <span data-testid={`icon-${name}`} /> : undefined };
   return new Proxy(actual, handler);
 });
 

@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
-import { requireAuth, aiLimiter, aiDailyQuota, roadmapGenLimiter } from '../lib/middleware';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { requireAuth, aiLimiter, aiDailyQuota, roadmapGenLimiter, createLimiter } from '../lib/middleware';
 import { unlockAchievement } from '../lib/db';
 import { logger } from '../lib/logger';
 import { Sentry } from '../lib/sentry';
@@ -24,6 +28,108 @@ import {
 import { callGroqChatCompletion, cleanAndParseJSON, sanitizeForPrompt } from '../lib/ai';
 
 const router = Router();
+const resourcePreviewLimiter = createLimiter({ windowMs: 60_000, max: 20, message: { error: 'Too many resource previews. Please try again shortly.' } });
+const resourcePreviewCache = new Map<string, { expires: number; data: Record<string, string | null> }>();
+
+function isPrivateAddress(address: string): boolean {
+  if (isIP(address) === 4) {
+    const [a, b] = address.split('.').map(Number);
+    return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || (a === 198 && (b === 18 || b === 19));
+  }
+  if (isIP(address) === 6) {
+    const value = address.toLowerCase();
+    if (value.startsWith('::ffff:')) return isPrivateAddress(value.slice(7));
+    return value === '::' || value === '::1' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb');
+  }
+  return true;
+}
+
+async function validatePreviewUrl(raw: string): Promise<URL> {
+  const url = new URL(raw);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || (url.port && Number(url.port) !== (url.protocol === 'https:' ? 443 : 80))) throw new Error('Unsupported URL');
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === 'metadata.google.internal' || host === 'metadata.azure.internal' || host === 'instance-data') throw new Error('Private host is not allowed');
+  const addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(item => isPrivateAddress(item.address))) throw new Error('Private host is not allowed');
+  return url;
+}
+
+function readMeta(html: string, key: string): string | null {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tags = html.match(/<meta\b[^>]*>/gi) || [];
+  for (const tag of tags) {
+    const match = tag.match(new RegExp(`(?:property|name)=["']${escaped}["'][^>]*content=["']([^"']*)["']`, 'i')) || tag.match(new RegExp(`content=["']([^"']*)["'][^>]*(?:property|name)=["']${escaped}["']`, 'i'));
+    if (match?.[1]) return match[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").slice(0, 600);
+  }
+  return null;
+}
+
+export function extractResourceMetadata(html: string, target: URL) {
+  return {
+    title: readMeta(html, 'og:title') || readMeta(html, 'twitter:title') || html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, ' ').slice(0, 300) || null,
+    description: readMeta(html, 'og:description') || readMeta(html, 'twitter:description') || readMeta(html, 'description'),
+    image: readMeta(html, 'og:image') || readMeta(html, 'twitter:image'),
+    publisher: readMeta(html, 'og:site_name') || target.hostname,
+    author: readMeta(html, 'author'),
+  };
+}
+
+async function requestPublicHtml(target: URL): Promise<{ status: number; contentType: string; location: string | undefined; html: string }> {
+  const host = target.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const addresses = isIP(host) ? [{ address: host, family: isIP(host) }] : await lookup(host, { all: true, verbatim: true });
+  const publicAddress = addresses.find(address => !isPrivateAddress(address.address));
+  if (!publicAddress || addresses.some(address => isPrivateAddress(address.address))) throw new Error('Private host is not allowed');
+  return new Promise((resolve, reject) => {
+    const transport = target.protocol === 'https:' ? httpsRequest : httpRequest;
+    const req = transport(target, {
+      method: 'GET',
+      headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'LearnPathResourcePreview/1.0' },
+      servername: isIP(host) ? undefined : host,
+      lookup: (_hostname: string, _options: unknown, callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void) => callback(null, publicAddress.address, publicAddress.family),
+    } as any, response => {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      response.on('data', (chunk: Buffer | string) => {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        size += buffer.length;
+        if (size > 1_000_000) { req.destroy(new Error('Preview too large')); return; }
+        chunks.push(buffer);
+      });
+      response.on('end', () => resolve({ status: response.statusCode || 0, contentType: String(response.headers['content-type'] || ''), location: response.headers.location, html: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.setTimeout(5000, () => req.destroy(new Error('Preview request timed out')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+router.get('/resources/preview', requireAuth, resourcePreviewLimiter, async (req, res) => {
+  const raw = typeof req.query.url === 'string' ? req.query.url : '';
+  if (!raw || raw.length > 2048) return res.status(400).json({ error: 'A valid URL is required.' });
+  const cached = resourcePreviewCache.get(raw);
+  if (cached && cached.expires > Date.now()) return res.json(cached.data);
+  try {
+    let target = await validatePreviewUrl(raw);
+    let response: { status: number; contentType: string; location: string | undefined; html: string } | null = null;
+    for (let redirects = 0; redirects <= 3; redirects++) {
+      response = await requestPublicHtml(target);
+      if (response.status < 300 || response.status >= 400) break;
+      const location = response.location;
+      if (!location || redirects === 3) throw new Error('Too many redirects');
+      target = await validatePreviewUrl(new URL(location, target).toString());
+    }
+    if (!response || response.status < 200 || response.status >= 300 || !/text\/html|application\/xhtml\+xml/i.test(response.contentType)) throw new Error('Preview unavailable');
+    const parsed = extractResourceMetadata(response.html, target);
+    let image: string | null = null;
+    if (parsed.image) { try { const candidate = await validatePreviewUrl(new URL(parsed.image, target).toString()); image = candidate.toString(); } catch { /* omit malformed or private image URLs */ } }
+    const metadata = { title: parsed.title, description: parsed.description, image, publisher: parsed.publisher, author: parsed.author };
+    resourcePreviewCache.set(raw, { expires: Date.now() + 60 * 60 * 1000, data: metadata });
+    if (resourcePreviewCache.size > 500) resourcePreviewCache.delete(resourcePreviewCache.keys().next().value!);
+    return res.json(metadata);
+  } catch {
+    return res.status(422).json({ error: 'Could not load resource preview.' });
+  }
+});
 
 // Generate roadmap
 router.post('/generate-roadmap', requireAuth, aiDailyQuota, roadmapGenLimiter, aiLimiter, async (req, res) => {

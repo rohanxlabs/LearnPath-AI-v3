@@ -115,6 +115,23 @@ export interface ChatMessage {
   timestamp: string;
 }
 
+export interface MentorRoadmapContext {
+  goal?: string;
+  phase?: Pick<Phase, 'name' | 'description'>;
+  module?: Pick<Level, 'name'> & { description?: string };
+  lesson?: Pick<Lesson, 'name'> & { description?: string };
+  topics?: string[];
+  progress?: { completedLessons: number; totalLessons: number; percentage: number };
+  resources?: MentorResourceContext[];
+}
+
+export interface MentorResourceContext {
+  title: string;
+  provider?: string;
+  type?: CuratedResource['type'];
+  description?: string;
+}
+
 export interface SystemNotification {
   id: string;
   title: string;
@@ -127,12 +144,27 @@ export interface SystemNotification {
 export interface CuratedResource {
   id: string;
   phaseId: string;
+  moduleId?: string;
   title: string;
   type: 'video' | 'article' | 'book' | 'paper' | 'course';
   url: string;
   provider: string;
   duration?: string;
   description: string;
+  image?: string;
+  author?: string;
+  source?: string;
+  estimatedMinutes?: number;
+}
+
+export interface ResourceMetadata {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  author?: string;
+  source?: string;
+  estimatedMinutes?: number;
 }
 
 export interface TopicQuizAttempt {

@@ -1,4 +1,4 @@
-import { Roadmap, Phase, Level, Lesson, UserProfile } from '../types';
+import { Roadmap, Phase, Level, Lesson, UserProfile, type CuratedResource, type MentorRoadmapContext } from '../types';
 
 export interface LessonContext {
   phase: Phase;
@@ -488,4 +488,72 @@ export function computeAdaptiveDifficulty(
   if (correctRatio >= 0.8 && lessonAttempts.length >= 3) return 'Easy';
   if (correctRatio < 0.5) return 'Hard';
   return 'Medium';
+}
+
+export function buildMentorRoadmapContext(roadmap: Roadmap, phase: Phase, level: Level, lesson?: Lesson, selectedResource?: CuratedResource): MentorRoadmapContext {
+  const totalLessons = level.lessons?.length || 0;
+  const completedLessons = level.lessons?.filter(item => item.status === 'completed').length || 0;
+  const levelResources = Array.isArray((level as Level & { resources?: CuratedResource[] }).resources)
+    ? (level as Level & { resources?: CuratedResource[] }).resources || []
+    : [];
+  const moduleResources = [...levelResources, ...(roadmap.resources || []).filter(resource => (resource as CuratedResource & { moduleId?: string }).moduleId === level.id)];
+  const phaseResources = moduleResources.length ? moduleResources : (roadmap.resources || []).filter(resource => resource.phaseId === phase.id && !(resource as CuratedResource & { moduleId?: string }).moduleId);
+  const relevantResources = selectedResource ? [selectedResource] : phaseResources;
+  return {
+    goal: roadmap.goal,
+    phase: { name: phase.name, description: phase.description },
+    module: { name: level.name },
+    lesson: lesson ? { name: lesson.name } : undefined,
+    topics: [...new Set([...(phase.skillsCovered || []), ...(level.lessons || []).flatMap(item => item.tags || [])])].slice(0, 12),
+    progress: { completedLessons, totalLessons, percentage: getModuleProgress(level) },
+    resources: relevantResources.slice(0, 5).map(resource => ({
+      title: resource.title,
+      provider: resource.provider || resource.source,
+      type: resource.type,
+      description: resource.description,
+    })),
+  };
+}
+
+export function buildRoadmapMentorContext(roadmap: Roadmap, currentLessonId?: string | null): MentorRoadmapContext {
+  let current: { phase: Phase; level: Level; lesson?: Lesson } | undefined;
+  const entries = (roadmap.phases || []).flatMap(phase => (phase.levels || []).map(level => ({ phase, level })));
+  for (const entry of entries) {
+    const lesson = entry.level.lessons?.find(item => item.id === currentLessonId && item.status !== 'completed');
+    if (lesson) { current = { ...entry, lesson }; break; }
+  }
+  if (!current) {
+    for (const entry of entries) {
+      const lesson = entry.level.lessons?.find(item => item.status !== 'completed');
+      if (lesson) { current = { ...entry, lesson }; break; }
+    }
+  }
+  if (!current) {
+    const phase = roadmap.phases?.find(item => item.status === 'current') || roadmap.phases?.[0];
+    const level = phase?.levels?.find(item => item.status === 'current') || phase?.levels?.[0];
+    if (phase && level) current = { phase, level };
+  }
+  if (current) {
+    const context = buildMentorRoadmapContext(roadmap, current.phase, current.level, current.lesson);
+    const lessons = entries.flatMap(entry => entry.level.lessons || []);
+    const completedLessons = lessons.filter(lesson => lesson.status === 'completed').length;
+    return {
+      ...context,
+      progress: {
+        completedLessons: roadmap.lessonsCompleted ?? completedLessons,
+        totalLessons: lessons.length,
+        percentage: roadmap.progressPercent ?? (lessons.length ? Math.round((completedLessons / lessons.length) * 100) : 0),
+      },
+    };
+  }
+
+  return {
+    goal: roadmap.goal,
+    progress: {
+      completedLessons: roadmap.lessonsCompleted || 0,
+      totalLessons: (roadmap.phases || []).reduce((sum, phase) => sum + (phase.levels || []).reduce((levelSum, level) => levelSum + (level.lessons?.length || 0), 0), 0),
+      percentage: roadmap.progressPercent || 0,
+    },
+    resources: (roadmap.resources || []).slice(0, 5).map(resource => ({ title: resource.title, provider: resource.provider || resource.source, type: resource.type, description: resource.description })),
+  };
 }

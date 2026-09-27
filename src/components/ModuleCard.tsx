@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Level, Lesson } from '../types';
 import { ChevronDown, BookOpen, CheckCircle2, Circle, Play, Lock } from 'lucide-react';
@@ -30,6 +30,7 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
   phaseId,
 }) => {
   const reduced = useReducedMotion();
+  const lessonsRegionId = `module-lessons-${useId()}`;
   const lessons = level.lessons || [];
   const totalLessons = lessons.length;
   const completedLessons = lessons.filter((l) => l.status === 'completed').length;
@@ -84,9 +85,13 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
       className="bg-zinc-50 dark:bg-white/[0.03] rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm overflow-hidden transition-all hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)]"
     >
       <motion.button
+        type="button"
         whileTap={{ scale: 0.995 }}
         onClick={onToggle}
-        className="w-full p-5 flex items-start gap-4 text-left"
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${level.name}`}
+        aria-expanded={expanded}
+        aria-controls={lessonsRegionId}
+        className="w-full p-5 flex items-start gap-4 text-left focus-visible:ring-2 focus-visible:ring-purple-500"
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -122,15 +127,16 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
         </div>
       </motion.button>
       
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            initial={reduced ? false : { height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={reduced ? {} : { height: 0, opacity: 0 }}
-            transition={{ duration: reduced ? 0 : 0.25, ease: 'easeInOut' }}
-            className="overflow-hidden"
-          >
+      <div id={lessonsRegionId} aria-hidden={!expanded}>
+        <AnimatePresence initial={false}>
+          {expanded && (
+            <motion.div
+              initial={reduced ? false : { height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={reduced ? {} : { height: 0, opacity: 0 }}
+              transition={{ duration: reduced ? 0 : 0.25, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
             <div className="px-5 pb-5 pt-1">
               <div className="h-px bg-zinc-200 dark:bg-white/10 mb-3" />
               <div className="space-y-2">
@@ -145,9 +151,10 @@ export const ModuleCard: React.FC<ModuleCardProps> = ({
                 ))}
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 };

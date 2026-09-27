@@ -155,17 +155,11 @@ const RoadmapTree: React.FC<RoadmapTreeProps> = ({ data, roadmap, onLessonSelect
                       <Lock className="w-4 h-4 text-zinc-400 dark:text-zinc-500" />
                     )}
                   </div>
-                  <span
-                    role={child.isLesson && onLessonSelect ? 'button' : undefined}
-                    tabIndex={child.isLesson && onLessonSelect ? 0 : undefined}
-                    onClick={child.isLesson && onLessonSelect && child.lessonId ? () => onLessonSelect(child.phaseId!, child.levelId!, child.lessonId!) : undefined}
-                    onKeyDown={child.isLesson && onLessonSelect && child.lessonId ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onLessonSelect!(child.phaseId!, child.levelId!, child.lessonId!); } } : undefined}
-                    className={`text-sm flex-1 ${
-                      child.status === 'locked' ? 'text-zinc-400 dark:text-zinc-600' : 'text-zinc-700 dark:text-zinc-300 font-medium'
-                    } ${child.isLesson && onLessonSelect ? 'cursor-pointer hover:underline' : ''}`}
-                  >
-                    {child.name}
-                  </span>
+                  {child.isLesson && onLessonSelect && child.lessonId ? (
+                    <button type="button" aria-label={`Open lesson: ${child.name}`} onClick={() => onLessonSelect(child.phaseId!, child.levelId!, child.lessonId!)} className={`flex-1 rounded text-left text-sm focus-visible:ring-2 focus-visible:ring-purple-500 ${child.status === 'locked' ? 'text-zinc-400 dark:text-zinc-600' : 'text-zinc-700 dark:text-zinc-300 font-medium'} hover:underline`}>
+                      {child.name}<span className="sr-only">{child.status === 'completed' ? ', completed' : child.status === 'current' ? ', current lesson' : child.status === 'locked' ? ', locked' : ''}</span>
+                    </button>
+                  ) : <span className={`flex-1 text-sm ${child.status === 'locked' ? 'text-zinc-400 dark:text-zinc-600' : 'text-zinc-700 dark:text-zinc-300 font-medium'}`}>{child.name}</span>}
                 </div>
               ))}
             </div>

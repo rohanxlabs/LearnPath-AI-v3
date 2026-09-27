@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { PlusCircle, BookOpen, Code2, Brain, Sparkles, RefreshCw } from 'lucide-react';
 import { buttonStyles } from '../styles/theme';
+import { RoadmapGeneratorForm, ROADMAP_GOAL_EXAMPLES, type RoadmapGeneratorParams } from './RoadmapGeneratorForm';
 
 interface EmptyStateProps {
   icon?: React.ReactNode;
@@ -57,7 +58,19 @@ export function EmptyState({
   );
 }
 
-export function NoRoadmapEmptyState({ onCreateRoadmap }: { onCreateRoadmap: () => void }) {
+export function NoRoadmapEmptyState({ onCreateRoadmap, onSubmit, onRoadmapReady, isGenerating = false, getHeaders }: {
+  onCreateRoadmap?: () => void;
+  onSubmit?: (params: RoadmapGeneratorParams) => Promise<void>;
+  onRoadmapReady?: (roadmap: any) => void;
+  isGenerating?: boolean;
+  getHeaders?: () => Promise<Record<string, string>>;
+}) {
+  if (onSubmit) return <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center px-5 py-10 sm:py-14 text-center">
+    <div className="mb-5 grid size-16 place-items-center rounded-2xl bg-purple-500/15"><BookOpen className="size-8 text-purple-600" /></div>
+    <h3 className="mb-2 text-xl font-bold text-zinc-900 dark:text-white">Start your learning path</h3>
+    <p className="mb-4 max-w-md text-sm text-zinc-500 dark:text-zinc-400">Tell LearnPath what you're trying to achieve and we'll build a personalized path.</p>
+    <RoadmapGeneratorForm embedded goalExamples={ROADMAP_GOAL_EXAMPLES} onSubmit={onSubmit} onRoadmapReady={onRoadmapReady} isGenerating={isGenerating} getHeaders={getHeaders} />
+  </motion.div>;
   return (
     <EmptyState
       icon={<BookOpen className="w-10 h-10 text-purple-600" />}

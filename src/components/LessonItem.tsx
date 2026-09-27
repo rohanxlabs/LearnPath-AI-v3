@@ -36,25 +36,18 @@ export const LessonItem: React.FC<LessonItemProps> = ({
   };
   
    return (
-    <motion.div
+    <motion.div className="flex w-full items-center gap-2">
+    <motion.button
+     type="button"
      whileTap={{ scale: 0.98 }}
-     role="button"
-     tabIndex={0}
-     aria-label={`Open lesson: ${lesson.name}`}
      onClick={onClick}
-     onKeyDown={(e) => {
-       if (e.key === 'Enter' || e.key === ' ') {
-         e.preventDefault();
-         onClick();
-       }
-     }}
-     className={`w-full flex items-center gap-3 px-4 py-3 min-h-[44px] rounded-xl text-left transition-all duration-200 group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
+     className={`min-w-0 flex-1 flex items-center gap-3 px-4 py-3 min-h-[44px] rounded-xl text-left transition-all duration-200 group cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
         displayStatus === 'current'
           ? 'bg-gradient-to-r from-purple-500/10 to-violet-500/10 dark:from-purple-500/15 dark:to-violet-500/10 border border-purple-200/60 dark:border-purple-500/20 hover:border-purple-300 dark:hover:border-purple-500/40 shadow-sm'
           : 'hover:bg-zinc-100 dark:hover:bg-white/5 border border-transparent'
       }`}
     >
-      {getIcon()}
+      <span aria-hidden="true">{getIcon()}</span>
       
       <span
         className={`flex-1 text-sm font-medium truncate ${
@@ -67,15 +60,13 @@ export const LessonItem: React.FC<LessonItemProps> = ({
       >
         {lesson.name}
       </span>
-      
-      {isRecommended && (
+      <span className="sr-only">{displayStatus === 'completed' ? 'Completed' : displayStatus === 'current' ? 'Current lesson' : 'Not started'}</span>
+    </motion.button>
+    {isRecommended && (
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            (onRecommendedClick || onClick)();
-          }}
-          className="flex-shrink-0 px-2.5 py-1 bg-purple-500/10 dark:bg-purple-500/15 text-purple-700 dark:text-purple-400 text-xs font-bold rounded-full uppercase tracking-wide hover:bg-purple-500/20 dark:hover:bg-purple-500/25 border border-purple-200 dark:border-purple-500/20 transition-colors cursor-pointer"
+          onClick={onRecommendedClick || onClick}
+          className="min-h-10 flex-shrink-0 px-2.5 py-1 bg-purple-500/10 dark:bg-purple-500/15 text-purple-700 dark:text-purple-400 text-xs font-bold rounded-full uppercase tracking-wide hover:bg-purple-500/20 dark:hover:bg-purple-500/25 border border-purple-200 dark:border-purple-500/20 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-purple-500"
         >
           Continue Learning
         </button>

@@ -62,9 +62,13 @@ export function RoadmapsTabContainer({
           onDeleteRoadmap={onDeleteRoadmap}
           isLoading={isLoading}
           onCreateRoadmap={() => setShowGenerator(true)}
+          onGenerateRoadmap={onGenerateRoadmap}
+          onRoadmapReady={onRoadmapReady}
+          isGenerating={isGenerating}
+          getHeaders={getHeaders}
         />
 
-        <div className="space-y-3">
+        {roadmaps.length > 0 && <div className="space-y-3">
           <button
             onClick={() => setShowGenerator(v => !v)}
             className={`w-full py-3.5 px-6 rounded-xl font-bold text-sm ${buttonStyles.primary} flex items-center justify-center gap-2`}
@@ -87,7 +91,7 @@ export function RoadmapsTabContainer({
               getHeaders={getHeaders}
             />
           )}
-        </div>
+        </div>}
       </div>
     );
   }

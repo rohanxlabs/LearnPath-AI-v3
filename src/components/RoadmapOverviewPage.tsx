@@ -15,6 +15,8 @@ import {
   PhaseUnlockStatus,
 } from '../lib/roadmapUtils';
 import { RoadmapGeneratorForm } from './RoadmapGeneratorForm';
+import { RoadmapWorkspaceViews } from './roadmap/RoadmapWorkspaceViews';
+import type { RoadmapModule, RoadmapModuleStatus } from '../lib/roadmap/roadmapView';
 
 interface RoadmapOverviewPageProps {
   roadmap: Roadmap;
@@ -34,6 +36,10 @@ interface RoadmapOverviewPageProps {
   resumeInfo?: { lessonName: string; phaseName: string } | null;
   /** Sub-Task 10: navigate to the AI Insights tab */
   onViewInsights?: () => void;
+  currentLessonId?: string | null;
+  onOpenRoadmapLesson?: (phaseId: string, moduleId: string, lessonId: string) => void;
+  onModuleStatusChange?: (module: RoadmapModule, status: RoadmapModuleStatus) => Promise<boolean>;
+  onOpenModuleMentor?: (module: RoadmapModule) => void;
 }
 
 const LOADING_QUOTES = [
@@ -55,6 +61,10 @@ export function RoadmapOverviewPage({
   isGenerating,
   resumeInfo,
   onViewInsights,
+  currentLessonId,
+  onOpenRoadmapLesson,
+  onModuleStatusChange,
+  onOpenModuleMentor,
 }: RoadmapOverviewPageProps) {
   const reduced = useReducedMotion();
   const [lockedToast, setLockedToast] = useState<string | null>(null);
@@ -252,6 +262,12 @@ export function RoadmapOverviewPage({
             <Play className="w-3 h-3 fill-current" /> Resume
           </button>
         </motion.div>
+      )}
+
+      {onOpenRoadmapLesson && onModuleStatusChange && (
+        <RoadmapWorkspaceViews key={roadmap.id} roadmap={roadmap} currentLessonId={currentLessonId}
+          onOpenLesson={onOpenRoadmapLesson} onModuleStatusChange={onModuleStatusChange}
+          onOpenMentor={onOpenModuleMentor} />
       )}
 
       {/* ── Phase cards ── */}

@@ -1659,6 +1659,7 @@ export async function upsertRoadmapState(state: {
   ownerEmail: string;
   roadmapId: string;
   currentLessonId?: string | null;
+  clearCurrent?: boolean;
   startedAt?: string | null;
   completedAt?: string | null;
 }): Promise<void> {
@@ -1676,7 +1677,9 @@ export async function upsertRoadmapState(state: {
   }).onConflictDoUpdate({
     target: [userRoadmapState.ownerEmail, userRoadmapState.roadmapId],
     set: {
-      currentLessonId: drizzleSql`COALESCE(EXCLUDED.current_lesson_id, user_roadmap_state.current_lesson_id)`,
+      currentLessonId: state.clearCurrent
+        ? null
+        : drizzleSql`COALESCE(EXCLUDED.current_lesson_id, user_roadmap_state.current_lesson_id)`,
       startedAt: drizzleSql`COALESCE(user_roadmap_state.started_at, EXCLUDED.started_at)`,
       completedAt: drizzleSql`COALESCE(EXCLUDED.completed_at, user_roadmap_state.completed_at)`,
       updatedAt: new Date(),

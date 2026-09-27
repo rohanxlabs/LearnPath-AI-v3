@@ -20,6 +20,9 @@ interface RoadmapGeneratorFormProps {
   onCancel?: () => void;
   /** Returns auth headers (including Bearer token) for the SSE streaming fetch. */
   getHeaders?: () => Promise<Record<string, string>>;
+  initialGoal?: string;
+  embedded?: boolean;
+  goalExamples?: string[];
 }
 
 const GOAL_CHIPS = [
@@ -31,14 +34,29 @@ const GOAL_CHIPS = [
   'iOS App Development',
 ];
 
+export const ROADMAP_GOAL_EXAMPLES = [
+  'I want to learn Rust for systems programming',
+  'Transition from Junior to Senior Developer',
+  'Data Science with Python in 6 months',
+  'Learn React and build production applications',
+  'Become an AI Engineer',
+];
+
 export function RoadmapGeneratorForm({
   onRoadmapReady,
   onSubmit,
   isGenerating,
   onCancel,
   getHeaders,
+  initialGoal = '',
+  embedded = false,
+  goalExamples = GOAL_CHIPS,
 }: RoadmapGeneratorFormProps) {
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState(initialGoal);
+  const [goalFocused, setGoalFocused] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [goalError, setGoalError] = useState('');
   const [experienceLevel, setExperienceLevel] = useState('Beginner');
   const [weeklyHours, setWeeklyHours] = useState(10);
@@ -219,11 +237,19 @@ export function RoadmapGeneratorForm({
 
   const busy = isGenerating || isStreaming;
 
+  useEffect(() => {
+    if (!embedded || goal || goalFocused || typing || busy) return;
+    const timer = setInterval(() => setPlaceholderIndex(index => (index + 1) % ROADMAP_GOAL_EXAMPLES.length), 3000);
+    return () => clearInterval(timer);
+  }, [embedded, goal, goalFocused, typing, busy]);
+
+  useEffect(() => () => { if (typingTimerRef.current) clearTimeout(typingTimerRef.current); }, []);
+
   return (
-    <div className="rounded-2xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 shadow-sm overflow-hidden">
+    <div className={`${embedded ? 'w-full max-w-2xl border-0 bg-transparent shadow-none' : 'rounded-2xl bg-zinc-50 dark:bg-white/[0.03] border border-zinc-200 dark:border-white/10 shadow-sm'} overflow-hidden`}>
       <div className="p-5 sm:p-6 space-y-5">
         {/* header */}
-        <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/10 pb-4">
+        {!embedded && <div className="flex items-center gap-3 border-b border-zinc-200 dark:border-white/10 pb-4">
           <div className="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-500/15 flex items-center justify-center flex-shrink-0">
             <GraduationCap className="w-5 h-5 text-purple-700 dark:text-purple-400" />
           </div>
@@ -231,17 +257,19 @@ export function RoadmapGeneratorForm({
             <h3 className="font-bold text-zinc-900 dark:text-white text-sm">AI Roadmap Architect</h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Describe your goal and we'll build your personalized path.</p>
           </div>
-        </div>
+        </div>}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* goal input + chips */}
           <div className="space-y-2.5">
-            <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide">
-              Your Learning Goal
+            <label htmlFor="roadmap-goal-input" className={`block ${embedded ? 'text-base font-bold text-zinc-800 dark:text-zinc-100' : 'text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide'}`}>
+              {embedded ? 'What do you want to learn?' : 'Your Learning Goal'}
             </label>
+            {embedded && <p className="text-sm text-zinc-600 dark:text-zinc-300">Tell LearnPath what you're trying to achieve and we'll build a personalized path.</p>}
             {/* suggestion chips */}
+            {embedded && <p className="pt-1 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-300">Try one of these examples</p>}
             <div className="flex flex-wrap gap-2">
-              {GOAL_CHIPS.map(chip => (
+              {(embedded ? goalExamples : GOAL_CHIPS).map(chip => (
                 <button
                   key={chip}
                   type="button"
@@ -259,25 +287,30 @@ export function RoadmapGeneratorForm({
               ))}
             </div>
             <input
+              id="roadmap-goal-input"
               type="text"
               value={goal}
-              onChange={e => { setGoal(e.target.value); if (goalError) setGoalError(''); if (generationError) setGenerationError(null); }}
+              aria-invalid={Boolean(goalError)}
+              aria-describedby={goalError ? 'roadmap-goal-error' : undefined}
+              onFocus={() => setGoalFocused(true)}
               onBlur={() => {
+                setGoalFocused(false);
                 if (goal.trim().length > 0 && goal.trim().length < 10) {
                   setGoalError('Please describe your goal in at least 10 characters (e.g. "Learn React for web apps").');
                 }
               }}
-              placeholder="e.g., Build a full-stack application with React and Node.js"
+              onChange={e => { setGoal(e.target.value); setTyping(true); if (typingTimerRef.current) clearTimeout(typingTimerRef.current); typingTimerRef.current = setTimeout(() => setTyping(false), 1500); if (goalError) setGoalError(''); if (generationError) setGenerationError(null); }}
+              placeholder={embedded ? `Try: “${ROADMAP_GOAL_EXAMPLES[placeholderIndex]}”` : 'e.g., Build a full-stack application with React and Node.js'}
               disabled={busy}
               className={`w-full px-4 py-2.5 bg-white dark:bg-white/5 border rounded-xl text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-60 ${goalError ? 'border-red-400 dark:border-red-500' : 'border-zinc-200 dark:border-white/10'}`}
             />
             {goalError && (
-              <p className="text-xs text-red-500 dark:text-red-400 mt-1">{goalError}</p>
+              <p id="roadmap-goal-error" className="text-xs text-red-500 dark:text-red-400 mt-1">{goalError}</p>
             )}
           </div>
 
           {/* options row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {!embedded && <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide">
                 Experience
@@ -327,7 +360,7 @@ export function RoadmapGeneratorForm({
                 <option>Theoretical</option>
               </select>
             </div>
-          </div>
+          </div>}
 
           {/* submit */}
           <div className="flex gap-3">
@@ -337,7 +370,7 @@ export function RoadmapGeneratorForm({
               className={`flex-1 py-3 rounded-xl text-sm font-bold ${buttonStyles.primary} flex items-center justify-center gap-2 disabled:opacity-50 transition-all`}
             >
               <Sparkles className="w-4 h-4" />
-              <span>{busy ? 'Generating...' : 'Create My Roadmap'}</span>
+              <span>{busy ? 'Generating...' : embedded ? 'Generate Path' : 'Create My Roadmap'}</span>
             </button>
             {busy && (
               <button

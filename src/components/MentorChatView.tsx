@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
+import type { MentorRoadmapContext } from '../types';
 import { Send, Sparkles, MessageSquare, Bot, HelpCircle, Code2, BookOpen, Lightbulb, Mic, MicOff, Paperclip, CheckCircle, Search, Terminal, AlertTriangle, Check } from 'lucide-react';
 import { ChatMessage } from '../types';
 import { XPBadge } from './Badges';
@@ -88,9 +89,10 @@ interface MentorChatViewProps {
   onSelectAction: (topic: string) => void;
   aiActive: boolean | null;
   roadmapGoal?: string;
+  roadmapContext?: MentorRoadmapContext;
 }
 
-export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAction, aiActive, roadmapGoal }: MentorChatViewProps) {
+export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAction, aiActive, roadmapGoal, roadmapContext }: MentorChatViewProps) {
   const useReducedMotionValue = useReducedMotion();
   const [inputText, setInputText] = useState('');
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -191,18 +193,30 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
     reader.readAsText(file);
   }, []);
 
-  const suggestedPrompts = [
-    { text: roadmapGoal ? `Explain core ${roadmapGoal} concepts for a beginner` : "Explain NumPy Vector Broadcast", icon: Code2 },
-    { text: "How does Self-Attention work?", icon: BookOpen },
-    { text: "Design a 4-hour study plan for me", icon: Sparkles },
-    { text: "Suggest coding project ideas", icon: Lightbulb }
+  const topicLabel = roadmapContext?.lesson?.name || roadmapContext?.module?.name || roadmapGoal;
+  const resourceLabel = roadmapContext?.resources?.[0]?.title;
+  const suggestedPrompts = resourceLabel ? [
+    { text: `Summarize ${resourceLabel} for my current topic`, icon: BookOpen },
+    { text: `Explain the key ideas in ${resourceLabel} simply`, icon: Code2 },
+    { text: `Quiz me on ${topicLabel || 'this learning resource'}`, icon: Sparkles },
+    { text: `Give me a practical exercise based on ${topicLabel || resourceLabel}`, icon: Lightbulb },
+  ] : [
+    { text: topicLabel ? `Explain ${topicLabel} simply` : "Explain the key idea in my current topic simply", icon: Code2 },
+    { text: topicLabel ? `Give me a practical example of ${topicLabel}` : "Give me a practical example", icon: BookOpen },
+    { text: topicLabel ? `Quiz me on ${topicLabel}` : "Quiz me on my current topic", icon: Sparkles },
+    { text: "What should I learn next?", icon: Lightbulb }
   ];
 
-  const helperActions = [
-    { label: "Explain Core Concepts", topic: roadmapGoal ? `Explain the absolute foundations of ${roadmapGoal} in plain English.` : "Explain the absolute foundations of Deep Learning in plain English." },
-    { label: "Generate Live Quiz", topic: "Ask me 3 challenging questions about my current topic so I can practice." },
-    { label: "Review My Study Progress", topic: "Please review my study logs and suggest what topics I should conquer next." },
-    { label: "Suggest Projects", topic: roadmapGoal ? `Recommend 2 beginner-friendly project ideas for learning ${roadmapGoal}.` : "Recommend 2 cool open-source project guides involving Model Context Protocol." }
+  const helperActions = resourceLabel ? [
+    { label: "Summarize this resource", topic: `Summarize ${resourceLabel} and explain how it relates to ${topicLabel || 'my learning goal'}.` },
+    { label: "Explain a difficult part", topic: `Help me understand a difficult idea from ${resourceLabel}.` },
+    { label: "Quiz me", topic: `Quiz me on the ideas in ${resourceLabel}.` },
+    { label: "Give me an example", topic: `Give me a practical example related to ${topicLabel || resourceLabel}.` },
+  ] : [
+    { label: "Explain simply", topic: topicLabel ? `Explain ${topicLabel} simply, with an example.` : "Explain the key idea in my current topic simply, with an example." },
+    { label: "Quiz me", topic: topicLabel ? `Quiz me on ${topicLabel} with 3 challenging questions.` : "Ask me 3 challenging questions about my current topic." },
+    { label: "Review My Study Progress", topic: "Please review my current learning progress and suggest what topics I should study next." },
+    { label: "What next?", topic: topicLabel ? `What should I learn next after ${topicLabel}?` : "What should I learn next in my roadmap?" }
   ];
 
   return (
@@ -230,6 +244,9 @@ export function MentorChatView({ chats, onSendMessage, isGenerating, onSelectAct
             <p className="text-xs text-zinc-400">
               {aiActive === false ? 'Offline — using fallback replies' : 'AI Mentor online'}
             </p>
+            {roadmapContext && <p className="mt-0.5 max-w-[65vw] truncate text-[11px] text-purple-200" aria-live="polite" aria-label={`Learning context: ${[roadmapContext.phase?.name, roadmapContext.module?.name, roadmapContext.lesson?.name, resourceLabel].filter(Boolean).join(' → ') || roadmapContext.goal || 'current roadmap'}`}>
+              Learning: {[roadmapContext.phase?.name, roadmapContext.module?.name, roadmapContext.lesson?.name, resourceLabel].filter(Boolean).join(' → ') || roadmapContext.goal}
+            </p>}
           </div>
         </div>
 

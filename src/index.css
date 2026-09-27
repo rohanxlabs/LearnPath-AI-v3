@@ -249,7 +249,7 @@ body {
    ========================================================================== */
 
 :focus-visible {
-  outline: 2px solid rgba(168, 85, 247, 0.7);
+  outline: 2px solid #7c3aed;
   outline-offset: 2px;
 }
 

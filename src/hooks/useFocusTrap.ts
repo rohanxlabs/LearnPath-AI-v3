@@ -24,7 +24,7 @@ export function useFocusTrap(
   useEffect(() => {
     if (!enabled) {
       // Restore focus to the element that was focused before the trap opened.
-      if (previouslyFocusedRef.current instanceof HTMLElement) {
+      if (previouslyFocusedRef.current instanceof HTMLElement && previouslyFocusedRef.current.isConnected) {
         previouslyFocusedRef.current.focus();
       }
       previouslyFocusedRef.current = null;
@@ -47,7 +47,7 @@ export function useFocusTrap(
     }
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key !== 'Tab') return;
+      if (e.defaultPrevented || e.key !== 'Tab') return;
 
       const focusable = Array.from(
         container!.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS),

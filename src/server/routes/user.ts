@@ -234,7 +234,7 @@ router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
 router.post('/progress', requireAuth, async (req, res) => {
   const { roadmapId, lessonId, action } = req.body;
   const userEmail = req.supabaseUser!.email;
-  if (!roadmapId || !lessonId) return res.status(400).json({ error: 'roadmapId and lessonId are required', code: 'MISSING_IDS' });
+    if (!roadmapId || !lessonId) return res.status(400).json({ error: 'roadmapId and lessonId are required', code: 'MISSING_IDS' });
 
   // dynamic import to avoid circular deps
   const { findLessonContext, completeLessonForUser, getRoadmapState, upsertRoadmapState, getRoadmapById } = await import('../db/queries');
@@ -257,6 +257,11 @@ router.post('/progress', requireAuth, async (req, res) => {
       }
     } else if (action === 'set-current') {
       await upsertRoadmapState({ ownerEmail: userEmail, roadmapId, currentLessonId: lessonId });
+    } else if (action === 'clear-current') {
+      const state = await getRoadmapState(userEmail, roadmapId);
+      if (state?.currentLessonId === lessonId || state?.current_lesson_id === lessonId) {
+        await upsertRoadmapState({ ownerEmail: userEmail, roadmapId, currentLessonId: null, clearCurrent: true });
+      }
     }
 
     const progress = await getRoadmapProgressSnapshot(userEmail, roadmapId);

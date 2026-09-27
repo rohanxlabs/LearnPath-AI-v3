@@ -3,6 +3,7 @@ import { Trash2, Calendar, TrendingUp, Clock, ChevronRight } from 'lucide-react'
 import { Roadmap } from '../types';
 import { Skeleton } from './Skeleton';
 import { NoRoadmapEmptyState } from './EmptyState';
+import type { RoadmapGeneratorParams } from './RoadmapGeneratorForm';
 
 interface RoadmapsListProps {
   roadmaps: Roadmap[];
@@ -11,9 +12,13 @@ interface RoadmapsListProps {
   isLoading?: boolean;
   /** Optional: called when the user clicks the CTA inside the no-roadmaps empty state. */
   onCreateRoadmap?: () => void;
+  onGenerateRoadmap?: (params: RoadmapGeneratorParams) => Promise<void>;
+  onRoadmapReady?: (roadmap: any) => Promise<void> | void;
+  isGenerating?: boolean;
+  getHeaders?: () => Promise<Record<string, string>>;
 }
 
-export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoading, onCreateRoadmap }: RoadmapsListProps) {
+export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoading, onCreateRoadmap, onGenerateRoadmap, onRoadmapReady, isGenerating, getHeaders }: RoadmapsListProps) {
   const getStatusStyle = (progress: number) => {
     if (progress === 0) return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20';
     if (progress === 100) return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25';
@@ -37,7 +42,7 @@ export function RoadmapsList({ roadmaps, onSelectRoadmap, onDeleteRoadmap, isLoa
 
   if (roadmaps.length === 0 && !isLoading) {
     return onCreateRoadmap
-      ? <NoRoadmapEmptyState onCreateRoadmap={onCreateRoadmap} />
+      ? <NoRoadmapEmptyState onCreateRoadmap={onCreateRoadmap} onSubmit={onGenerateRoadmap} onRoadmapReady={onRoadmapReady} isGenerating={isGenerating} getHeaders={getHeaders} />
       : (
         <div className="text-center py-12 px-6">
           <div className="max-w-md mx-auto">
