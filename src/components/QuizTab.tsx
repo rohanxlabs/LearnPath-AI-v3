@@ -213,7 +213,7 @@ export function QuizTab({ roadmap, onAddXp, onRoadmapUpdated, onAchievementUnloc
     const saveRes = await fetch('/api/topic-wise-quizzes', {
       method: 'POST',
       headers: getAuthHeaders ? await getAuthHeaders() : { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...updatedAttempt, quizId })
+      body: JSON.stringify({ ...updatedAttempt, correctCount, quizId })
     });
     if (saveRes.ok) {
       const saveData = await saveRes.json().catch(() => ({}));

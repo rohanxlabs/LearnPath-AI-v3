@@ -2,7 +2,7 @@
 // Desktop: 3-column layout (sidebar | content | stats)
 // Mobile: Content-first with collapsible bottom sheet syllabus
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import ReactMarkdown from 'react-markdown';
@@ -140,6 +140,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
 }) => {
   const reduced = useReducedMotion();
   const [selectedTopicId, setSelectedTopicId] = useState<string>(activeLesson?.lessonId || '');
+  const lastRequestedTopicId = useRef<string | null>(null);
   const [topicData, setTopicData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [completedInLevel, setCompletedInLevel] = useState<string[]>([]);
@@ -199,7 +200,7 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
     const pollId = setTimeout(async () => {
       setContentPollCount(c => c + 1);
       const authHeaders = getHeaders ? await getHeaders() : {};
-      const res = await fetch(`/api/topics/${topicData.id}`, { headers: authHeaders }).catch(() => null);
+      const res = await fetch(`/api/topics/${topicData.id}?refresh=1`, { headers: authHeaders }).catch(() => null);
       if (res?.ok) {
         const d = await res.json();
         if (d.topic) {
@@ -234,10 +235,13 @@ export const LearningWorkspace: React.FC<LearningWorkspaceProps> = ({
   }, [selectedTopicId]);
 
   const loadTopicData = async () => {
+    const isRepeatRequest = lastRequestedTopicId.current === selectedTopicId;
+    lastRequestedTopicId.current = selectedTopicId;
     setLoading(true);
     try {
       const authHeaders = getHeaders ? await getHeaders() : {};
-      const res = await fetch(`/api/topics/${selectedTopicId}`, { headers: authHeaders });
+      const refresh = isRepeatRequest ? '?refresh=1' : '';
+      const res = await fetch(`/api/topics/${selectedTopicId}${refresh}`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
         setTopicData(data.topic);

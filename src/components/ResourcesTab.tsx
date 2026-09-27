@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { BookOpen, Video, FileText, Bookmark, ExternalLink, CheckCircle, Search, ChevronDown, Clock, Layers, MessageCircle } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
-import { Roadmap, CuratedResource } from '../types';
+import { Roadmap, CuratedResource, LEARNING_EVENT } from '../types';
 import { getRecommendationsForRoadmap } from '../lib/recommendations';
 import { calcPhaseProgress } from '../lib/roadmapUtils';
 import { buttonStyles, glassCardClass } from '../styles/theme';
@@ -375,6 +375,13 @@ const ResourceCard = ({ resource, isCompleted, isSaved, onToggleCompleted, onTog
           href={safeResourceUrl}
           target="_blank" 
           rel="noopener noreferrer" 
+          onClick={() => {
+            if (!getAuthHeaders) return;
+            void getAuthHeaders().then(headers => fetch('/api/learning-events', {
+              method: 'POST', headers,
+              body: JSON.stringify({ eventType: LEARNING_EVENT.resourceOpened, properties: { resourceId: resource.id } }),
+            })).catch(() => undefined);
+          }}
           aria-label={`Open ${resource.title} on external site (opens in a new tab)`}
           className="text-xs sm:text-sm font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1.5 transition-all hover:gap-2 min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded"
         >

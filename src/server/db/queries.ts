@@ -1,7 +1,4 @@
-// Drizzle ORM query layer — replaces src/server/db/schema.ts (raw neon SQL).
-//
-// All exported function signatures are intentionally identical to the legacy
-// schema.ts so callers require no changes beyond updating the import path.
+// Drizzle ORM query layer for the normalized PostgreSQL schema.
 //
 // The `ensureRoadmapTables()` function is kept as a no-op for backward
 // compatibility — Drizzle migrations handle table creation.
@@ -25,6 +22,8 @@ import {
   phaseProjects,
   userLessonProgress,
   userRoadmapState,
+  learningEvents,
+  userSkills,
   users,
 } from '../../../drizzle/schema';
 
@@ -34,6 +33,59 @@ import {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+export async function insertLearningEvent(event: {
+  id: string; ownerEmail: string; eventType: string; occurredAt?: Date;
+  roadmapId?: string | null; phaseId?: string | null; moduleId?: string | null; lessonId?: string | null;
+  properties?: Record<string, string | number | boolean | null>;
+}): Promise<void> {
+  await db.insert(learningEvents).values({
+    id: event.id, ownerEmail: event.ownerEmail.toLowerCase(), eventType: event.eventType,
+    occurredAt: event.occurredAt ?? new Date(), roadmapId: event.roadmapId ?? null,
+    phaseId: event.phaseId ?? null, moduleId: event.moduleId ?? null, lessonId: event.lessonId ?? null,
+    properties: event.properties ?? {},
+  });
+}
+
+export async function getUserSkills(ownerEmail: string): Promise<any[]> {
+  return db.select({
+    id: userSkills.id,
+    skillKey: userSkills.skillKey,
+    skillName: userSkills.skillName,
+    proficiencyLevel: userSkills.proficiencyLevel,
+    confidenceLevel: userSkills.confidenceLevel,
+    evidenceCount: userSkills.evidenceCount,
+    lastEvidenceAt: userSkills.lastEvidenceAt,
+    updatedAt: userSkills.updatedAt,
+  }).from(userSkills)
+    .where(eq(userSkills.ownerEmail, ownerEmail.toLowerCase()))
+    .orderBy(asc(userSkills.skillKey));
+}
+
+export async function getUserSkill(ownerEmail: string, skillKey: string): Promise<any | null> {
+  const rows = await db.select({
+    id: userSkills.id,
+    skillKey: userSkills.skillKey,
+    skillName: userSkills.skillName,
+    proficiencyLevel: userSkills.proficiencyLevel,
+    confidenceLevel: userSkills.confidenceLevel,
+    evidenceCount: userSkills.evidenceCount,
+    lastEvidenceAt: userSkills.lastEvidenceAt,
+    updatedAt: userSkills.updatedAt,
+  }).from(userSkills)
+    .where(and(eq(userSkills.ownerEmail, ownerEmail.toLowerCase()), eq(userSkills.skillKey, skillKey)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getResourceByIdForOwner(resourceId: string, ownerEmail: string): Promise<any | null> {
+  const rows = await db.select({ resource: resources })
+    .from(resources)
+    .innerJoin(roadmaps, eq(roadmaps.id, resources.roadmapId))
+    .where(and(eq(resources.id, resourceId), eq(roadmaps.ownerEmail, ownerEmail.toLowerCase())))
+    .limit(1);
+  return rows[0]?.resource ?? null;
 }
 
 function asArray(v: any): any[] {
@@ -587,6 +639,20 @@ export async function getQuizForLesson(lessonId: string): Promise<any | null> {
     .where(eq(quizzes.lessonId, lessonId))
     .limit(1);
   return rows[0] || null;
+}
+
+export async function getPlacementQuestionSources(ownerEmail: string, roadmapId: string): Promise<any[]> {
+  return db.select({
+    lessonId: lessons.id,
+    lessonTitle: lessons.title,
+    skillTags: lessons.skillTags,
+    difficulty: lessons.difficulty,
+    questions: quizzes.questions,
+  }).from(quizzes)
+    .innerJoin(lessons, eq(quizzes.lessonId, lessons.id))
+    .innerJoin(roadmaps, eq(roadmaps.id, quizzes.roadmapId))
+    .where(and(eq(quizzes.roadmapId, roadmapId), eq(roadmaps.ownerEmail, ownerEmail.toLowerCase())))
+    .orderBy(asc(lessons.orderIndex), asc(quizzes.orderIndex));
 }
 
 // ---------------------------------------------------------------------------

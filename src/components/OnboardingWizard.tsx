@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sparkles, Target, Clock, BookOpen, ChevronRight, Check } from 'lucide-react';
+import { GOAL_TYPES, SESSION_LENGTHS } from '../types';
+import type { GoalType, SessionLength } from '../types';
 
 interface OnboardingWizardProps {
   onComplete: (data: OnboardingData) => void;
@@ -9,8 +11,11 @@ interface OnboardingWizardProps {
 
 export interface OnboardingData {
   goal: string;
+  goalType?: GoalType;
+  targetDate?: string;
   experienceLevel: string;
   weeklyHours: number;
+  sessionLength?: SessionLength;
   preferredStyle: string;
 }
 
@@ -32,7 +37,7 @@ function loadDraft(): Partial<OnboardingData & { step: number }> {
   }
 }
 
-function saveDraft(data: { step: number; goal: string; experienceLevel: string; weeklyHours: number; preferredStyle: string }) {
+function saveDraft(data: { step: number; goal: string; goalType?: GoalType; targetDate?: string; experienceLevel: string; weeklyHours: number; sessionLength?: SessionLength; preferredStyle: string }) {
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
@@ -78,16 +83,19 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
 
   const [step, setStep] = useState(draft.step ?? 0);
   const [goal, setGoal] = useState(draft.goal ?? '');
+  const [goalType, setGoalType] = useState<GoalType | ''>(draft.goalType ?? '');
+  const [targetDate, setTargetDate] = useState(draft.targetDate ?? '');
   const [experienceLevel, setExperienceLevel] = useState(draft.experienceLevel ?? '');
   const [weeklyHours, setWeeklyHours] = useState(draft.weeklyHours ?? 5);
+  const [sessionLength, setSessionLength] = useState<SessionLength | ''>(draft.sessionLength ?? '');
   const [preferredStyle, setPreferredStyle] = useState(draft.preferredStyle ?? '');
   // direction lets us reverse the slide animation when going Back.
   const [direction, setDirection] = useState<1 | -1>(1);
 
   // Persist every state change to sessionStorage immediately.
   useEffect(() => {
-    saveDraft({ step, goal, experienceLevel, weeklyHours, preferredStyle });
-  }, [step, goal, experienceLevel, weeklyHours, preferredStyle]);
+    saveDraft({ step, goal, goalType: goalType || undefined, targetDate: targetDate || undefined, experienceLevel, weeklyHours, sessionLength: sessionLength || undefined, preferredStyle });
+  }, [step, goal, goalType, targetDate, experienceLevel, weeklyHours, sessionLength, preferredStyle]);
 
   const canProceed = [
     goal.trim().length >= 3,
@@ -106,7 +114,7 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
       setStep(s => s + 1);
     } else {
       clearDraft();
-      onComplete({ goal: goal.trim(), experienceLevel, weeklyHours, preferredStyle });
+      onComplete({ goal: goal.trim(), goalType: goalType || undefined, targetDate: targetDate || undefined, experienceLevel, weeklyHours, sessionLength: sessionLength || undefined, preferredStyle });
     }
   }
 
@@ -189,6 +197,19 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
                   className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 resize-none focus:outline-none focus:border-purple-500 transition-colors"
                 />
                 <p className="text-xs text-zinc-400 dark:text-zinc-600 mt-1 text-right">{goal.trim().length}/500</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                  <label className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Goal type (optional)
+                    <select value={goalType} onChange={e => setGoalType(e.target.value as GoalType | '')} aria-label="Goal type" className="mt-1 w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white">
+                      <option value="">Choose if useful</option>
+                      {GOAL_TYPES.map(type => <option key={type} value={type}>{type.replaceAll('_', ' ')}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Target date (optional)
+                    <input type="date" value={targetDate} onChange={e => setTargetDate(e.target.value)} aria-label="Target date" className="mt-1 w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white" />
+                  </label>
+                </div>
               </motion.div>
             )}
 
@@ -269,6 +290,14 @@ export function OnboardingWizard({ onComplete, userName }: OnboardingWizardProps
                     <span key={h}>{h}h</span>
                   ))}
                 </div>
+
+                <label className="block text-xs text-zinc-500 dark:text-zinc-500 mb-5">
+                  Preferred session length (optional)
+                  <select value={sessionLength} onChange={e => setSessionLength(e.target.value ? Number(e.target.value) as SessionLength : '')} aria-label="Preferred session length" className="mt-1 w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white">
+                    <option value="">No preference</option>
+                    {SESSION_LENGTHS.map(minutes => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
+                  </select>
+                </label>
 
                 <p className="text-xs text-zinc-500 dark:text-zinc-500 mb-2">Preferred learning style</p>
                 <div className="grid grid-cols-2 gap-3">

@@ -5,6 +5,7 @@
 import React from 'react';
 import './setup';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -43,12 +44,12 @@ const QUESTIONS = [
 // We render QuizTab with a minimal roadmap and stub props so it reaches ActiveQuiz.
 // ---------------------------------------------------------------------------
 
-// Stub fetch so QuizTab's AI call resolves immediately with empty questions,
-// forcing a fallback to seed mode for the 'ai' test case.
 beforeEach(() => {
-  global.fetch = vi.fn().mockResolvedValue({
-    ok: false,
-    json: async () => ({}),
+  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === '/api/topic-wise-quizzes') return { ok: true, json: async () => [] } as Response;
+    if (url === '/api/generate-quiz') return { ok: true, json: async () => QUESTIONS } as Response;
+    return { ok: true, json: async () => ({}) } as Response;
   }) as any;
 });
 
@@ -61,7 +62,7 @@ const ROADMAP_STUB: any = {
   phases: [
     {
       id: 'ph1',
-      name: 'Foundations',
+      name: 'Python',
       levels: [
         {
           id: 'lv1',
@@ -74,8 +75,8 @@ const ROADMAP_STUB: any = {
 };
 
 describe('ActiveQuiz source label', () => {
-  it('shows "General practice quiz" label when source is seed', async () => {
-    // quiz-python is a seed topic — no AI fetch should be triggered.
+  it('shows the roadmap label for a generated phase quiz', async () => {
+    const user = userEvent.setup();
     render(
       <QuizTab
         roadmap={ROADMAP_STUB}
@@ -85,11 +86,10 @@ describe('ActiveQuiz source label', () => {
       />
     );
 
-    // Click the Python quiz card to enter ActiveQuiz.
-    const pythonBtn = await screen.findByText(/Python/i);
-    pythonBtn.click();
+    // The current quiz list is built from unlocked roadmap phases.
+    await screen.findByText('Python');
+    await user.click(screen.getByRole('button', { name: /Start Assessment/i }));
 
-    // The source label should now be visible.
-    expect(await screen.findByText(/General practice/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Tailored to your roadmap/i)).toBeInTheDocument();
   });
 });

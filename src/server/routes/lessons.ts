@@ -10,8 +10,12 @@ import {
   upsertUserLessonProgress,
   getResourcesForLessonContext,
   getProjectForPhase,
-  getRoadmapById
+  getRoadmapById,
+  insertLearningEvent,
 } from '../db/queries';
+import { newLearningEventId } from '../lib/learningEvents';
+import { LEARNING_EVENT } from '../../types';
+import { recordSkillCalibrationBestEffort } from '../lib/skillCalibration';
 import {
   getOrGenerateLessonContent,
   assembleLessonResponse,
@@ -146,7 +150,11 @@ router.get('/topics/:topicId', requireAuth, async (req, res) => {
 
     let lastOpenedAt: string | null = null;
     try {
-      lastOpenedAt = (await recordLessonOpened(userEmail, { lessonId: lesson.id, moduleId: lesson.module_id, phaseId: lesson.phase_id, roadmapId: lesson.roadmap_id })) || (await getLessonLastOpened(userEmail, lesson.id));
+      if (req.query.refresh !== '1') {
+        lastOpenedAt = await recordLessonOpened(userEmail, { lessonId: lesson.id, moduleId: lesson.module_id, phaseId: lesson.phase_id, roadmapId: lesson.roadmap_id });
+        await insertLearningEvent({ id: newLearningEventId(), ownerEmail: userEmail, eventType: LEARNING_EVENT.lessonOpened, roadmapId: lesson.roadmap_id, phaseId: lesson.phase_id, moduleId: lesson.module_id, lessonId: lesson.id }).catch((error) => logger.warn({ error }, 'Could not record lesson-open event'));
+      }
+      lastOpenedAt ||= await getLessonLastOpened(userEmail, lesson.id);
     } catch (_) { /* best-effort */ }
 
     if (!summary) {
@@ -257,6 +265,9 @@ router.post('/complete-lesson', lessonLimiter, requireAuth, async (req, res) => 
       const studyMinutes = Number.isFinite(clientStudyMinutes) && clientStudyMinutes > 0 ? Math.min(clientStudyMinutes, 600) : autoStudyMinutes;
 
       const counters = await completeLessonForUser(userEmail, lessonId, lessonCtx.module_id, lessonCtx.phase_id, lessonCtx.roadmap_id, null, studyMinutes);
+      const completionEventId = newLearningEventId();
+      await insertLearningEvent({ id: completionEventId, ownerEmail: userEmail, eventType: LEARNING_EVENT.lessonCompleted, roadmapId: lessonCtx.roadmap_id, phaseId: lessonCtx.phase_id, moduleId: lessonCtx.module_id, lessonId }).catch((error) => logger.warn({ error }, 'Could not record lesson-completion event'));
+      await recordSkillCalibrationBestEffort(userEmail, completionEventId);
       clearLessonContentCacheEntry(lessonId);
 
       // Atomically increment XP — avoids the read-modify-write race where two

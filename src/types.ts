@@ -1,5 +1,69 @@
 export type Theme = 'light' | 'dark' | 'system';
 
+export const LEARNER_TYPES = ['school_student', 'college_student', 'professional', 'career_switcher', 'job_seeker', 'developer', 'researcher', 'self_learner', 'hobbyist', 'other'] as const;
+export type LearnerType = typeof LEARNER_TYPES[number];
+export const GOAL_TYPES = ['learn_skill', 'build_project', 'prepare_interview', 'prepare_exam', 'career_transition', 'improve_job_performance', 'academic_learning', 'personal_interest', 'certification', 'other'] as const;
+export type GoalType = typeof GOAL_TYPES[number];
+export const LEARNING_STYLES = ['Hands-on Projects', 'Hands-on', 'Theory First', 'Theoretical', 'Mixed', 'Video Tutorials', 'Visual'] as const;
+export type LearningStyle = typeof LEARNING_STYLES[number];
+export const EXPERIENCE_LEVELS = ['Complete Beginner', 'Beginner', 'Some Experience', 'Intermediate', 'Advanced', 'Expert'] as const;
+export type ExperienceLevel = typeof EXPERIENCE_LEVELS[number];
+export const SESSION_LENGTHS = [15, 25, 30, 45, 60, 90] as const;
+export type SessionLength = typeof SESSION_LENGTHS[number];
+
+export interface LearnerProfile {
+  learnerType?: LearnerType;
+  /** Primary learner goal category; roadmap.goal remains roadmap-specific. */
+  primaryGoal?: GoalType | null;
+  /** Free-text learner outcome/intent, independent of any one roadmap. */
+  goalDescription?: string | null;
+  targetDate?: string | null;
+  /** weeklyHours is available capacity; sessionLength is a preferred session duration. */
+  preferences?: { learningStyle?: LearningStyle; weeklyHours?: number; sessionLength?: SessionLength | null };
+  background?: {
+    experienceLevel?: ExperienceLevel | string;
+    education?: { level?: string; field?: string; institution?: string };
+    occupation?: string;
+    industry?: string;
+  };
+}
+
+export const LEARNING_EVENT = {
+  lessonOpened: 'lesson_opened', lessonCompleted: 'lesson_completed', quizAttempted: 'quiz_attempted',
+  quizPassed: 'quiz_passed', quizFailed: 'quiz_failed', resourceOpened: 'resource_opened',
+  resourceCompleted: 'resource_completed', sessionStarted: 'session_started', sessionEnded: 'session_ended',
+  tooEasy: 'too_easy', stuck: 'stuck', assessmentStarted: 'assessment_started', assessmentCompleted: 'assessment_completed',
+  placementQuestionAnswered: 'placement_question_answered',
+} as const;
+export const LEARNING_EVENT_TYPES = Object.values(LEARNING_EVENT);
+export type LearningEventType = typeof LEARNING_EVENT[keyof typeof LEARNING_EVENT];
+export interface LearningEvent {
+  id: string;
+  eventType: LearningEventType;
+  occurredAt: string;
+  roadmapId?: string | null;
+  phaseId?: string | null;
+  moduleId?: string | null;
+  lessonId?: string | null;
+  properties: Record<string, string | number | boolean | null>;
+}
+
+export const SKILL_PROFICIENCY_LEVELS = ['unknown', 'beginner', 'developing', 'competent', 'advanced'] as const;
+export type SkillProficiencyLevel = typeof SKILL_PROFICIENCY_LEVELS[number];
+export const SKILL_CONFIDENCE_LEVELS = ['low', 'medium', 'high'] as const;
+export type SkillConfidenceLevel = typeof SKILL_CONFIDENCE_LEVELS[number];
+
+export interface LearnerSkillState {
+  id: string;
+  skillKey: string;
+  skillName: string;
+  proficiencyLevel: SkillProficiencyLevel;
+  confidenceLevel: SkillConfidenceLevel;
+  evidenceCount: number;
+  lastEvidenceAt: string | null;
+  updatedAt: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -14,6 +78,7 @@ export interface UserProfile {
   aiSessionsCount: number;
   lessonsCompleted: number;
   completedLessonIds?: string[];
+  learnerProfile?: LearnerProfile;
   topicWiseQuizzes?: Array<{ quizId: string; score: number; totalQuestions: number; [key: string]: any }>;
   createdAt: string;
 }

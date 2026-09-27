@@ -57,6 +57,27 @@
       "when": 1785075300000,
       "tag": "0007_create_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785075400000,
+      "tag": "0008_learning_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785075500000,
+      "tag": "0009_user_skills",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785075600000,
+      "tag": "0010_placement_attempts",
+      "breakpoints": true
     }
   ]
 }

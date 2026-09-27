@@ -4,7 +4,7 @@ import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import { ArrowLeft, CheckCircle2, AlertTriangle, Lightbulb, Code2, PlayCircle, RefreshCw, Swords, ChevronRight, Check } from 'lucide-react';
-import { Lesson } from '../types';
+import { Lesson, LEARNING_EVENT } from '../types';
 import { XPBadge } from './Badges';
 import { BookOpeningAnimation } from './BookOpeningAnimation';
 import { ConfettiParticles } from './ConfettiParticles';
@@ -51,6 +51,7 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
   // Quiz submission scorer
   const handleQuizSubmit = () => {
     if (!lesson.quizQuestions) return;
+    const totalQuestions = lesson.quizQuestions.length;
     let score = 0;
     lesson.quizQuestions.forEach((q) => {
       if (quizAnswers[q.id] === q.correctIndex) {
@@ -59,6 +60,10 @@ export function LessonPlayView({ lesson, onClose, onComplete }: LessonPlayViewPr
     });
     setQuizScore(score);
     setSubmittedQuiz(true);
+    void getAuthHeaders().then(headers => fetch('/api/learning-events', {
+      method: 'POST', headers,
+      body: JSON.stringify({ eventType: LEARNING_EVENT.quizAttempted, lessonId: lesson.id, properties: { score, totalQuestions } }),
+    })).catch(() => undefined);
 
     if (score === (lesson.quizQuestions?.length || 0)) {
       setHasCompleted(true);

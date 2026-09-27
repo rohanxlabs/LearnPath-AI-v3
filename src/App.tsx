@@ -12,7 +12,7 @@ import { CheckCircle } from 'lucide-react';
 import { Toast } from './components/Toast';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { AuthGateway } from './auth/AuthGateway';
-import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, type MentorRoadmapContext } from './types';
+import { UserProfile, UserSettings, Roadmap, Phase, Achievement, SystemNotification, type MentorRoadmapContext, type LearnerProfile, type LearningStyle, type SessionLength } from './types';
 import { getPhaseUnlockStatus, calcPhaseProgress, isPhaseComplete } from './lib/roadmapUtils';
 import { buildMentorRoadmapContext, buildRoadmapMentorContext } from './lib/homeData';
 import { MobileHeader, BottomNavigation, SideDrawer } from './components/Navigation';
@@ -25,6 +25,7 @@ import { TermsPage, PrivacyPage } from './components/LegalPages';
 import { useAnalytics } from './hooks/useAnalytics';
 import { PhaseCompletionModal } from './components/PhaseCompletionModal';
 import { ContextualMentorSidebar } from './components/mentor/ContextualMentorSidebar';
+import { OnboardingWizard, type OnboardingData } from './components/OnboardingWizard';
 
 import { AuthProvider, createEmptyProfile, DEFAULT_SETTINGS } from './auth/AuthProvider';
 import { useAuth } from './auth/authHooks';
@@ -57,6 +58,7 @@ export function renderHomeView(props: {
   onSelectRoadmap?: (roadmapId: string) => void;
   progressRefreshFailed?: boolean;
   onRetryProgress?: () => void;
+  onGenerateRoadmap?: () => void;
 }) {
   const { profile, activeRoadmap, activePhase, achievements, aiRecommendations, isRecsLoading, isLoading, getNextIncompleteLesson, setActiveTab, setActiveLesson, handleSelectRecommendationTask, getAuthHeaders, resumeLessonId, onResumeLesson, roadmaps, onSelectRoadmap, progressRefreshFailed, onRetryProgress } = props;
   const openLesson = (phaseId: string, levelId: string, lessonId: string) => {
@@ -79,7 +81,7 @@ export function renderHomeView(props: {
         if (nextLesson) openLesson(nextLesson.phaseId, nextLesson.levelId, nextLesson.lessonId);
         else setActiveTab('roadmaps');
       }}
-      onGenerateRoadmap={() => { setActiveTab('roadmaps'); setActiveLesson(null); }}
+      onGenerateRoadmap={props.onGenerateRoadmap ?? (() => { setActiveTab('roadmaps'); setActiveLesson(null); })}
       onStartLesson={openLesson}
       onLaunchRecommendation={handleSelectRecommendationTask}
       onOpenMentor={() => { setActiveTab('mentor'); setActiveLesson(null); }}
@@ -114,6 +116,7 @@ function AppShell() {
     handleLogout,
     mutatingHeaders, getStoredUserEmail,
   } = useAuth();
+  const [showLearnerOnboarding, setShowLearnerOnboarding] = useState(false);
 
   const {
     roadmaps, setRoadmaps, activeRoadmapId, setActiveRoadmapId,
@@ -133,6 +136,28 @@ function AppShell() {
     aiRecommendations, setAiRecommendations, isRecsLoading, setIsRecsLoading,
     resolvedTheme,
   } = useUI();
+
+  const handleOnboardingComplete = async (data: OnboardingData) => {
+    const learnerProfile: LearnerProfile = {
+      ...(data.goalType ? { primaryGoal: data.goalType } : {}),
+      ...(data.goal && data.goal !== 'General Learning' ? { goalDescription: data.goal } : {}),
+      ...(data.targetDate ? { targetDate: data.targetDate } : {}),
+      preferences: { learningStyle: data.preferredStyle as LearningStyle, weeklyHours: data.weeklyHours, ...(data.sessionLength ? { sessionLength: data.sessionLength as SessionLength } : {}) },
+      background: { experienceLevel: data.experienceLevel },
+    };
+    try {
+      const response = await fetch('/api/user-profile', {
+        method: 'PUT', headers: await mutatingHeaders(),
+        body: JSON.stringify({ learnerProfile }),
+      });
+      if (!response.ok) throw new Error('Could not save learner profile');
+      setProfile(previous => ({ ...previous, learnerProfile }));
+      setShowLearnerOnboarding(false);
+      await handleGenerateRoadmap({ goal: data.goal, experienceLevel: data.experienceLevel, weeklyHours: data.weeklyHours, preferredStyle: data.preferredStyle });
+    } catch {
+      showToast('Could not save your learning profile. Please try again.', 'error');
+    }
+  };
 
   const { pwa, showOnlineToast, verifiedStatus, setVerifiedStatus, legalPage, setLegalPage } = usePWAContext();
   const commandRoadmap = roadmaps.find(roadmap => roadmap.id === activeRoadmapId) || roadmaps[0] || null;
@@ -472,6 +497,8 @@ function AppShell() {
     <ErrorBoundary>
       <div className={`min-h-screen pb-20 ${themeClass} transition-colors duration-300 relative`} style={customBackground}>
 
+        {showLearnerOnboarding && <div className="fixed inset-0 z-[100] overflow-y-auto"><OnboardingWizard userName={profile.name} onComplete={handleOnboardingComplete} /></div>}
+
         <MobileHeader
           profile={profile} notifications={notifications}
           onTabChange={(tab) => { setActiveTab(tab); setActiveLesson(null); }}
@@ -565,6 +592,7 @@ function AppShell() {
                 onSetSettings={(s) => setSettings(prev => ({ ...prev, ...s }))}
                 onSetProfile={(p) => setProfile(prev => ({ ...prev, name: p.name }))}
                 onOpenMentorContext={openContextualMentor}
+                onGenerateRoadmap={() => { setActiveTab('roadmaps'); setActiveLesson(null); setShowLearnerOnboarding(!profile.learnerProfile); }}
               />
             </Suspense>
           </ErrorBoundary>

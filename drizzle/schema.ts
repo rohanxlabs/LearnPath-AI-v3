@@ -1,13 +1,5 @@
-// Drizzle ORM schema — forward-looking normalized roadmap model.
-//
-// This file documents the target relational schema as the migration target.
-// The live application currently uses the equivalent raw-SQL definitions in
-// `src/server/db/schema.ts` (neon tagged templates). Once the project adopts
-// Drizzle, this schema becomes the single source of truth and `drizzle-kit`
-// generates the migration SQL.
-//
-// Run `npx drizzle-kit generate` after adding drizzle-orm / drizzle-kit to
-// devDependencies and configuring drizzle.config.ts.
+// Drizzle schema for the application's runtime PostgreSQL model.
+// Migrations in drizzle/migrations are applied with drizzle-kit.
 
 import {
   pgTable,
@@ -19,7 +11,11 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  check,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm/sql';
+
+// Forward declaration is valid because table callbacks resolve lazily.
 
 // ---------------------------------------------------------------------------
 // Roadmap
@@ -341,6 +337,73 @@ export const userRoadmapState = pgTable(
   (t) => ({
     ownerIdx: index('idx_roadmap_state_owner').on(t.ownerEmail),
     ownerRoadmapUniq: uniqueIndex('uniq_roadmap_state_owner').on(t.ownerEmail, t.roadmapId),
+  })
+);
+
+// Append-only history of authenticated learning actions. Current completion
+// state remains in user_lesson_progress; this table records actions over time.
+export const learningEvents = pgTable(
+  'learning_events',
+  {
+    id: text('id').primaryKey(),
+    ownerEmail: text('owner_email').notNull().references(() => users.email, { onDelete: 'cascade' }),
+    eventType: text('event_type').notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+    roadmapId: text('roadmap_id').references(() => roadmaps.id, { onDelete: 'set null' }),
+    phaseId: text('phase_id').references(() => phases.id, { onDelete: 'set null' }),
+    moduleId: text('module_id').references(() => modules.id, { onDelete: 'set null' }),
+    lessonId: text('lesson_id').references(() => lessons.id, { onDelete: 'set null' }),
+    properties: jsonb('properties').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    ownerOccurredIdx: index('idx_learning_events_owner_occurred').on(t.ownerEmail, t.occurredAt),
+    ownerTypeOccurredIdx: index('idx_learning_events_owner_type_occurred').on(t.ownerEmail, t.eventType, t.occurredAt),
+  })
+);
+
+// Current system-derived calibration per learner and normalized skill tag.
+export const userSkills = pgTable(
+  'user_skills',
+  {
+    id: text('id').primaryKey(),
+    ownerEmail: text('owner_email').notNull().references(() => users.email, { onDelete: 'cascade' }),
+    skillKey: text('skill_key').notNull(),
+    skillName: text('skill_name').notNull(),
+    proficiencyLevel: text('proficiency_level').notNull().default('unknown'),
+    confidenceLevel: text('confidence_level').notNull().default('low'),
+    evidenceCount: integer('evidence_count').notNull().default(0),
+    lastEvidenceAt: timestamp('last_evidence_at', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    ownerSkillUnique: uniqueIndex('uniq_user_skills_owner_skill').on(t.ownerEmail, t.skillKey),
+    proficiencyCheck: check('user_skills_proficiency_check', sql`${t.proficiencyLevel} IN ('unknown', 'beginner', 'developing', 'competent', 'advanced')`),
+    confidenceCheck: check('user_skills_confidence_check', sql`${t.confidenceLevel} IN ('low', 'medium', 'high')`),
+    evidenceCountCheck: check('user_skills_evidence_count_check', sql`${t.evidenceCount} >= 0`),
+  })
+);
+
+// Server-evaluated placement attempts. Question snapshots preserve the exact
+// item set used for grading; responses contain selected indexes only.
+export const placementAttempts = pgTable(
+  'placement_attempts',
+  {
+    id: text('id').primaryKey(),
+    ownerEmail: text('owner_email').notNull().references(() => users.email, { onDelete: 'cascade' }),
+    roadmapId: text('roadmap_id').notNull().references(() => roadmaps.id, { onDelete: 'cascade' }),
+    idempotencyKey: text('idempotency_key').notNull(),
+    status: text('status').notNull().default('started'),
+    questions: jsonb('questions').notNull(),
+    responses: jsonb('responses'),
+    result: jsonb('result'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+  },
+  (t) => ({
+    ownerKeyUnique: uniqueIndex('uniq_placement_attempt_owner_key').on(t.ownerEmail, t.idempotencyKey),
+    ownerStartedIdx: index('idx_placement_attempt_owner_started').on(t.ownerEmail, t.startedAt),
+    statusCheck: check('placement_attempt_status_check', sql`${t.status} IN ('started', 'completed')`),
   })
 );
 

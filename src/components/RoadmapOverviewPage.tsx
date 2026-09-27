@@ -16,6 +16,7 @@ import {
 } from '../lib/roadmapUtils';
 import { RoadmapGeneratorForm } from './RoadmapGeneratorForm';
 import { RoadmapWorkspaceViews } from './roadmap/RoadmapWorkspaceViews';
+import { PlacementAssessmentPanel } from './PlacementAssessmentPanel';
 import type { RoadmapModule, RoadmapModuleStatus } from '../lib/roadmap/roadmapView';
 
 interface RoadmapOverviewPageProps {
@@ -40,6 +41,7 @@ interface RoadmapOverviewPageProps {
   onOpenRoadmapLesson?: (phaseId: string, moduleId: string, lessonId: string) => void;
   onModuleStatusChange?: (module: RoadmapModule, status: RoadmapModuleStatus) => Promise<boolean>;
   onOpenModuleMentor?: (module: RoadmapModule) => void;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
 }
 
 const LOADING_QUOTES = [
@@ -65,6 +67,7 @@ export function RoadmapOverviewPage({
   onOpenRoadmapLesson,
   onModuleStatusChange,
   onOpenModuleMentor,
+  getAuthHeaders,
 }: RoadmapOverviewPageProps) {
   const reduced = useReducedMotion();
   const [lockedToast, setLockedToast] = useState<string | null>(null);
@@ -225,6 +228,8 @@ export function RoadmapOverviewPage({
           </div>
         </div>
       </motion.div>
+
+      {getAuthHeaders && <PlacementAssessmentPanel roadmapId={roadmap.id} getAuthHeaders={getAuthHeaders} />}
 
       {/* ── Locked toast ── */}
       {lockedToast && (

@@ -121,6 +121,9 @@ import roadmapsRouter from './src/server/routes/roadmaps';
 import lessonsRouter from './src/server/routes/lessons';
 import aiRouter from './src/server/routes/ai';
 import userRouter from './src/server/routes/user';
+import learningEventsRouter from './src/server/routes/learningEvents';
+import skillsRouter from './src/server/routes/skills';
+import placementAssessmentsRouter from './src/server/routes/placementAssessments';
 
 // Disable ETag-based 304 caching for all API routes.
 // Every /api endpoint is auth-gated and returns user-specific mutable data —
@@ -155,6 +158,9 @@ app.use('/api', roadmapsRouter);
 app.use('/api', lessonsRouter);
 app.use('/api', aiRouter);
 app.use('/api', userRouter);
+app.use('/api', learningEventsRouter);
+app.use('/api', skillsRouter);
+app.use('/api', placementAssessmentsRouter);
 
 // ---------------------------------------------------------------------------
 // Debug / verification endpoint — DEVELOPMENT ONLY.

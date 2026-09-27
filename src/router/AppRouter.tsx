@@ -63,6 +63,7 @@ interface AppRouterProps {
   onSetSettings: (s: any) => void;
   onSetProfile: (p: any) => void;
   onOpenMentorContext: (context: MentorRoadmapContext) => void;
+  onGenerateRoadmap?: () => void;
 }
 
 export function AppRouter({
@@ -85,6 +86,7 @@ export function AppRouter({
   onSetSettings,
   onSetProfile,
   onOpenMentorContext,
+  onGenerateRoadmap,
 }: AppRouterProps) {
   const { profile, settings, achievements, isLoadingAuth, activityLog, mutatingHeaders } = useAuth();
   const {
@@ -185,6 +187,7 @@ export function AppRouter({
         onResumeLesson: (roadmapId, lessonId) => { void setCurrentLesson(roadmapId, lessonId); },
         roadmaps,
         onSelectRoadmap: setActiveRoadmapId,
+        onGenerateRoadmap,
       });
     }
     if (activeTab === 'mentor') {
@@ -235,6 +238,7 @@ export function AppRouter({
         onResumeLesson: (roadmapId, lessonId) => { void setCurrentLesson(roadmapId, lessonId); },
         roadmaps,
         onSelectRoadmap: setActiveRoadmapId,
+        onGenerateRoadmap,
         progressRefreshFailed: Boolean(progressErrors[activeRoadmap.id]),
         onRetryProgress: retryProgress,
       });
@@ -308,6 +312,7 @@ export function AppRouter({
             isGenerating={isAiGeneratingRoadmap}
             resumeInfo={resumeInfo}
             onViewInsights={() => setRoadmapDetailTab('insights')}
+            getAuthHeaders={mutatingHeaders}
           />
         );
       }

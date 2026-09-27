@@ -9,6 +9,12 @@ import {
 import { logger } from '../lib/logger';
 import { Sentry } from '../lib/sentry';
 import { getDailyUsageStats } from '../lib/ai';
+import { validateLearnerProfile, mergeLearnerProfile } from '../lib/learnerProfile';
+import { insertLearningEvent, getResourceByIdForOwner } from '../db/queries';
+import { newLearningEventId } from '../lib/learningEvents';
+import { LEARNING_EVENT } from '../../types';
+import { recordSkillCalibrationBestEffort } from '../lib/skillCalibration';
+import { backfillUserSkillStatesBestEffort } from '../lib/skillCalibration';
 
 // ---------------------------------------------------------------------------
 // Public stats cache — TTL 5 minutes so the landing page is fast.
@@ -92,8 +98,14 @@ router.post('/user-resource-states', requireAuth, async (req, res) => {
     const dbData = await loadUserDB(userEmail, { createIfMissing: true });
     if (!dbData) return res.status(503).json({ error: 'Resource states temporarily unavailable', code: 'RESOURCE_STATES_FAILED' });
     if (!dbData.progress) dbData.progress = {};
-    dbData.progress.resource_states = { completedIds: Array.isArray(completedIds) ? completedIds : [], savedIds: Array.isArray(savedIds) ? savedIds : [] };
+    const previousCompleted = new Set<string>(Array.isArray(dbData.progress.resource_states?.completedIds) ? dbData.progress.resource_states.completedIds : []);
+    const nextCompleted = Array.isArray(completedIds) ? [...new Set(completedIds.filter((id: unknown): id is string => typeof id === 'string' && id.length <= 200))] : [];
+    dbData.progress.resource_states = { completedIds: nextCompleted, savedIds: Array.isArray(savedIds) ? savedIds : [] };
     await saveUserDB(userEmail, dbData);
+    for (const resourceId of nextCompleted.filter(id => !previousCompleted.has(id)).slice(0, 50)) {
+      if (!await getResourceByIdForOwner(resourceId, userEmail)) continue;
+      await insertLearningEvent({ id: newLearningEventId(), ownerEmail: userEmail, eventType: LEARNING_EVENT.resourceCompleted, properties: { resourceId } }).catch(() => undefined);
+    }
     return res.json({ success: true });
   } catch (error) {
     logger.error({ err: error }, 'Save resource states error');
@@ -120,7 +132,7 @@ router.put('/user-profile', requireAuth, async (req, res) => {
   // achievements and activityLog are intentionally excluded from the client-writable surface.
   // achievements: must only be modified server-side via unlockAchievement() to prevent self-unlocking.
   // activityLog: must only be written by server-side lesson completion handlers to prevent fabrication.
-  const { profile, settings, notifications, chats } = req.body;
+  const { profile, learnerProfile: learnerProfileInput, settings, notifications, chats } = req.body ?? {};
 
   const PROFILE_BLOCKLIST = ['xp', 'level', 'streak', 'isPro', 'email', 'createdAt', 'id', 'tier'];
   // Maximum length for any single string value in the profile object.
@@ -148,9 +160,21 @@ router.put('/user-profile', requireAuth, async (req, res) => {
     const dbData = await loadUserDB(userEmail, { createIfMissing: true });
     if (!dbData) return res.status(503).json({ error: 'Profile temporarily unavailable', code: 'PROFILE_UNAVAILABLE' });
     if (!dbData.progress) dbData.progress = {};
+    const profileRecord = profile && typeof profile === 'object' && !Array.isArray(profile) ? profile : null;
     const safeProfile = sanitizeProfile(profile);
+    const learnerProfileValue = learnerProfileInput ?? profileRecord?.learnerProfile;
+    let learnerProfile;
+    if (learnerProfileValue !== undefined) {
+      try { learnerProfile = validateLearnerProfile(learnerProfileValue); }
+      catch (error) { return res.status(400).json({ error: error instanceof Error ? error.message : 'Invalid learner profile', code: 'INVALID_LEARNER_PROFILE' }); }
+    }
     if (safeProfile) {
       const merged = { ...(dbData.progress.profile || {}), ...safeProfile };
+      if (learnerProfile) merged.learnerProfile = mergeLearnerProfile(dbData.progress.profile?.learnerProfile, learnerProfile);
+      dbData.progress.profile = merged;
+      dbData.profile = merged;
+    } else if (learnerProfile) {
+      const merged = { ...(dbData.progress.profile || {}), learnerProfile: mergeLearnerProfile(dbData.progress.profile?.learnerProfile, learnerProfile) };
       dbData.progress.profile = merged;
       dbData.profile = merged;
     }
@@ -158,6 +182,7 @@ router.put('/user-profile', requireAuth, async (req, res) => {
     if (notifications) dbData.progress.notifications = Array.isArray(notifications) ? notifications : [];
     if (chats) dbData.progress.chats = Array.isArray(chats) ? chats : [];
     await saveUserDB(userEmail, dbData);
+    if (learnerProfile) await backfillUserSkillStatesBestEffort(userEmail);
     return res.json({ success: true });
   } catch (error) {
     logger.error({ err: error }, 'Update user profile error');
@@ -181,7 +206,7 @@ router.get('/topic-wise-quizzes', requireAuth, async (req, res) => {
 router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
   const userEmail = req.supabaseUser!.email;
   const attempt = req.body;
-  if (!attempt || !attempt.quizId) return res.status(400).json({ error: 'quizId is required', code: 'MISSING_QUIZ_ID' });
+  if (!attempt || typeof attempt.quizId !== 'string' || !attempt.quizId || attempt.quizId.length > 200) return res.status(400).json({ error: 'Valid quizId is required', code: 'MISSING_QUIZ_ID' });
 
   try {
     // Determine the authoritative question count from the database.
@@ -189,10 +214,15 @@ router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
     // For seed/topic quizzes not in the DB, use the client-supplied totalQuestions
     // but still enforce score <= total so a crafted request cannot inflate counts.
     const dbQuiz = await getQuizForLesson(attempt.quizId).catch(() => null);
+    const suppliedTotal = Number(attempt.totalQuestions);
     const authoritativeTotal: number = dbQuiz && Array.isArray(dbQuiz.questions) && dbQuiz.questions.length > 0
       ? dbQuiz.questions.length
-      : Math.max(0, Number(attempt.totalQuestions) || 0);
+      : Number.isInteger(suppliedTotal) && suppliedTotal >= 0 && suppliedTotal <= 100 ? suppliedTotal : 0;
     const sanitizedScore = Math.min(Math.max(0, Number(attempt.score) || 0), authoritativeTotal);
+    const submittedCorrectCount = attempt.correctCount === undefined
+      ? Math.round((Math.max(0, Number(attempt.score) || 0) * authoritativeTotal) / 100)
+      : Number(attempt.correctCount);
+    const eventScore = Math.min(Math.max(0, Math.floor(submittedCorrectCount || 0)), authoritativeTotal);
 
     const dbData = await loadUserDB(userEmail, { createIfMissing: false });
     if (!dbData) return res.status(404).json({ error: 'User data not found', code: 'USER_NOT_FOUND' });
@@ -202,9 +232,9 @@ router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
       id: attempt.id || `quiz-${Date.now()}`,
       quizId: attempt.quizId,
       quizName: attempt.quizName || 'Untitled Quiz',
-      score: sanitizedScore,
+      score: Math.max(Number(idx >= 0 ? quizzes[idx].score : 0) || 0, sanitizedScore),
       totalQuestions: authoritativeTotal,
-      attemptsCount: attempt.attemptsCount || 0,
+      attemptsCount: (Number(idx >= 0 ? quizzes[idx].attemptsCount : 0) || 0) + 1,
       lastAttemptedAt: attempt.lastAttemptedAt || new Date().toISOString(),
     };
     if (idx >= 0) {
@@ -214,6 +244,14 @@ router.post('/topic-wise-quizzes', requireAuth, async (req, res) => {
     }
     dbData.topic_wise_quizzes = quizzes;
     await saveUserDB(userEmail, dbData);
+
+    const eventProperties = { quizId: String(attempt.quizId).slice(0, 200), score: eventScore, totalQuestions: authoritativeTotal, attempt: sanitizedAttempt.attemptsCount };
+    const attemptEventId = newLearningEventId();
+    await insertLearningEvent({ id: attemptEventId, ownerEmail: userEmail, eventType: LEARNING_EVENT.quizAttempted, properties: eventProperties }).catch(() => undefined);
+    await recordSkillCalibrationBestEffort(userEmail, attemptEventId);
+    if (authoritativeTotal > 0) {
+      await insertLearningEvent({ id: newLearningEventId(), ownerEmail: userEmail, eventType: eventScore === authoritativeTotal ? LEARNING_EVENT.quizPassed : LEARNING_EVENT.quizFailed, properties: eventProperties }).catch(() => undefined);
+    }
 
     // Unlock "Quiz Master" achievement when user scores 100% on any quiz.
     // Uses sanitizedScore and authoritativeTotal so the check cannot be spoofed.
