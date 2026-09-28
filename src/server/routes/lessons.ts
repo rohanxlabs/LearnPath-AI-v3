@@ -11,6 +11,9 @@ import {
   getResourcesForLessonContext,
   getProjectForPhase,
   getRoadmapById,
+  getRoadmapState,
+  getUserSkills,
+  reconstructRoadmapJson,
   insertLearningEvent,
 } from '../db/queries';
 import { newLearningEventId } from '../lib/learningEvents';
@@ -29,8 +32,48 @@ import {
   generateQuizQuestions
 } from '../lib/lesson';
 import { sql } from '../lib/db';
+import { determineNextLearningAction } from '../lib/adaptiveLearning';
 
 const router = Router();
+
+// Deterministic recommendation over the learner's existing roadmap and
+// evidence. This is additive: it never edits roadmap nodes or progress.
+router.get('/roadmaps/:roadmapId/next-action', requireAuth, async (req, res) => {
+  const ownerEmail = req.supabaseUser!.email;
+  const { roadmapId } = req.params;
+  try {
+    const roadmap = await reconstructRoadmapJson(roadmapId, ownerEmail);
+    if (!roadmap) return res.status(404).json({ error: 'Roadmap not found', code: 'ROADMAP_NOT_FOUND' });
+    const state = await getRoadmapState(ownerEmail, roadmapId);
+    const lessons: Array<{ id: string; title: string; skillTags: string[]; phaseId: string; levelId: string; type?: string; prerequisites: string[] }> = [];
+    for (const phase of roadmap.phases ?? []) for (const level of phase.levels ?? []) for (const lesson of level.lessons ?? []) {
+      lessons.push({ id: lesson.id, title: lesson.name ?? lesson.title ?? '', skillTags: lesson.skillTags ?? [], phaseId: phase.id, levelId: level.id, type: lesson.type, prerequisites: lesson.prerequisites ?? [] });
+    }
+    const recentEvents = lessons.length ? await sql`
+      SELECT lesson_id, properties, occurred_at
+      FROM learning_events
+      WHERE owner_email = ${ownerEmail.toLowerCase()}
+        AND roadmap_id = ${roadmapId}
+        AND event_type = 'quiz_attempted'
+      ORDER BY occurred_at DESC
+      LIMIT 100
+    ` : [];
+    const skills = await getUserSkills(ownerEmail);
+    const flattened = lessons.map(({ phaseId: _phaseId, levelId: _levelId, ...lesson }) => lesson);
+    const decision = determineNextLearningAction({
+      lessons: flattened,
+      completedLessonIds: lessons.filter((lesson) => roadmap.phases?.some((phase: any) => phase.levels?.some((level: any) => level.lessons?.some((item: any) => item.id === lesson.id && item.status === 'completed')))).map((lesson) => lesson.id),
+      currentLessonId: state?.currentLessonId ?? state?.current_lesson_id ?? null,
+      quizEvidence: recentEvents.map((event: any) => ({ lessonId: event.lesson_id, score: Number(event.properties?.score), totalQuestions: Number(event.properties?.totalQuestions), occurredAt: event.occurred_at })),
+      skills,
+    });
+    const location = lessons.find((lesson) => lesson.id === decision.targetLessonId);
+    return res.json({ decision, target: location ? { lessonId: location.id, phaseId: location.phaseId, levelId: location.levelId, title: location.title } : null });
+  } catch (error) {
+    logger.error({ err: error instanceof Error ? error.message : String(error), roadmapId }, 'Adaptive next-step recommendation failed');
+    return res.status(503).json({ error: 'Recommendation temporarily unavailable', code: 'NEXT_ACTION_FAILED' });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Shared ownership guard — returns true if the lesson belongs to a roadmap

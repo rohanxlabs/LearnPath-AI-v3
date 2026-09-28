@@ -307,7 +307,24 @@ export function AppRouter({
             }}
             onSelectPhase={(phaseId) => setSelectedPhaseId(phaseId)}
             onBack={() => { setSelectedRoadmapId(null); setSelectedPhaseId(null); }}
-            onContinueLearning={() => { const next = getNextIncompleteLesson(selectedRm); if (next) setActiveLesson(next); }}
+            onContinueLearning={async () => {
+              const fallback = getNextIncompleteLesson(selectedRm);
+              try {
+                const headers = await mutatingHeaders();
+                const response = await fetch(`/api/roadmaps/${encodeURIComponent(selectedRm.id)}/next-action`, { headers });
+                const result = response.ok ? await response.json() : null;
+                if (result?.target) {
+                  const target = { phaseId: result.target.phaseId, levelId: result.target.levelId, lessonId: result.target.lessonId };
+                  setActiveLesson(target);
+                  void setCurrentLesson(selectedRm.id, target.lessonId);
+                  return;
+                }
+              } catch {
+                // Keep the existing continue-learning path available if the
+                // additive recommendation endpoint is temporarily unavailable.
+              }
+              if (fallback) setActiveLesson(fallback);
+            }}
             onGenerateRoadmap={handleGenerateRoadmap} onRoadmapReady={handleRoadmapReadyFromStream}
             isGenerating={isAiGeneratingRoadmap}
             resumeInfo={resumeInfo}

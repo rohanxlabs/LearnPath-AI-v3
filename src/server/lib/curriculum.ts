@@ -1,5 +1,6 @@
 import { cleanAndParseJSON, callGroqChatCompletion, sanitizeForPrompt, GROQ_MODELS } from './ai';
 import { logger } from './logger';
+import { formatLearnerContext, learningGaps, type LearnerContext } from './curriculumPersonalization';
 
 // ---------------------------------------------------------------------------
 // Curriculum constants & types
@@ -21,6 +22,206 @@ export const CURRICULUM_LIMITS = {
   minLessonMinutes: 15,
   maxLessonMinutes: 40
 } as const;
+
+// Budget policy for future roadmap generation. Module counts are totals across
+// the whole roadmap, unlike CURRICULUM_LIMITS.maxModulesPerPhase.
+export type CurriculumLevel = 'standard' | 'intermediate' | 'advanced';
+export type CurriculumScope = 'small' | 'medium' | 'large';
+
+export interface CurriculumIntent {
+  subject: string;
+  desiredOutcome: string;
+  requiredCapabilities: string[];
+  scope: CurriculumScope;
+}
+
+export interface CurriculumBudget {
+  level: CurriculumLevel;
+  scope: CurriculumScope;
+  goal: string;
+  targetPhases: number;
+  targetModules: number;
+  maximumPhases: number;
+  maximumModules: number;
+  lessons: { minPerModule: number; maxPerModule: number; totalSoftMaximum: number };
+  rationale: string[];
+}
+
+export const CURRICULUM_BUDGET_POLICY = {
+  levelTargets: {
+    standard: { phases: 3, modules: 5 },
+    intermediate: { phases: 5, modules: 8 },
+    advanced: { phases: 8, modules: 11 },
+  },
+  scopeAdjustments: {
+    small: { phases: -1, modules: -2 },
+    medium: { phases: 0, modules: 0 },
+    large: { phases: 1, modules: 2 },
+  },
+  hardCaps: { phases: 9, modules: 13 },
+  lessonSoftLimits: { minPerModule: 1, maxPerModule: 8, totalSoftMaximum: 80 },
+  fallbackLevel: 'standard' as CurriculumLevel,
+  fallbackScope: 'medium' as CurriculumScope,
+} as const;
+
+function normalizeCurriculumLevel(value: unknown): CurriculumLevel {
+  if (typeof value !== 'string') return CURRICULUM_BUDGET_POLICY.fallbackLevel;
+  switch (value.trim().toLowerCase()) {
+    case 'beginner':
+    case 'standard':
+    case 'complete beginner': return 'standard';
+    case 'intermediate':
+    case 'some experience': return 'intermediate';
+    case 'advanced':
+    case 'expert': return 'advanced';
+    default: return CURRICULUM_BUDGET_POLICY.fallbackLevel;
+  }
+}
+
+function normalizeCurriculumScope(value: unknown): CurriculumScope {
+  if (typeof value !== 'string') return CURRICULUM_BUDGET_POLICY.fallbackScope;
+  const normalized = value.trim().toLowerCase();
+  return (['small', 'medium', 'large'] as const).includes(normalized as CurriculumScope)
+    ? normalized as CurriculumScope
+    : CURRICULUM_BUDGET_POLICY.fallbackScope;
+}
+
+/** Calculate a deterministic phase and total-module budget for a new roadmap. */
+export function calculateCurriculumBudget(input: { level?: unknown; scope?: unknown; goal?: string }): CurriculumBudget {
+  const level = normalizeCurriculumLevel(input.level);
+  const scope = normalizeCurriculumScope(input.scope);
+  const target = CURRICULUM_BUDGET_POLICY.levelTargets[level];
+  const adjustment = CURRICULUM_BUDGET_POLICY.scopeAdjustments[scope];
+  const targetPhases = Math.min(CURRICULUM_BUDGET_POLICY.hardCaps.phases, Math.max(1, target.phases + adjustment.phases));
+  const targetModules = Math.min(CURRICULUM_BUDGET_POLICY.hardCaps.modules, Math.max(1, target.modules + adjustment.modules));
+  return {
+    level, scope, goal: typeof input.goal === 'string' ? input.goal.trim() : '',
+    targetPhases, targetModules,
+    maximumPhases: CURRICULUM_BUDGET_POLICY.hardCaps.phases,
+    maximumModules: CURRICULUM_BUDGET_POLICY.hardCaps.modules,
+    lessons: { ...CURRICULUM_BUDGET_POLICY.lessonSoftLimits },
+    rationale: [
+      `Level "${level}" establishes a center of ${target.phases} phases and ${target.modules} total modules.`,
+      `Scope "${scope}" adjusts that center by ${adjustment.phases} phase(s) and ${adjustment.modules} module(s).`,
+      'The goal is retained for future relevance planning; it does not yet affect size calculation.',
+    ],
+  };
+}
+
+/** Conservative keyword policy until goal scope is inferred by a richer planner. */
+export function classifyGoalScope(goal: string): CurriculumScope {
+  const text = String(goal || '').toLowerCase();
+  if (/\b(basics?|intro(duction)?|syntax|getting started|fundamentals|essentials)\b/.test(text)) return 'small';
+  if (/\b(advanced|deeply|mastery|expert|job.?ready|career|engineer|full.?stack|end.?to.?end|comprehensive|production|machine.?learn|deep.?learn|robotics|data.?science)\b/.test(text)) return 'large';
+  return 'medium';
+}
+
+function inferGoalSubject(goal: string): string {
+  const text = goal.toLowerCase();
+  if (/\b(machine learning|deep learning|ml)\b/.test(text)) return /\bpython\b/.test(text) ? 'Machine Learning with Python' : 'Machine Learning';
+  const knownSubjects = ['Python', 'JavaScript', 'TypeScript', 'React', 'SQL', 'Docker', 'Git', 'Machine Learning', 'Robotics', 'Data Science'];
+  const found = knownSubjects.find(subject => new RegExp(`\\b${subject.toLowerCase()}\\b`, 'i').test(goal));
+  if (found) return found;
+  const prefix = goal.split(/\b(?:for|to|with|using|basics?|fundamentals|from)\b/i)[0].replace(/^(learn|study|master)\s+/i, '').trim();
+  return (prefix || goal).slice(0, 100);
+}
+
+/** Deterministic fallback intent used when interpretation is unavailable or malformed. */
+export function buildFallbackCurriculumIntent(goal: string): CurriculumIntent {
+  const text = goal.toLowerCase();
+  const subject = inferGoalSubject(goal);
+  let desiredOutcome: string;
+  let requiredCapabilities: string[];
+  if (/scrap/.test(text)) {
+    desiredOutcome = 'Build practical web scrapers that collect and export structured website data.';
+    requiredCapabilities = ['Python scripting fundamentals', 'HTTP requests and response handling', 'HTML structure and CSS selectors', 'HTML parsing and data extraction', 'Pagination and respectful request handling', 'Error handling and retry decisions', 'Data cleaning and export', 'Debugging and testing a scraper'];
+  } else if (/machine.?learn|deep.?learn|\bml\b/.test(text)) {
+    desiredOutcome = 'Use Python and relevant data tools to build and evaluate machine-learning workflows.';
+    requiredCapabilities = ['Python programming for data workflows', 'NumPy and tabular data handling', 'Data cleaning and feature preparation', 'Core supervised and unsupervised learning concepts', 'Model training and evaluation', 'Experiment tracking and result interpretation'];
+  } else if (/automat|excel|spreadsheet|repetitive task|reports?/.test(text)) {
+    desiredOutcome = 'Use Python to automate practical repetitive tasks and verify the results.';
+    requiredCapabilities = ['Python scripting fundamentals', 'Functions and reusable scripts', 'File and structured-data handling', 'Error handling and logging', 'Task-specific automation libraries or APIs', 'Testing and safely rerunning automation'];
+  } else if (/backend|back-end|server|api engineer/.test(text)) {
+    desiredOutcome = 'Build and operate reliable Python backend services.';
+    requiredCapabilities = ['Advanced Python language features', 'HTTP APIs and request validation', 'Data persistence and database access', 'Concurrency and background work', 'Automated testing and debugging', 'Authentication and application security', 'Configuration, logging, and observability', 'Deployment and production operations'];
+  } else if (/personal finance tracker|finance tracker|budget tracker/.test(text)) {
+    desiredOutcome = 'Build a personal finance tracker in Python for recording and reviewing transactions.';
+    requiredCapabilities = ['Python programming fundamentals', 'Transaction and category data modelling', 'Persistent storage for financial records', 'Income, spending, and balance calculations', 'Input validation and error handling', 'Testing calculations and stored data'];
+  } else if (/\b(basics?|intro(duction)?|syntax|fundamentals|getting started)\b/.test(text)) {
+    desiredOutcome = `Learn ${subject} fundamentals and use them to complete small practical tasks.`;
+    requiredCapabilities = [`${subject} syntax and core vocabulary`, 'Working with common values and data', 'Control flow and reusable operations', 'Reading errors and debugging small programs', 'Applying fundamentals in a focused exercise'];
+  } else {
+    desiredOutcome = `Learn the core capabilities of ${subject} and apply them to the stated goal: ${goal.trim()}.`;
+    requiredCapabilities = [`${subject} foundations`, `Core concepts and workflows in ${subject}`, `Practising the main tasks involved in ${goal.trim()}`, 'Debugging and checking work against the intended result'];
+  }
+  const scope = /machine.?learn|deep.?learn|\brobotics\b|data.?science/.test(text)
+    ? 'large'
+    : classifyGoalScope(goal);
+  return { subject, desiredOutcome, requiredCapabilities, scope };
+}
+
+export function normalizeCurriculumIntent(input: unknown, goal: string): CurriculumIntent {
+  const fallback = buildFallbackCurriculumIntent(goal);
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return fallback;
+  const value = input as Record<string, unknown>;
+  const subject = typeof value.subject === 'string' ? value.subject.trim().slice(0, 100) : '';
+  const desiredOutcome = typeof value.desiredOutcome === 'string' ? value.desiredOutcome.trim().slice(0, 300) : '';
+  const capabilities = Array.isArray(value.requiredCapabilities)
+    ? Array.from(new Set(value.requiredCapabilities.filter((item): item is string => typeof item === 'string').map(item => item.trim().slice(0, 160)).filter(Boolean))).slice(0, 12)
+    : [];
+  const scope = typeof value.scope === 'string' && ['small', 'medium', 'large'].includes(value.scope.toLowerCase())
+    ? value.scope.toLowerCase() as CurriculumScope : fallback.scope;
+  if (!subject || !desiredOutcome || capabilities.length < 2) return fallback;
+  return { subject, desiredOutcome, requiredCapabilities: capabilities, scope };
+}
+
+export function buildCurriculumIntentPrompt(goal: string): string {
+  return `Interpret this learner request for a bounded curriculum. Return JSON only with exactly these fields: subject (string), desiredOutcome (string), requiredCapabilities (array of 3-10 concise strings), scope (small|medium|large). Request: "${sanitizeForPrompt(goal, 240)}". Separate the subject from the outcome. Stay faithful to the request; do not invent a career, project, or adjacent domain. List only capabilities needed to reach the stated outcome. A subject-only request should have a modest general outcome. Scope reflects the breadth of the stated outcome, not everything associated with its technology. Do not include phases, modules, lessons, or a curriculum budget.`;
+}
+
+export async function interpretCurriculumIntent(goal: string): Promise<CurriculumIntent> {
+  const fallback = buildFallbackCurriculumIntent(goal);
+  try {
+    const response = await callGroqChatCompletion(buildCurriculumIntentPrompt(goal), { temperature: 0.1, asJSON: true, timeoutMs: 15000, maxTokens: 1200 });
+    return normalizeCurriculumIntent(cleanAndParseJSON(response, '{}'), goal);
+  } catch (error: any) {
+    logger.warn({ err: error?.message || error }, '[Curriculum] Goal interpretation failed; using bounded deterministic intent');
+    return fallback;
+  }
+}
+
+export async function createCurriculumPlan(goal: string, level: unknown): Promise<{ intent: CurriculumIntent; budget: CurriculumBudget }> {
+  const intent = await interpretCurriculumIntent(goal);
+  const budget = calculateCurriculumBudget({ level, scope: intent.scope, goal });
+  return { intent, budget };
+}
+
+export function calculateRoadmapGenerationBudget(level: unknown, goal: string): CurriculumBudget {
+  return calculateCurriculumBudget({ level, scope: classifyGoalScope(goal), goal });
+}
+
+export function buildCurriculumGenerationPrompt(input: {
+  goal: string; experienceLevel?: string; weeklyHours?: number | string; preferredStyle?: string;
+  college?: string; branch?: string; year?: string; budget: CurriculumBudget; intent?: CurriculumIntent;
+  learnerContext?: LearnerContext;
+}): string {
+  const { goal, budget } = input;
+  const intent = input.intent || buildFallbackCurriculumIntent(goal);
+  const capabilityList = intent.requiredCapabilities.map(capability => `- ${sanitizeForPrompt(capability, 160)}`).join('\n');
+  const learnerSection = input.learnerContext
+    ? `\n\nLEARNER CONTEXT (goal-specific evidence):\n${formatLearnerContext(input.learnerContext)}\n\nPERSONALIZATION RULES: Prioritize the learning gaps listed below. Do not reteach demonstrated knowledge unnecessarily; compress or use a brief verification when useful. Teach unknown prerequisites. Give partially known capabilities concise review and verification. Treat uncertain capabilities conservatively and teach them lightly. Experience level is a broad prior, not proof of specific knowledge. Available time affects pacing and lesson granularity only; do not expand module or phase counts.\nLEARNING GAPS TO COVER:\n${learningGaps(input.learnerContext).map(item => `- ${sanitizeForPrompt(item.capability, 160)} (${item.state}; ${item.decision})`).join('\n') || '- No unmet capability identified; provide a concise outcome integration/verification path.'}`
+    : '';
+  const universityContext = input.college && input.branch && input.year
+    ? ` Learner context: ${sanitizeForPrompt(input.year)} student at ${sanitizeForPrompt(input.college)}, studying ${sanitizeForPrompt(input.branch)}.` : '';
+  return `You are a curriculum architect. Plan the smallest coherent curriculum required for this learner's specific outcome.\n\nORIGINAL REQUEST: "${sanitizeForPrompt(goal, 240)}"\nSUBJECT: ${sanitizeForPrompt(intent.subject, 100)}\nDESIRED OUTCOME: ${sanitizeForPrompt(intent.desiredOutcome, 300)}\nREQUIRED CAPABILITIES (preserve outcome coverage; modules map to exact strings in supportsCapabilities):\n${capabilityList}\nSCOPE: ${intent.scope}\nLEVEL: ${budget.level} (learner selected: ${sanitizeForPrompt(input.experienceLevel || 'Beginner')})\nPACE: ${sanitizeForPrompt(input.weeklyHours || 5)} hours/week. STYLE: ${sanitizeForPrompt(input.preferredStyle || 'Hands-on')}.${universityContext}${learnerSection}\n\nCURRICULUM BUDGET (application-controlled hard boundary):\n- Target approximately ${budget.targetPhases} phases and ${budget.targetModules} TOTAL modules across the entire roadmap. Module count is global, not per phase.\n- Never exceed ${budget.maximumPhases} phases or ${budget.maximumModules} TOTAL modules. Use fewer than target whenever sufficient; extra structure is justified only when genuinely necessary and still within both caps. Do not inflate the curriculum to reach target counts.\n- Lesson metadata only: lesson counts are variable and follow module objectives. Avoid padding.\n\nGOAL RELEVANCE AND STOP CONDITION: Generate only the curriculum necessary to achieve the desired outcome. Every module must contribute meaningfully to one or more required capabilities. Do not add unrelated subject areas or adjacent technologies. Stop when the learner has sufficient knowledge to achieve the outcome.\n\nSTRUCTURE AND QUALITY:\n- Organize meaningful phases and coherent modules. Counts are flexible targets, not quotas. No artificial phases, modules, or lessons.\n- Use specific, distinct titles and concise descriptions; order prerequisites logically. No duplicate lesson titles or module names.\n- Lessons: id, name, description, learningObjectives (2-4 measurable phrases), prerequisites (earlier lesson IDs; first lesson []), skillTags, difficulty beginner|intermediate|advanced, estimatedMinutes ${CURRICULUM_LIMITS.minLessonMinutes}-${CURRICULUM_LIMITS.maxLessonMinutes}, type "learn", status "available" for first lesson only else "locked", contentStatus "pending".\n- Modules: id, name, description, supportsCapabilities (exact strings from the required capability list), difficulty, estimatedHours, lessons, and 0-2 topic-matched resources.\n- Phases: id, name, description, estimatedHours, difficulty, skillsCovered, modules, and projects only when they directly support the outcome. Projects are optional.\n- Return JSON only, shaped as {"goal":"...","phases":[{"id":"ph-1","name":"...","description":"...","estimatedHours":8,"difficulty":"beginner","skillsCovered":["..."],"modules":[{"id":"mod-1-1","name":"...","description":"...","supportsCapabilities":["exact capability"],"difficulty":"beginner","estimatedHours":3,"lessons":[{"id":"les-1-1-1","name":"...","description":"...","learningObjectives":["..."],"prerequisites":[],"skillTags":["..."],"difficulty":"beginner","estimatedMinutes":20,"type":"learn","status":"available","contentStatus":"pending"}],"resources":[]}],"projects":[]}]}.`;
+}
+
+export function buildCurriculumRetryPrompt(goal: string, budget: CurriculumBudget, issues: string[], intent?: CurriculumIntent, learnerContext?: LearnerContext): string {
+  const plan = intent || buildFallbackCurriculumIntent(goal);
+  const capabilities = plan.requiredCapabilities.map(capability => `- ${sanitizeForPrompt(capability, 160)}`).join('\n');
+  const personalization = learnerContext ? `\nLearner context:\n${formatLearnerContext(learnerContext)}\nPrioritize gaps; compress demonstrated capabilities, briefly verify partial knowledge, and teach unknown or uncertain prerequisites. Study time affects pacing only.` : '';
+  return `Revise the curriculum for request "${sanitizeForPrompt(goal, 240)}" to fix these issues:\n${issues.slice(0, 12).map(issue => `- ${issue}`).join('\n')}\nSubject: ${sanitizeForPrompt(plan.subject, 100)}. Desired outcome: ${sanitizeForPrompt(plan.desiredOutcome, 300)}. Required capabilities:\n${capabilities}${personalization}\nPreserve outcome coverage and map every module to one or more exact required capabilities. Target approximately ${budget.targetPhases} phases and ${budget.targetModules} TOTAL modules; never exceed ${budget.maximumPhases} phases or ${budget.maximumModules} total modules. Use fewer when sufficient. Lessons are variable and should not pad the curriculum. Do not reintroduce unrelated topics or projects. Return the corrected complete JSON only.`;
+}
 
 export const PROJECT_LADDER = ['mini-exercise', 'mini-project', 'real-application', 'portfolio-project', 'capstone'] as const;
 export const PROJECT_LADDER_RANK: Record<string, number> = Object.fromEntries(PROJECT_LADDER.map((tier, i) => [tier, i]));
@@ -70,18 +271,22 @@ export function normalizeProjectTier(value: any): string | null {
 // Quality gate
 // ---------------------------------------------------------------------------
 
-export function validateCurriculumQuality(input: any): { ok: boolean; score: number; issues: string[] } {
+export function validateCurriculumQuality(input: any, budget?: CurriculumBudget, intent?: CurriculumIntent, learnerContext?: LearnerContext): { ok: boolean; score: number; issues: string[] } {
   const issues: string[] = [];
   const phases = Array.isArray(input?.phases) ? input.phases : [];
   const totalPhases = phases.length;
 
-  if (totalPhases < CURRICULUM_LIMITS.minPhases) issues.push(`Too few phases (${totalPhases}); need at least ${CURRICULUM_LIMITS.minPhases}.`);
-  if (totalPhases > CURRICULUM_LIMITS.maxPhases) issues.push(`Too many phases (${totalPhases}); keep at most ${CURRICULUM_LIMITS.maxPhases}.`);
+  const phaseMaximum = budget?.maximumPhases ?? CURRICULUM_LIMITS.maxPhases;
+  if (totalPhases > phaseMaximum) issues.push(`Too many phases (${totalPhases}); budget maximum is ${phaseMaximum}.`);
 
   let totalModules = 0, totalLessons = 0, lessonsWithEmptyTags = 0, lessonsMissingPrereqs = 0;
   let genericPhaseNames = 0, genericModuleNames = 0, duplicateLessonTitles = 0, duplicateModuleNames = 0;
   let brokenPrereqs = 0, forwardPrereqs = 0, genericLessonTitles = 0, unrealisticTime = 0;
   let resourceMismatch = 0, emptyObjectives = 0, weakObjectives = 0;
+  let modulesWithoutIntentSupport = 0;
+  const coveredCapabilities = new Set<string>();
+  const requiredCapabilities = new Set((intent?.requiredCapabilities || []).map(capability => capability.trim().toLowerCase()));
+  const knownCapabilities = new Set((learnerContext?.currentKnowledge || []).filter(item => item.state === 'known').map(item => item.capability.trim().toLowerCase()));
 
   const lessonOrder = new Map<string, number>();
   let ordinal = 0;
@@ -102,9 +307,7 @@ export function validateCurriculumQuality(input: any): { ok: boolean; score: num
   for (const phase of phases) {
     const mods = Array.isArray(phase?.modules) ? phase.modules : [];
     totalModules += mods.length;
-    if (mods.length < CURRICULUM_LIMITS.minModulesPerPhase) {
-      issues.push(`Phase "${phase?.name || '?'}" has only ${mods.length} modules; need ${CURRICULUM_LIMITS.minModulesPerPhase}-${CURRICULUM_LIMITS.maxModulesPerPhase}.`);
-    }
+    if (mods.length > CURRICULUM_LIMITS.maxModulesPerPhase) issues.push(`Phase "${phase?.name || '?'}" exceeds the per-phase structural limit of ${CURRICULUM_LIMITS.maxModulesPerPhase} modules.`);
     if (typeof phase?.difficulty === 'string') phaseDiffs.push(String(phase.difficulty).toLowerCase());
 
     const phaseName = String(phase?.name || '').trim().toLowerCase();
@@ -118,11 +321,16 @@ export function validateCurriculumQuality(input: any): { ok: boolean; score: num
         seenModuleNames.add(modName);
       }
 
+      if (intent) {
+        const moduleCapabilities = asStringArray(mod?.supportsCapabilities);
+        const relevantCapabilities = moduleCapabilities.filter(capability => requiredCapabilities.has(capability.toLowerCase()));
+        if (relevantCapabilities.length === 0) modulesWithoutIntentSupport++;
+        relevantCapabilities.forEach(capability => coveredCapabilities.add(capability.toLowerCase()));
+      }
+
       const lessons = Array.isArray(mod?.lessons) ? mod.lessons : [];
       totalLessons += lessons.length;
-      if (lessons.length < CURRICULUM_LIMITS.minLessonsPerModule) {
-        issues.push(`Module "${mod?.name || '?'}" has only ${lessons.length} lessons; need ${CURRICULUM_LIMITS.minLessonsPerModule}-${CURRICULUM_LIMITS.maxLessonsPerModule}.`);
-      }
+      if (lessons.length > CURRICULUM_BUDGET_POLICY.lessonSoftLimits.maxPerModule) issues.push(`Module "${mod?.name || '?'}" exceeds the lesson soft limit of ${CURRICULUM_BUDGET_POLICY.lessonSoftLimits.maxPerModule}.`);
 
       const modTopicWords = modName.split(/\s+/).filter((w) => w.length > 3);
       const goalWords = String(input?.goal || '').toLowerCase().split(/\s+/).filter((w) => w.length > 3);
@@ -166,16 +374,13 @@ export function validateCurriculumQuality(input: any): { ok: boolean; score: num
   }
 
   const projTiers: number[] = [];
-  let phasesWithoutProject = 0;
   for (const phase of phases) {
     const projs = Array.isArray(phase?.projects) ? phase.projects : [];
-    if (projs.length === 0) phasesWithoutProject++;
     for (const pr of projs) {
       const tier = normalizeProjectTier(pr?.difficulty);
       if (tier) projTiers.push(PROJECT_LADDER_RANK[tier]);
     }
   }
-  if (phasesWithoutProject > 0) issues.push(`${phasesWithoutProject} phase(s) have no project.`);
   for (let i = 1; i < projTiers.length; i++) {
     if (projTiers[i] < projTiers[i - 1]) {
       issues.push('Project difficulty does not rise across phases (mini-exercise -> capstone).');
@@ -232,8 +437,19 @@ export function validateCurriculumQuality(input: any): { ok: boolean; score: num
   if (emptyObjectives > 0) issues.push(`${emptyObjectives} lesson(s) have empty learning objectives.`);
   if (weakObjectives > 0) issues.push(`${weakObjectives} lesson(s) have vague, one-word learning objectives.`);
   if (resourceMismatch > 0) issues.push(`${resourceMismatch} resource(s) do not match their module topic or the goal.`);
-  if (totalModules < CURRICULUM_LIMITS.minTotalModules) issues.push(`Too few modules overall (${totalModules}); curriculum is too shallow.`);
-  if (totalLessons < CURRICULUM_LIMITS.minTotalLessons) issues.push(`Too few lessons overall (${totalLessons}); curriculum is too shallow.`);
+  if (budget && totalModules > budget.maximumModules) issues.push(`Too many total modules (${totalModules}); budget maximum is ${budget.maximumModules}.`);
+  if (modulesWithoutIntentSupport > 0) issues.push(`${modulesWithoutIntentSupport} module(s) do not map to a required outcome capability.`);
+  const missingCapabilities = [...requiredCapabilities].filter(capability => !knownCapabilities.has(capability) && !coveredCapabilities.has(capability));
+  if (missingCapabilities.length > 0) issues.push(`Required outcome capabilities are not covered: ${missingCapabilities.slice(0, 8).join(', ')}.`);
+  if (learnerContext) {
+    const hasLearningGaps = learningGaps(learnerContext).length > 0;
+    const unnecessaryKnownOnlyModules = phases.flatMap((phase: any) => Array.isArray(phase?.modules) ? phase.modules : [])
+      .filter((mod: any) => {
+        const mapped = asStringArray(mod?.supportsCapabilities).map(capability => capability.toLowerCase());
+        return hasLearningGaps && mapped.length > 0 && mapped.every(capability => knownCapabilities.has(capability));
+      }).length;
+    if (unnecessaryKnownOnlyModules > 0) issues.push(`${unnecessaryKnownOnlyModules} module(s) focus only on demonstrated capabilities and should be compressed or removed.`);
+  }
 
   const score = Math.max(0, 100 - Math.min(60, issues.length * 6));
   return { ok: issues.length === 0, score, issues };
@@ -333,7 +549,8 @@ export function normalizeResources(
 
 export function validateAndNormalizeCurriculum(
   input: any,
-  meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string; roadmapId?: string }
+  meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string; roadmapId?: string },
+  budget?: CurriculumBudget
 ): any {
   const goal = meta.goal || (typeof input.goal === 'string' ? input.goal : 'Learning Goal');
   // Use a caller-supplied roadmapId when available so all child IDs are globally unique
@@ -346,7 +563,16 @@ export function validateAndNormalizeCurriculum(
     rawId.startsWith(`${roadmapId}-`) ? rawId : `${roadmapId}-${rawId}`;
 
   let phases = Array.isArray(input.phases) ? input.phases : [];
-  if (phases.length > CURRICULUM_LIMITS.maxPhases) phases = phases.slice(0, CURRICULUM_LIMITS.maxPhases);
+  if (phases.length > (budget?.maximumPhases ?? CURRICULUM_LIMITS.maxPhases)) phases = phases.slice(0, budget?.maximumPhases ?? CURRICULUM_LIMITS.maxPhases);
+  if (budget) {
+    let remainingModules = budget.maximumModules;
+    phases = phases.map((phase: any) => {
+      const modules = Array.isArray(phase?.modules) ? phase.modules : [];
+      const kept = modules.slice(0, Math.min(CURRICULUM_LIMITS.maxModulesPerPhase, remainingModules));
+      remainingModules -= kept.length;
+      return { ...phase, modules: kept };
+    }).filter((phase: any) => phase.modules.length > 0);
+  }
 
   const numPhases = Math.max(1, phases.length);
   const phaseDifficulties: Difficulty[] = [];
@@ -729,7 +955,7 @@ function getDomainPhasePlan(domain: string, goal: string, goalTitle: string): Do
   ];
 }
 
-export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string; roadmapId?: string }): any {
+export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: string; weeklyHours?: string | number; preferredStyle?: string; college?: string; branch?: string; year?: string; roadmapId?: string }, suppliedBudget?: CurriculumBudget, suppliedIntent?: CurriculumIntent, learnerContext?: LearnerContext): any {
   const goal = meta.goal || 'the learning goal';
   const goalTitle = goal.charAt(0).toUpperCase() + goal.slice(1);
   const roadmapId = meta.roadmapId || `roadmap-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -737,16 +963,40 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
   const scope = (rawId: string) =>
     rawId.startsWith(`${roadmapId}-`) ? rawId : `${roadmapId}-${rawId}`;
 
-  const domain = detectGoalDomain(goal);
-  const phasePlan = getDomainPhasePlan(domain, goal, goalTitle);
+  const intent = suppliedIntent || buildFallbackCurriculumIntent(goal);
+  const budget = suppliedBudget || calculateCurriculumBudget({ level: meta.experienceLevel, scope: intent.scope, goal });
+  const unmetCapabilities = learnerContext
+    ? intent.requiredCapabilities.filter(capability => learnerContext.currentKnowledge.find(item => item.capability.toLowerCase() === capability.toLowerCase())?.state !== 'known')
+    : intent.requiredCapabilities;
+  const capabilities = unmetCapabilities.length ? unmetCapabilities : ['Outcome integration and verification'];
+  const moduleCount = Math.min(budget.targetModules, capabilities.length);
+  const moduleGroups: string[][] = Array.from({ length: moduleCount }, () => []);
+  capabilities.forEach((capability, index) => moduleGroups[index % moduleCount].push(capability));
+  const phaseCount = Math.min(budget.targetPhases, moduleCount);
+  const selectedPlans = Array.from({ length: phaseCount }, (_, index) => ({
+    name: phaseCount === 1 ? `${intent.subject}: Outcome Foundations` : index === phaseCount - 1 ? `${intent.subject}: Outcome Application` : `${intent.subject}: Required Foundations`,
+    description: `Build capabilities required for the outcome: ${intent.desiredOutcome}`,
+    difficulty: budget.level === 'advanced' ? 'advanced' : budget.level === 'intermediate' && index > 0 ? 'intermediate' : 'beginner',
+    moduleCapabilityGroups: [] as string[][],
+    projectTitle: intent.desiredOutcome,
+    projectTech: [intent.subject],
+    skillTags: [] as string[],
+  }));
+  moduleGroups.forEach((group, index) => selectedPlans[index % phaseCount].moduleCapabilityGroups.push(group));
+  selectedPlans.forEach(plan => { plan.skillTags = Array.from(new Set(plan.moduleCapabilityGroups.flat().map(capability => capability.toLowerCase().replace(/[^a-z0-9]+/g, '-')))); });
+  const modulesPerPhase = selectedPlans.map(plan => plan.moduleCapabilityGroups.length);
+  const requiresProject = /\b(build|create|develop|implement|make|scrap|tracker|automate)\b/i.test(goal);
 
-  const phases = phasePlan.map((plan, pIdx) => {
+  const phases = selectedPlans.map((plan, pIdx) => {
     const phaseId = scope(`ph-${pIdx + 1}`);
     let lessonCounter = 0;
 
-    const modules = plan.moduleThemes.map((theme, mIdx) => {
+    const moduleCapabilities = plan.moduleCapabilityGroups.slice(0, modulesPerPhase[pIdx]);
+    const moduleThemes = moduleCapabilities.map(group => group.join(' & '));
+    const modules = moduleThemes.map((theme, mIdx) => {
       const moduleId = scope(`mod-${pIdx + 1}-${mIdx + 1}`);
-      const lessonCount = 4 + ((pIdx + mIdx) % 3);
+      const capabilitiesForModule = moduleCapabilities[mIdx];
+      const lessonCount = capabilitiesForModule.length;
       const lessonIds: string[] = [];
       const lessons = [];
       for (let l = 0; l < lessonCount; l++) {
@@ -760,10 +1010,13 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
           else prereqs = [`phase-prev-${pIdx}`];
         }
         lessonIds.push(lessonId);
+        const capability = capabilitiesForModule[l];
+        const knowledge = learnerContext?.currentKnowledge.find(item => item.capability.toLowerCase() === capability.toLowerCase());
+        const lessonName = knowledge?.state === 'partially_known' ? `Review and verify: ${capability}` : capability;
         lessons.push({
-          id: lessonId, name: `${theme}: Lesson ${l + 1}`, description: `Learn and apply ${theme.toLowerCase()} in the context of ${goal}.`,
-          learningObjectives: [`Apply ${theme} concepts to ${goal}`, `Complete a guided exercise reinforcing ${theme.toLowerCase()}`],
-          prerequisites: prereqs, skillTags: (plan.skillTags && plan.skillTags.length > 0 ? plan.skillTags.slice(0, 3) : [String(goal).toLowerCase().split(' ')[0], theme.toLowerCase().replace(/[^a-z0-9]+/g, '-')]).filter(Boolean),
+          id: lessonId, name: lessonName, description: `${knowledge?.state === 'partially_known' ? 'Review and verify' : 'Learn'} ${capability.toLowerCase()} as needed to achieve the outcome: ${intent.desiredOutcome}`,
+          learningObjectives: [`Demonstrate ${capability.toLowerCase()} in a task relevant to the stated outcome`],
+          prerequisites: prereqs, skillTags: capability.toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(/\s+/).filter((tag: string) => tag.length > 2 && !PROHIBITED_SKILL_TAGS.has(tag)).slice(0, 4),
           difficulty: plan.difficulty === 'expert' ? 'advanced' : plan.difficulty, estimatedMinutes: 20 + ((lessonCounter * 5) % 20),
           type: 'learn', status: isFirstOverall ? 'available' : 'locked', contentStatus: 'pending', xpReward: 25
         });
@@ -771,7 +1024,8 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
 
       return {
         id: moduleId, name: theme, description: `Covers ${theme.toLowerCase()} as part of ${plan.name}.`,
-        difficulty: plan.difficulty === 'expert' ? 'advanced' : plan.difficulty, estimatedHours: 4 + (mIdx % 3), lessons,
+        supportsCapabilities: capabilitiesForModule,
+        difficulty: plan.difficulty, estimatedHours: 4 + (mIdx % 3), lessons,
         resources: getFallbackResources(goal, theme, pIdx, mIdx)
       };
     });
@@ -789,10 +1043,10 @@ export function buildFallbackCurriculum(meta: { goal: string; experienceLevel?: 
     const projectTier = PROJECT_LADDER[Math.min(PROJECT_LADDER.length - 1, pIdx)];
     return {
       id: phaseId, name: plan.name, description: plan.description, estimatedHours: 12 + (pIdx * 2), difficulty: plan.difficulty,
-      skillsCovered: (plan as any).skillTags?.length ? (plan as any).skillTags : plan.moduleThemes.map((t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-')),
+      skillsCovered: plan.skillTags,
       levels: modules, modules,
       progress: 0, xpEarned: 0, status: 'current',
-      projects: [{ id: scope(`proj-${pIdx + 1}`), title: plan.projectTitle, difficulty: projectTier, description: `Apply everything from ${plan.name} to ship ${plan.projectTitle}. Build incrementally, test continuously, and document your work for ${goal}.`, techStack: plan.projectTech, features: ['Scaffold the project structure', 'Implement core feature set', 'Add tests and documentation', 'Deploy or demo the result'], progress: 0 }]
+      projects: requiresProject && pIdx === selectedPlans.length - 1 ? [{ id: scope(`proj-${pIdx + 1}`), title: plan.projectTitle, difficulty: projectTier, description: `Apply the relevant capabilities to achieve ${intent.desiredOutcome}. Verify the result against the requested outcome.`, techStack: plan.projectTech, features: ['Implement the requested outcome', 'Verify expected behavior', 'Document how to use the result'], progress: 0 }] : []
     };
   });
 

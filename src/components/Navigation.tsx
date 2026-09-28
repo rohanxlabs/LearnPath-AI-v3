@@ -106,21 +106,19 @@ interface BottomNavigationProps {
   onTabChange: (tab: string) => void;
 }
 
-export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
-  // Display labels are kept short for consistent grid sizing across all screen widths.
-  // aria-label always carries the full accessible name.
-  const tabs = [
-    { id: 'home',     label: 'Home',     ariaLabel: 'Home',          icon: Home },
-    { id: 'roadmaps', label: 'Paths',    ariaLabel: 'Roadmaps',      icon: Compass },
-    { id: 'mentor',   label: 'Mentor',   ariaLabel: 'AI Mentor',     icon: MessageSquare },
-    { id: 'progress', label: 'Progress', ariaLabel: 'Progress',      icon: BarChart3 },
-    { id: 'profile',  label: 'Profile',  ariaLabel: 'Profile',       icon: User },
-  ];
+const primaryNavigation = [
+  { id: 'home',     label: 'Home',     ariaLabel: 'Home',      icon: Home },
+  { id: 'roadmaps', label: 'Paths',    ariaLabel: 'Roadmaps',  icon: Compass },
+  { id: 'mentor',   label: 'Mentor',   ariaLabel: 'AI Mentor', icon: MessageSquare },
+  { id: 'progress', label: 'Progress', ariaLabel: 'Progress',  icon: BarChart3 },
+  { id: 'profile',  label: 'Profile',  ariaLabel: 'Profile',   icon: User },
+];
 
+export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/85 dark:bg-zinc-950/85 border-t border-zinc-200 dark:border-transparent pb-safe shadow-[0_-8px_24px_rgba(0,0,0,0.06)] dark:shadow-[0_-12px_32px_rgba(0,0,0,0.5)] backdrop-blur-sm transition-all duration-300">
       <div className="grid grid-cols-5 items-center h-16 max-w-xl mx-auto px-2">
-        {tabs.map((tab) => {
+        {primaryNavigation.map((tab) => {
           const IconComponent = tab.icon;
           const isActive = activeTab === tab.id;
           return (
@@ -223,7 +221,7 @@ export function SideDrawer({
         className={`absolute inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-[#111111] text-zinc-900 dark:text-white shadow-[0_8px_40px_rgba(0,0,0,0.18)] flex flex-col border-r border-zinc-200 dark:border-white/10 transition-transform duration-300 ease-out ${mounted ? 'translate-x-0' : '-translate-x-full'}`}
       >
         {/* Drawer Header */}
-        <div className="p-5 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between">
+        <div className="p-5 border-b border-zinc-200 dark:border-white/10 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-purple-500 to-blue-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
@@ -242,7 +240,7 @@ export function SideDrawer({
         </div>
 
         {/* Profile preview summary */}
-        <div className="px-5 py-4 border-b border-zinc-200 dark:border-white/10 bg-zinc-100/50 dark:bg-white/[0.02]">
+        <div className="px-5 py-4 border-b border-zinc-200 dark:border-white/10 bg-zinc-100/50 dark:bg-white/[0.02] shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full overflow-hidden border border-zinc-300 dark:border-white/10">
               <img src={profile.avatar} alt="Profile photo" className="w-full h-full object-cover" />
@@ -260,9 +258,35 @@ export function SideDrawer({
           </div>
         </div>
 
-        {/* Secondary navigation list */}
-        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          <p className="px-4 pb-2 text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+        {/* Navigation list */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1">
+          <nav aria-label="Primary navigation" className="space-y-1">
+            {primaryNavigation.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onTabChange(item.id);
+                    onClose();
+                  }}
+                  aria-label={item.ariaLabel}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-left font-semibold transition-all duration-200 cursor-pointer min-h-[44px] ${
+                    isActive
+                      ? 'bg-purple-100/70 dark:bg-white/5 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-white/10'
+                      : 'text-zinc-700 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-zinc-100 hover:bg-zinc-200/50 dark:hover:bg-white/5'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-purple-700 dark:text-purple-400' : 'text-zinc-500 dark:text-zinc-400'}`} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <p className="px-4 pt-4 pb-2 text-xs font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
             More
           </p>
           {sections.map((sec) => {
@@ -290,7 +314,7 @@ export function SideDrawer({
 
         {/* Upgrade Card Banner */}
         {!profile.isPro && (
-          <div className="p-4 mx-4 mb-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 dark:from-purple-900/40 dark:to-blue-900/40 border border-purple-300 dark:border-purple-500/30">
+          <div className="p-4 mx-4 mb-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-blue-500/10 dark:from-purple-900/40 dark:to-blue-900/40 border border-purple-300 dark:border-purple-500/30 shrink-0">
             <div className="flex items-center gap-2 mb-1.5">
               <Crown className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               <h5 className="text-xs font-black text-purple-700 dark:text-purple-300">UPGRADE TO PRO</h5>
@@ -311,7 +335,7 @@ export function SideDrawer({
         )}
 
         {/* Drawer footer buttons */}
-        <div className="p-5 border-t border-zinc-200 dark:border-white/10 space-y-1 bg-zinc-50/60 dark:bg-white/[0.02]">
+        <div className="p-5 border-t border-zinc-200 dark:border-white/10 space-y-1 bg-zinc-50/60 dark:bg-white/[0.02] shrink-0">
           <button
             onClick={() => {
               onTabChange('profile');
